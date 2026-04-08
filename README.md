@@ -1,16 +1,10 @@
-# React + Vite
+## 2026년 미림마이스터 고등학교 IT쇼 참가 작품입니다.
+[ 학교폭력 상황을 AI로 분석하고 관련 법령 및 대응 방법을 안내하는 상담 플랫폼 ]
+## 사용 언어
+### Front : React, CSS, JavaScript - 3214 장세은
+### Back : 
+### DB : 
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 구조
+- src 폴더 안에 페이지별로 JSX와 CSS 파일이 쌍으로 구성되어 있습니다. 전역 스타일과 디자인 토큰은 index.css에서 관리하며, 라우팅은 App.jsx에서 처리합니다.
+- 페이지는 랜딩(/), 로그인(/login), AI 상담 채팅(/chat), 분석 결과(/result), 마이페이지(/mypage) 총 5개로 구성되어 있습니다.
