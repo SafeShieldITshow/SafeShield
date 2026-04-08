@@ -1,0 +1,213 @@
+.wrapper {
+  display: flex;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 사이드바는 index.css의 .ss-sidebar 공통 스타일 사용 */
+
+/* 메인 컨테이너 마운트 */
+.container { animation: fadeIn 0.4s 0.1s ease both; }
+
+/* 메인 컨테이너 */
+.container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* 헤더 */
+.header {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+/* 스크롤 영역 */
+.mainContent {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 60px 80px;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+.mainContent::-webkit-scrollbar       { width: 4px; }
+.mainContent::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+/* 섹션 stagger */
+.section:nth-of-type(1) { animation: fadeUp 0.45s 0.15s ease both; }
+.section:nth-of-type(2) { animation: fadeUp 0.45s 0.25s ease both; }
+
+/* 리포트 카드 stagger */
+.reportCard:nth-child(1) { animation: fadeUp 0.4s 0.30s ease both; }
+.reportCard:nth-child(2) { animation: fadeUp 0.4s 0.38s ease both; }
+.reportCard:nth-child(3) { animation: fadeUp 0.4s 0.46s ease both; }
+.reportCard:nth-child(4) { animation: fadeUp 0.4s 0.54s ease both; }
+.reportCard:nth-child(5) { animation: fadeUp 0.4s 0.62s ease both; }
+
+.pagination       { animation: fadeUp 0.4s 0.55s ease both; }
+.accountSettings  { animation: fadeUp 0.4s 0.62s ease both; }
+
+/* 섹션 */
+.section { margin-bottom: 52px; }
+
+.label {
+  font-size: 20px;
+  margin-bottom: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* 프로필 박스 */
+.profileBox {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  padding: 32px 40px;
+  background: var(--surface);
+}
+
+.userName  { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.userEmail { color: var(--text-sub); font-size: 15px; }
+
+.userStats {
+  border-left: 1px solid var(--border);
+  padding-left: 40px;
+  line-height: 2.2;
+  font-size: 16px;
+  color: var(--text-sub);
+}
+.userStats span { font-weight: 600; color: var(--accent-light); }
+
+/* 리포트 헤더 */
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 20px;
+}
+.sortOrder { font-size: 14px; color: var(--text-muted); cursor: pointer; }
+
+/* 리포트 리스트 */
+.reportList { display: flex; flex-direction: column; gap: 16px; }
+
+.reportCard {
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  padding: 28px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--surface);
+  transition: transform var(--ease), border-color var(--ease);
+}
+.reportCard:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+.date  { font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 8px; }
+.title { font-size: 19px; margin-bottom: 16px; font-weight: 600; color: var(--text); }
+
+.tags { display: flex; gap: 10px; }
+
+.tag {
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  color: var(--accent-light);
+  font-size: 12px;
+  padding: 6px 16px;
+  border-radius: var(--r-pill);
+}
+
+/* 액션 버튼 */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 140px;
+}
+
+.btnDetail {
+  background: var(--accent);
+  color: var(--text);
+  border: none;
+  padding: 12px 20px;
+  border-radius: var(--r-md);
+  font-weight: 600;
+  font-family: var(--font);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background var(--ease), transform var(--ease);
+}
+.btnDetail:hover { background: var(--accent-hover); transform: translateY(-1px); }
+
+.btnDelete {
+  background: transparent;
+  color: var(--text-sub);
+  border: 1px solid var(--border);
+  padding: 10px 20px;
+  border-radius: var(--r-md);
+  font-family: var(--font);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color var(--ease), border-color var(--ease);
+}
+.btnDelete:hover { color: var(--danger); border-color: var(--danger); }
+
+/* 페이지네이션 */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  padding: 36px 0;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.pageActive {
+  color: var(--text);
+  background: var(--accent);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+/* 계정 설정 */
+.accountSettings {
+  border-top: 1px solid var(--border);
+  padding: 36px 0;
+  margin-top: 20px;
+}
+
+.settingButtons {
+  display: flex;
+  gap: 24px;
+  margin-top: 14px;
+  font-size: 15px;
+  color: var(--text-sub);
+}
+
+.logout {
+  color: var(--danger);
+  cursor: pointer;
+  transition: text-shadow var(--ease);
+}
+.logout:hover { text-shadow: 0 0 10px rgba(255, 90, 90, 0.4); }

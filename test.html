@@ -1,0 +1,154 @@
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap');
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; 
+  background: #1f1e24;
+}
+
+.root {
+  width: 100%;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+/* 배경 말풍선 */
+.chat-wrapper {
+  position: absolute;
+  top: -20%;
+  right: 0%; 
+  width: 48%; 
+  height: 140%;
+  transform: rotate(16deg); 
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 40px; 
+  z-index: 1;
+}
+
+.bubble { border-radius: 30px; } 
+.b-white-1 { width: 80%; height: 16%; background: #f2f2f6; align-self: flex-end; margin-right: -20%; box-shadow: -5px 10px 25px rgba(0,0,0,0.3); }
+.b-purple-1 { width: 90%; height: 18%; background: linear-gradient(135deg, #7b6aed, #5d4ae4); align-self: flex-start; margin-left: -30%; box-shadow: -15px 20px 45px rgba(0,0,0,0.6); }
+.b-white-2 { width: 95%; height: 11%; background: #f2f2f6; align-self: flex-end; margin-right: -35%; box-shadow: -10px 15px 30px rgba(0,0,0,0.4); }
+.b-purple-2 { width: 85%; height: 13%; background: linear-gradient(135deg, #7b6aed, #5d4ae4); align-self: flex-start; margin-left: -25%; box-shadow: -15px 20px 45px rgba(0,0,0,0.6); }
+
+/* 어두운 오버레이 */
+.gradient-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(90deg, #1f1e24 50%, rgba(31,30,36,0.9) 60%, rgba(31,30,36,0.6) 75%, transparent 98%);
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* 로고 및 컨텐츠 위치 (오른쪽으로 더 이동) */
+.logo { 
+  position: absolute; 
+  top: 60px; 
+  left: 160px; 
+  color: #7a7a8a; 
+  font-size: 22px; 
+  font-weight: 500; 
+  z-index: 10; 
+}
+
+.content { 
+  position: absolute; 
+  left: 160px; 
+  top: 50%; 
+  transform: translateY(-50%); 
+  z-index: 10; 
+  width: 800px; 
+}
+
+/* 제목 및 텍스트 스타일 */
+.h1 { 
+  font-size: 72px; 
+  line-height: 1.2; 
+  margin-bottom: 32px; 
+  letter-spacing: -0.04em; 
+  white-space: nowrap; 
+}
+
+.w { color: #e6e6f0; font-weight: 400; } /* 흰색 글자: 얇게 */
+.p { color: #7e74f0; font-weight: 700; } /* 보라색 포인트: 적당히 굵게 */
+
+.sub { 
+  color: #9a9aab; 
+  font-size: 22px; 
+  line-height: 1.6; 
+  margin-bottom: 80px; /* 버튼과의 여백 확보 */
+  font-weight: 400; 
+}
+
+.mobile-br { display: none; }
+
+/* 시작하기 버튼 */
+.btn {
+  display: block;
+  width: 280px; 
+  padding: 16px 0; /* 높이 슬림하게 수정 */
+  background: #5243c2;
+  color: #fff;
+  border: 1px solid #6150d4;
+  border-radius: 14px;
+  font-size: 19px;
+  font-weight: 500; /* 너무 두껍지 않게 */
+  cursor: pointer;
+  margin-bottom: 24px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  transition: all 0.2s ease;
+}
+
+.btn:hover { background: #5d4ae4; transform: translateY(-2px); }
+.btn:active { transform: scale(0.97); }
+
+.note { color: #5a5a66; font-size: 15px; font-weight: 400; }
+
+/* 모바일 최적화 */
+@media (max-width: 600px) {
+  .logo { left: 0; width: 100%; text-align: center; top: 40px; }
+  .content { left: 5%; width: 90%; text-align: center; display: flex; flex-direction: column; align-items: center; }
+  .h1 { font-size: 36px; white-space: normal; }
+  .sub { font-size: 18px; margin-bottom: 40px; padding: 0 10px; }
+  .mobile-br { display: block; }
+  .pc-br { display: none; }
+  .btn { width: 100%; max-width: 300px; }
+  .chat-wrapper { opacity: 0.15; }
+  .gradient-overlay { background: linear-gradient(180deg, rgba(31,30,36,0.7) 0%, #1f1e24 50%, #1f1e24 100%); }
+}
+</style>
+
+<div class="root">
+  <div class="gradient-overlay"></div>
+
+  <div class="logo">S-Shield</div>
+  <div class="content">
+    <h1 class="h1">
+      <span class="w">당신의 상황,</span><br>
+      <span class="p">법 기준</span><span class="w">으로</span><br>
+      <span class="p">분석</span><span class="w">해드립니다.</span>
+    </h1>
+    <p class="sub">
+      학교폭력 상황을 입력하면 관련 법령을<br class="pc-br">
+      바탕으로<br class="mobile-br">
+      대응 방법을 안내합니다.
+    </p>
+    <button class="btn">시작하기</button>
+    <p class="note">* 상담 기록 보관을 위해 로그인이 필요합니다.</p>
+  </div>
+
+  <div class="chat-wrapper">
+    <div class="bubble b-white-1"></div>
+    <div class="bubble b-purple-1"></div>
+    <div class="bubble b-white-2"></div>
+    <div class="bubble b-purple-2"></div>
+  </div>
+</div>

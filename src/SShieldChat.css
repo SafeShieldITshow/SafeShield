@@ -1,0 +1,140 @@
+/* Chat 전용 스타일 (전역 토큰은 index.css 참조) */
+
+.ss-chat-root {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  position: relative;
+}
+
+/* 메인 채팅창 */
+.ss-chat-main    { flex: 1; display: flex; flex-direction: column; animation: fadeIn 0.4s 0.1s ease both; }
+
+.ss-chat-header  { padding: 22px 0 15px; }
+
+.ss-chat-logo {
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 20px;
+}
+.ss-logo-w { color: var(--text); }
+.ss-logo-p { color: var(--accent-light); }
+
+.ss-header-line {
+  width: 85%;
+  height: 1px;
+  background: var(--border);
+  margin: 0 auto;
+}
+
+.ss-chat-content {
+  flex: 1;
+  padding: 50px 15%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+.ss-chat-content::-webkit-scrollbar { width: 0; }
+
+/* 메시지 */
+.ss-msg-row         { display: flex; width: 100%; }
+.ss-msg-row.user    { justify-content: flex-end; }
+.ss-msg-row.ai      { justify-content: flex-start; }
+
+.ss-msg-bubble {
+  max-width: 100%;
+  padding: 22px 35px;
+  font-size: 19px;
+  line-height: 1.6;
+  box-shadow: var(--shadow-md);
+}
+
+.user .ss-msg-bubble {
+  background: #f2f2f6;
+  color: var(--bg);
+  border-radius: 35px 35px 5px 35px;
+  animation: slideInRight 0.3s ease both;
+}
+.ai .ss-msg-bubble {
+  background: var(--accent-gradient);
+  color: var(--text);
+  border-radius: 35px 35px 35px 5px;
+  animation: slideInLeft 0.3s ease both;
+}
+
+/* 입력창 */
+.ss-chat-footer { padding: 40px 10% 60px; animation: fadeUp 0.4s 0.3s ease both; }
+
+.ss-input-box {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: 12px 18px 12px 45px;
+  display: flex;
+  align-items: center;
+  box-shadow: var(--shadow-lg);
+}
+.ss-input-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 20px;
+  font-family: var(--font);
+  outline: none;
+}
+.ss-input-box input::placeholder { color: var(--text-muted); }
+
+.ss-send-btn {
+  background: var(--accent);
+  color: var(--text);
+  border: none;
+  border-radius: var(--r-pill);
+  padding: 15px 45px;
+  font-size: 18px;
+  font-weight: 500;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background var(--ease), transform var(--ease);
+}
+.ss-send-btn:hover  { background: var(--accent-hover); transform: translateY(-1px); }
+.ss-send-btn:active { transform: scale(0.97); }
+
+/* 로그아웃 오버레이 */
+.logout-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  background: rgba(31, 30, 36, 0.75);
+  backdrop-filter: blur(10px);
+  color: var(--text);
+}
+
+.logout-spinner {
+  width: 56px; height: 56px;
+  border: 4px solid rgba(126, 116, 240, 0.2);
+  border-top-color: var(--accent-light);
+  border-radius: 50%;
+  animation: ss-spin 1s linear infinite;
+  margin-bottom: 24px;
+}
+.logout-overlay p { font-size: 22px; font-weight: 500; }
+
+@keyframes ss-spin { to { transform: rotate(360deg); } }
+
+/* 모바일 */
+@media (max-width: 800px) {
+  .ss-sidebar     { display: none; }
+  .ss-chat-content { padding: 30px 6%; }
+  .ss-msg-bubble  { max-width: 90%; font-size: 17px; }
+}

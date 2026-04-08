@@ -1,0 +1,243 @@
+.ss-wrap {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+/* 메인 */
+.ss-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  animation: fadeIn 0.4s 0.1s ease both;
+}
+
+.ss-header {
+  padding: 22px 0 15px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.ss-logo {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.ss-back-btn {
+  position: absolute;
+  right: 20px;
+  top: 18px;
+  background: var(--accent);
+  border: none;
+  padding: 8px 18px;
+  border-radius: var(--r-pill);
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background var(--ease), transform var(--ease);
+}
+.ss-back-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+
+/* 컨텐츠 */
+.ss-content-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 40px;
+}
+.ss-content-scroll::-webkit-scrollbar       { width: 4px; }
+.ss-content-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.ss-container {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 0 15px;
+}
+
+.ss-report-title { font-size: 20px; margin: 20px 0 15px; }
+.ss-sub-title    { font-size: 15px; margin: 28px 0 12px; }
+
+/* AI 요약 카드 */
+.ss-summary-card {
+  background: linear-gradient(135deg, rgba(95,82,208,0.18), rgba(126,116,240,0.1));
+  border: 1px solid var(--accent);
+  border-radius: var(--r-lg);
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.ss-summary-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--r-pill);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ss-summary-text {
+  font-size: 14px;
+  color: var(--text-sub);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* 증거 체크리스트 헤더 */
+.ss-evidence-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.ss-check-progress {
+  font-size: 12px;
+  color: var(--accent-light);
+  font-weight: 600;
+}
+
+/* 117 링크 */
+.ss-action-link {
+  text-decoration: none;
+  display: contents;
+}
+
+/* 카드 stagger */
+.ss-container > * { animation: fadeUp 0.4s ease both; }
+.ss-container > *:nth-child(1) { animation-delay: 0.10s; }
+.ss-container > *:nth-child(2) { animation-delay: 0.17s; }
+.ss-container > *:nth-child(3) { animation-delay: 0.24s; }
+.ss-container > *:nth-child(4) { animation-delay: 0.31s; }
+.ss-container > *:nth-child(5) { animation-delay: 0.38s; }
+.ss-container > *:nth-child(6) { animation-delay: 0.44s; }
+.ss-container > *:nth-child(7) { animation-delay: 0.50s; }
+.ss-container > *:nth-child(8) { animation-delay: 0.55s; }
+
+/* 레이블 */
+.ss-label {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+/* 위험도 */
+.ss-risk-card {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 14px 18px;
+}
+
+.ss-gauge-container {
+  width: 160px;
+  height: 120px;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.ss-gauge-container svg { overflow: visible; }
+
+.ss-danger    { color: #ff4d4f; font-weight: 700; }
+.ss-risk-desc { font-size: 13px; color: var(--text-sub); }
+
+/* 그리드 */
+.ss-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* 법률 */
+.ss-law-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+.ss-law-item p { font-size: 12px; color: var(--text-sub); margin-bottom: 6px; }
+
+.ss-bar-bg   { height: 6px; background: var(--elevated); border-radius: 4px; }
+.ss-bar-fill { height: 100%; background: var(--accent-light); border-radius: 4px; }
+
+/* 징계 */
+.ss-card svg line {
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 0.7;
+}
+
+/* 태그 */
+.ss-center { text-align: center; }
+.ss-ai     { font-size: 13px; color: var(--text-muted); margin-bottom: 14px; }
+
+.ss-tags {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.ss-tags .tag {
+  padding: 8px 16px;
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.ss-tags .tag.p { background: var(--tag-p); }
+.ss-tags .tag.v { background: var(--tag-v); }
+.ss-tags .tag.k { background: var(--tag-k); }
+
+/* 증거 */
+.ss-evidence {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.evi {
+  background: var(--elevated);
+  border: 1px solid var(--border-faint);
+  padding: 14px;
+  border-radius: var(--r-sm);
+}
+.evi strong  { display: block; margin-bottom: 5px; }
+.evi p       { font-size: 12px; color: var(--text-sub); }
+
+/* 액션 버튼 */
+.ss-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.ss-actions button {
+  background: var(--accent);
+  border: none;
+  padding: 14px;
+  border-radius: var(--r-md);
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background var(--ease), transform var(--ease);
+}
+.ss-actions button:hover { background: var(--accent-hover); transform: translateY(-1px); }
+
+/* 반응형 */
+@media (max-width: 800px) {
+  .ss-sidebar   { display: none; }
+  .ss-grid      { grid-template-columns: 1fr; }
+  .ss-evidence  { grid-template-columns: 1fr; }
+}
