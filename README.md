@@ -1,9 +1,9 @@
 ## 2026년 미림마이스터 고등학교 IT쇼 참가 작품입니다.
 [ 학교폭력 상황을 AI로 분석하고 관련 법령 및 대응 방법을 안내하는 상담 플랫폼 ]
-## 사용 언어
-### Front : React, CSS, JavaScript - 3214 장세은
-### Back : 
-### DB : 
+### 사용 언어
+- Front : React, CSS, JavaScript - 3214 장세은
+- Back :
+- DB : 
 
 ## 구조
 - src 폴더 안에 페이지별로 JSX와 CSS 파일이 쌍으로 구성되어 있습니다. 전역 스타일과 디자인 토큰은 index.css에서 관리하며, 라우팅은 App.jsx에서 처리합니다.
