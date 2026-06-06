@@ -3,6 +3,7 @@ package com.safeshield.service;
 import com.safeshield.model.Message;
 import com.safeshield.model.Session;
 import com.safeshield.model.User;
+import com.safeshield.dto.AnalysisResult;
 import com.safeshield.dto.ReportReadiness;
 import com.safeshield.repository.MessageRepository;
 import com.safeshield.repository.SessionRepository;
@@ -296,40 +297,39 @@ public class ChatService {
 
         List<String> types = detectTypes(combined);
         ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessageCount(history));
+        AnalysisResult analysis = analysisService.analyze(combined, readiness);
         List<String> citations = selectFallbackCitations(lawContext);
         if (citations.isEmpty()) return "";
 
         StringBuilder reply = new StringBuilder();
-        reply.append(buildSituationSummary(types, readiness))
+        reply.append(buildSituationSummary(combined, analysis.violenceTypes(), readiness))
                 .append("\n\n");
 
         reply.append("🔎 현재 판단\n");
-        reply.append("• 확인된 유형: ").append(String.join(", ", types)).append("\n");
-        reply.append("• 리포트 상태: ").append(readiness.status()).append("\n");
-        if (!readiness.reason().isBlank()) {
-            reply.append("• 판단 이유: ").append(readiness.reason()).append("\n");
-        }
+        fallbackFindings(combined, analysis, readiness)
+                .forEach(item -> reply.append("• ").append(item).append("\n"));
 
         reply.append("\n⚖️ 관련 법률\n");
         citations.forEach(citation -> reply.append("• ").append(citation)
-                .append(": 현재 사실관계와 연결해 적용 가능성을 확인해야 합니다.\n"));
+                .append(": 위 사실관계와 직접 연결되는지 확인할 수 있습니다.\n"));
 
         reply.append("\n🗂️ 증거 확보\n");
-        for (String evidence : fallbackEvidence(types)) {
+        for (String evidence : analysis.evidenceGuide().stream().limit(4).toList()) {
             reply.append("• ").append(evidence).append("\n");
         }
 
         reply.append("\n💬 다음 단계\n");
-        for (String action : fallbackActions(readiness)) {
+        for (String action : fallbackActions(readiness, analysis, combined)) {
             reply.append("• ").append(action).append("\n");
         }
 
         if (!readiness.ready() && !readiness.missingInfo().isEmpty()) {
             reply.append("\n❓ 확인 질문\n");
             readiness.missingInfo().stream().limit(2)
-                    .forEach(item -> reply.append("• ").append(item).append(" 알려주세요.\n"));
+                    .map(ChatService::toConfirmationQuestion)
+                    .forEach(question -> reply.append("• ").append(question).append("\n"));
         } else {
-            reply.append("\n리포트를 생성할 수 있습니다.\n");
+            reply.append("\n리포트를 생성할 수 있습니다. 새 사안이 추가되면 별도 상담으로 나누는 것이 좋습니다.\n");
         }
 
         return reply.toString().trim();
@@ -456,29 +456,32 @@ public class ChatService {
                 # 반드시 지킬 규칙
                 1. 파악된 사실을 먼저 정리하고, 부족한 정보는 추측하지 말고 질문하세요.
                 2. 사용자 문장을 그대로 복사하거나 길게 다시 쓰지 말고, 사건 유형·관계·증거·확인 필요점으로 재구성하세요.
-                3. 모든 문장은 자연스러운 한국어로 작성하세요. AI, SNS, URL, DM, CCTV, PDF, ID, IP 외 외국어 단어를 쓰지 마세요.
-                4. 사용자를 '당신'이라고 부르지 말고 2인칭 표현을 생략하세요.
-                5. 법령명과 조문 번호는 아래 '허용 인용 목록'에서 현재 상황과 직접 관련된 항목만 최대 2개 골라 글자 그대로 복사하세요.
-                6. 허용 인용 목록에 없는 법령, 조문, 조문명은 절대 쓰지 마세요. 특히 정보통신망법을 임의로 인용하지 마세요.
-                7. 법률 설명은 참고 법령 내용의 범위를 벗어나 단정하지 말고, "적용 가능성이 있습니다", "확인이 필요합니다"처럼 말하세요.
-                8. 가해자 나이나 형사책임을 사용자가 묻지 않았다면 소년법을 언급하지 마세요.
-                9. 증거는 현재 상황에 맞는 항목 3~4개를 구체적으로 안내하세요.
-                10. 생명·신체에 즉각적인 위험이 있을 때만 112를, 일반 학교폭력 상담에는 '117에 상담을 요청하세요'라고 안내하세요.
-                11. 법률상담 대체 여부에 관한 면책 문구는 화면에 별도로 표시되므로 답변에 쓰지 마세요.
-                12. 아래 내부 리포트 상태가 '추가 확인 필요'일 때만 확인 질문을 최대 2개 넣으세요.
-                13. 내부 리포트 상태가 '추가 확인 필요'가 아니면 확인 질문을 넣지 말고, "리포트를 생성할 수 있습니다"라고만 짧게 안내하세요.
-                14. '리포트 준비 상태', '추가 확인 필요가 아니므로', '추가 확인 질문 없이' 같은 내부 판단 문구를 답변에 그대로 쓰지 마세요.
-                15. 사용자가 본인이 한 행동을 말하면 비난하지 말고, 피해 회복·게시물 삭제·사과·보호자/담임 공유 중심으로 안내하세요.
-                16. 학교폭력 해당성이 낮으면 억지로 학폭으로 단정하지 말고, 해당성이 낮은 이유와 다른 대응 경로를 말하세요.
-                17. 전체 답변은 900자 이내로, 짧지만 실질적인 상담처럼 작성하세요.
+                3. 이전 답변과 같은 문장을 반복하지 말고, 이번 입력이 판단을 바꾼 점이나 새로 확인한 단서를 먼저 말하세요.
+                4. 모든 문장은 자연스러운 한국어로 작성하세요. AI, SNS, URL, DM, CCTV, PDF, ID, IP 외 외국어 단어를 쓰지 마세요.
+                5. 사용자를 '당신'이라고 부르지 말고 2인칭 표현을 생략하세요.
+                6. 법령명과 조문 번호는 아래 '허용 인용 목록'에서 현재 상황과 직접 관련된 항목만 최대 2개 골라 글자 그대로 복사하세요.
+                7. 허용 인용 목록에 없는 법령, 조문, 조문명은 절대 쓰지 마세요. 특히 정보통신망법을 임의로 인용하지 마세요.
+                8. 법률 설명은 참고 법령 내용의 범위를 벗어나 단정하지 말고, "적용 가능성이 있습니다", "확인이 필요합니다"처럼 말하세요.
+                9. 가해자 나이나 형사책임을 사용자가 묻지 않았다면 소년법을 언급하지 마세요.
+                10. 증거는 현재 상황에 맞는 항목 3~4개를 구체적으로 안내하세요.
+                11. 생명·신체에 즉각적인 위험이 있을 때만 112를, 일반 학교폭력 상담에는 '117에 상담을 요청하세요'라고 안내하세요.
+                12. 법률상담 대체 여부에 관한 면책 문구는 화면에 별도로 표시되므로 답변에 쓰지 마세요.
+                13. 아래 내부 리포트 상태가 '추가 확인 필요'일 때만 확인 질문을 최대 2개 넣으세요.
+                14. 내부 리포트 상태가 '추가 확인 필요'가 아니면 확인 질문을 넣지 말고, "리포트를 생성할 수 있습니다"라고만 짧게 안내하세요.
+                15. '리포트 준비 상태', '추가 확인 필요가 아니므로', '추가 확인 질문 없이' 같은 내부 판단 문구를 답변에 그대로 쓰지 마세요.
+                16. 사용자가 본인이 한 행동을 말하면 비난하지 말고, 피해 회복·게시물 삭제·사과·보호자/담임 공유 중심으로 안내하세요.
+                17. 학교폭력 해당성이 낮으면 억지로 학폭으로 단정하지 말고, 해당성이 낮은 이유와 다른 대응 경로를 말하세요.
+                18. 전체 답변은 900자 이내로, 짧지만 실질적인 상담처럼 작성하세요.
 
                 # 답변 형식
+
+                이번에 새로 반영한 점: 새로 확인된 단서나 판단 변화 1줄
 
                 사용자 문장을 그대로 붙여넣지 말고, 사건 유형·관계·증거 상태를 한 문장으로 요약
 
                 🔎 현재 판단
-                • 학교폭력 유형과 위험 신호를 2줄로 설명
-                • 아직 확인해야 할 핵심 변수 1개
+                • 확인된 유형과 위험 신호를 구체적으로 설명
+                • 증거 상태 또는 학교 관계 확인 상태를 설명
 
                 ⚖️ 관련 법률
                 • 허용 인용 목록에서 복사한 법령명과 조문 번호: 현재 상황에 왜 연결되는지 설명
@@ -626,39 +629,59 @@ public class ChatService {
         return citations.stream().limit(2).toList();
     }
 
-    private static String buildSituationSummary(List<String> types, ReportReadiness readiness) {
+    private static String buildSituationSummary(String text, List<String> types, ReportReadiness readiness) {
         String typeText = types == null || types.isEmpty()
                 ? "아직 유형이 명확하지 않은 상담"
-                : String.join(", ", types) + " 관련 상담";
+                : String.join(", ", types) + " 단서가 있는 상담";
+        String context = contextSignal(text);
         if (!readiness.ready()) {
-            return typeText + "으로 보이며, 리포트 생성 전 핵심 사실을 더 확인해야 합니다.";
+            return typeText + "으로 정리됩니다. " + context + " 리포트 생성 전 핵심 사실을 더 확인해야 합니다.";
         }
         if (!readiness.schoolViolenceLikely()) {
-            return typeText + "이지만, 현재 정보만으로는 학교폭력 해당성이 낮아 추가 확인이 필요합니다.";
+            return typeText + "이지만, " + context + " 학교폭력 절차로 볼 수 있는지는 추가 확인이 필요합니다.";
         }
-        return typeText + "으로 볼 수 있어 증거와 다음 조치를 정리해야 합니다.";
+        return typeText + "으로 볼 수 있습니다. " + context + " 증거와 다음 조치를 바로 정리해야 합니다.";
     }
 
-    private static List<String> fallbackEvidence(List<String> types) {
-        List<String> evidence = new ArrayList<>();
-        if (types.contains("사이버 폭력")) {
-            evidence.add("게시글·댓글·사진이 보이는 전체 화면 캡처");
-            evidence.add("URL, 게시 시간, 계정명, 닉네임");
-            evidence.add("삭제되기 전 원본 이미지와 대화방 정보");
-        } else {
-            evidence.add("일시, 장소, 상대방, 목격자를 적은 사건 메모");
-            evidence.add("대화 내용, 녹음, 사진, 진단서 등 남아 있는 자료");
-            evidence.add("반복 여부와 이후 피해 상황을 확인할 수 있는 기록");
+    private static List<String> fallbackFindings(String text, AnalysisResult analysis, ReportReadiness readiness) {
+        List<String> findings = new ArrayList<>();
+        findings.add("확인된 유형: " + (analysis.violenceTypes().isEmpty() ? "아직 불명확" : String.join(", ", analysis.violenceTypes())));
+        findings.add("위험 신호: " + riskBand(analysis.riskScore()) + " 단계로 보이며, 점수는 " + analysis.riskScore() + "/10입니다.");
+        findings.add(evidenceSignal(text));
+        if (!readiness.reason().isBlank()) {
+            findings.add("리포트 판단: " + readiness.reason());
         }
-        evidence.add("보호자나 담임에게 공유한 날짜와 답변 내용");
-        return evidence.stream().distinct().limit(4).toList();
+        return findings.stream().distinct().limit(4).toList();
     }
 
-    private static List<String> fallbackActions(ReportReadiness readiness) {
+    private static String riskBand(double score) {
+        if (score >= 7) return "높음";
+        if (score >= 4) return "중간";
+        return "낮음";
+    }
+
+    private static String contextSignal(String text) {
+        if (hasAny(text, "같은 반", "반 친구", "동급생")) return "상대가 같은 반 또는 학교 관계자로 언급됐습니다.";
+        if (hasAny(text, "학교", "선배", "후배", "학생", "담임", "선생", "학원")) return "학교 또는 학원 관계 단서가 있습니다.";
+        return "상대와 학교 관계는 아직 분명하지 않습니다.";
+    }
+
+    private static String evidenceSignal(String text) {
+        List<String> signals = new ArrayList<>();
+        if (hasAny(text, "캡처", "스크린샷")) signals.add("캡처");
+        if (hasAny(text, "url", "링크", "게시글 번호")) signals.add("URL");
+        if (hasAny(text, "사진", "영상")) signals.add("사진·영상");
+        if (hasAny(text, "진단", "병원", "치료")) signals.add("진단·치료 기록");
+        if (hasAny(text, "목격")) signals.add("목격자");
+        if (signals.isEmpty()) return "증거 상태: 아직 구체적으로 확인되지 않았습니다.";
+        return "증거 상태: " + String.join(", ", signals) + " 단서가 있습니다.";
+    }
+
+    private static List<String> fallbackActions(ReportReadiness readiness, AnalysisResult analysis, String text) {
         if (!readiness.ready()) {
             return List.of(
-                    "부족한 정보를 먼저 확인한 뒤 같은 채팅에 이어서 답하세요.",
-                    "증거가 사라질 수 있으니 캡처와 원본 보관을 먼저 하세요."
+                    "아래 확인 질문에 답하면 리포트 판단이 바로 갱신됩니다.",
+                    firstEvidenceAction(analysis.evidenceGuide())
             );
         }
         if (!readiness.schoolViolenceLikely()) {
@@ -673,10 +696,37 @@ public class ChatService {
                     "보호자나 담임에게 사실관계를 숨기지 말고 설명하고 피해 회복 방안을 정리하세요."
             );
         }
+        if (hasAny(text, "계속", "아직도", "협박", "찾아가", "때리겠")) {
+            return List.of(
+                    "보호자나 담임에게 오늘 안에 상황과 증거를 공유하세요.",
+                    "반복되거나 보복 우려가 있으면 117 상담으로 학교 조치 절차를 확인하세요."
+            );
+        }
         return List.of(
                 "보호자나 담임에게 상황과 증거를 공유하세요.",
-                "위험이 계속되면 117 학교폭력 상담을 요청하세요."
+                "증거가 정리되면 리포트를 생성해 상담 내용을 문서화하세요."
         );
+    }
+
+    private static String firstEvidenceAction(List<String> evidenceGuide) {
+        if (evidenceGuide == null || evidenceGuide.isEmpty()) return "남아 있는 증거를 원본 형태로 먼저 보관하세요.";
+        return evidenceGuide.get(0) + "부터 먼저 보관하세요.";
+    }
+
+    private static String toConfirmationQuestion(String missingInfo) {
+        if (missingInfo.contains("무슨 일")) return "상대가 한 행동을 한 문장으로 더 구체적으로 적어주세요.";
+        if (missingInfo.contains("학교 관계")) return "상대가 같은 학교, 같은 반, 선배·후배, 학원 관계 중 어디에 해당하나요?";
+        if (missingInfo.contains("언제")) return "언제부터 몇 번 있었고, 지금도 계속되고 있나요?";
+        if (missingInfo.contains("증거")) return "캡처, URL, 사진, 진단서, 목격자 중 남아 있는 증거가 있나요?";
+        return missingInfo + " 알려주세요.";
+    }
+
+    private static boolean hasAny(String text, String... words) {
+        String normalized = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        for (String word : words) {
+            if (normalized.contains(word.toLowerCase(Locale.ROOT))) return true;
+        }
+        return false;
     }
 
     private static String firstNonNull(String... values) {
