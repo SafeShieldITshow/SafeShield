@@ -1,6 +1,7 @@
 package com.safeshield.config;
 
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -12,6 +13,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -20,10 +22,16 @@ public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
+    private final String frontendUrl;
+    private final String allowedOrigins;
 
-    public SecurityConfig(JwtFilter jwtFilter, OAuth2SuccessHandler oAuth2SuccessHandler) {
+    public SecurityConfig(JwtFilter jwtFilter, OAuth2SuccessHandler oAuth2SuccessHandler,
+                          @Value("${app.frontend-url}") String frontendUrl,
+                          @Value("${app.cors.allowed-origins}") String allowedOrigins) {
         this.jwtFilter = jwtFilter;
         this.oAuth2SuccessHandler = oAuth2SuccessHandler;
+        this.frontendUrl = stripTrailingSlash(frontendUrl);
+        this.allowedOrigins = allowedOrigins;
     }
 
     @Bean
@@ -41,7 +49,7 @@ public class SecurityConfig {
             .oauth2Login(oauth2 -> oauth2
                 .successHandler(oAuth2SuccessHandler)
                 .failureHandler((req, res, error) ->
-                    res.sendRedirect("http://localhost:5173/login?oauth_error=failed"))
+                    res.sendRedirect(this.frontendUrl + "/login?oauth_error=failed"))
             )
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint((req, res, e) ->
@@ -57,12 +65,25 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsSource() {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173"));
+        cfg.setAllowedOrigins(parseOrigins(allowedOrigins));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource src = new UrlBasedCorsConfigurationSource();
         src.registerCorsConfiguration("/**", cfg);
         return src;
+    }
+
+    private List<String> parseOrigins(String origins) {
+        return Arrays.stream(origins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isBlank())
+                .map(this::stripTrailingSlash)
+                .toList();
+    }
+
+    private String stripTrailingSlash(String value) {
+        if (value == null || value.isBlank()) return "http://localhost:5173";
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 }

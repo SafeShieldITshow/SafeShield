@@ -4,6 +4,7 @@ import com.safeshield.model.User;
 import com.safeshield.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
@@ -18,10 +19,13 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
+    private final String frontendUrl;
 
-    public OAuth2SuccessHandler(UserRepository userRepository, JwtUtil jwtUtil) {
+    public OAuth2SuccessHandler(UserRepository userRepository, JwtUtil jwtUtil,
+                                @Value("${app.frontend-url}") String frontendUrl) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
+        this.frontendUrl = stripTrailingSlash(frontendUrl);
     }
 
     @Override
@@ -33,7 +37,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String email = oAuth2User.getAttribute("email");
         String name  = oAuth2User.getAttribute("name");
         if (email == null || email.isBlank()) {
-            response.sendRedirect("http://localhost:5173/login?oauth_error=email");
+            response.sendRedirect(frontendUrl + "/login?oauth_error=email");
             return;
         }
 
@@ -50,9 +54,14 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         String token = jwtUtil.generate(user.getId(), user.getUsername());
 
-        response.sendRedirect("http://localhost:5173/oauth2/callback?token=" + encode(token)
+        response.sendRedirect(frontendUrl + "/oauth2/callback?token=" + encode(token)
                 + "&username=" + encode(user.getUsername())
                 + "&name=" + encode(user.getName()));
+    }
+
+    private String stripTrailingSlash(String value) {
+        if (value == null || value.isBlank()) return "http://localhost:5173";
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 
     private String encode(String value) {

@@ -65,6 +65,12 @@ Google Cloud Console의 승인된 리디렉션 URI에는 다음 주소가 등록
 http://localhost:8080/login/oauth2/code/google
 ```
 
+배포 환경에서는 실제 백엔드 주소도 추가해야 합니다.
+
+```text
+https://safeshield-api.onrender.com/login/oauth2/code/google
+```
+
 ## 실행
 
 백엔드:
@@ -82,6 +88,31 @@ npm run dev
 ```
 
 접속 주소는 `http://127.0.0.1:5173`입니다. API 주소를 변경하려면 프런트 실행 전에 `VITE_API_BASE_URL`을 설정합니다.
+
+## 배포
+
+`render.yaml`은 Render Blueprint 배포용 설정입니다.
+
+- `safeshield-api`: Spring Boot 백엔드
+- `safeshield-web`: Vite 정적 프런트엔드
+- `safeshield-db`: PostgreSQL 데이터베이스
+
+Render Dashboard에서 Blueprint를 만들고 이 저장소를 연결하면 됩니다. 생성 과정에서 다음 비밀 값을 입력해야 합니다.
+
+```text
+GROQ_API_KEY
+GEMINI_API_KEY
+BACKUP_AI_KEY
+LAW_API_OC
+GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET
+```
+
+배포 후 Google Cloud Console의 OAuth 승인된 리디렉션 URI에 배포 백엔드 주소를 등록해야 Google 로그인이 동작합니다.
+
+```text
+https://safeshield-api.onrender.com/login/oauth2/code/google
+```
 
 ## 검증
 
