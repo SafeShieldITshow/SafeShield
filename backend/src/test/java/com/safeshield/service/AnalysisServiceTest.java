@@ -55,6 +55,42 @@ class AnalysisServiceTest {
         assertFalse(result.evidenceGuide().contains("진단서·진료 기록"));
     }
 
+    @Test
+    void differentiatesRiskWithinCyberViolenceCases() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var oneOff = analysisService.analyze(
+                "같은 반 친구가 SNS에 제 사진과 비방 글을 한 번 올렸고 캡처와 URL이 있습니다.",
+                readiness
+        );
+        var repeated = analysisService.analyze(
+                "같은 반 친구들이 단톡방과 SNS에 제 사진과 비방 글을 계속 올리고 여러 명이 댓글로 조롱합니다. 아직도 반복되고 등교가 불안합니다.",
+                readiness
+        );
+
+        assertTrue(repeated.riskScore() > oneOff.riskScore() + 1.0,
+                "반복, 공개 확산, 불안이 있으면 1회성 게시보다 위험도가 뚜렷하게 높아야 합니다.");
+        assertTrue(oneOff.riskScore() < 5.5, "1회성 사이버 비방은 고위험으로 과측정하지 않아야 합니다.");
+    }
+
+    @Test
+    void differentiatesMinorAndSeverePhysicalCases() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var minor = analysisService.analyze(
+                "같은 반 친구가 어제 한 번 밀쳐서 멍이 들었고 사진이 있습니다.",
+                readiness
+        );
+        var severe = analysisService.analyze(
+                "같은 반 친구들이 몇 달 동안 여러 번 때렸고 출혈과 골절로 병원 치료를 받았습니다. 계속 찾아와 때리겠다고 협박합니다.",
+                readiness
+        );
+
+        assertTrue(severe.riskScore() > minor.riskScore() + 2.0,
+                "반복 상해와 협박은 단발성 멍보다 훨씬 높게 산정해야 합니다.");
+        assertTrue(minor.riskScore() < 6.5, "단발성 경미 상해는 자동으로 최고위험이 되지 않아야 합니다.");
+    }
+
     private ReportReadiness readySchoolViolence() {
         return new ReportReadiness(
                 true,

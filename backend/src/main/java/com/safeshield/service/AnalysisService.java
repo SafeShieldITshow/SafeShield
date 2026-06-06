@@ -118,7 +118,7 @@ public class AnalysisService {
         if (containsAny(t, "때렸", "맞았", "폭행", "밀쳤", "발로", "주먹", "상처", "멍", "상해", "다쳤")) {
             types.add("신체 폭력");
         }
-        if (containsAny(t, "욕", "협박", "모욕", "비하", "놀림", "죽이", "꺼져", "소문", "명예훼손")) {
+        if (containsAny(t, "욕", "협박", "모욕", "비하", "비방", "놀림", "죽이", "꺼져", "소문", "명예훼손")) {
             types.add("언어 폭력");
         }
         if (containsAny(t, "sns", "카톡", "카카오", "단톡", "단체 채팅", "디엠", "dm", "인스타", "게시", "댓글", "사진 올", "온라인")) {
@@ -142,29 +142,56 @@ public class AnalysisService {
 
     private double calculateRiskScore(List<String> violenceTypes, String text) {
         String t = text.toLowerCase(Locale.ROOT);
-        double score = 1.4;
+        double score = 1.2;
 
-        if (violenceTypes.contains("언어 폭력")) score += 0.9;
-        if (violenceTypes.contains("사이버 폭력")) score += 1.0;
-        if (violenceTypes.contains("따돌림")) score += 1.1;
-        if (violenceTypes.contains("갈취")) score += 1.5;
-        if (violenceTypes.contains("스토킹")) score += 1.7;
-        if (violenceTypes.contains("신체 폭력")) score += 2.1;
-        if (violenceTypes.contains("성폭력")) score += 2.4;
+        if (violenceTypes.contains("언어 폭력")) score += 0.7;
+        if (violenceTypes.contains("사이버 폭력")) score += 0.8;
+        if (violenceTypes.contains("따돌림")) score += 0.9;
+        if (violenceTypes.contains("갈취")) score += 1.4;
+        if (violenceTypes.contains("스토킹")) score += 1.6;
+        if (violenceTypes.contains("신체 폭력")) score += 1.8;
+        if (violenceTypes.contains("성폭력")) score += 2.5;
 
-        if (violenceTypes.size() > 1) score += Math.min(0.8, (violenceTypes.size() - 1) * 0.25);
+        if (violenceTypes.size() > 1) score += Math.min(1.0, (violenceTypes.size() - 1) * 0.35);
 
-        boolean repeated = containsAny(t, "계속", "매일", "반복", "몇 달", "여러 번", "지속", "몇 주", "몇 개월");
-        boolean severeDistress = containsAny(t, "무서", "불안", "죽고", "자살", "학교 못", "등교 못", "잠을 못", "병원");
-        boolean injury = containsAny(t, "출혈", "골절", "멍", "상처", "진단", "치료", "응급실");
+        boolean oneOff = containsAny(t, "한 번", "1번", "처음", "처음으로");
+        boolean repeated = containsAny(t, "계속", "매일", "반복", "여러 번", "지속", "몇 번", "또");
+        boolean longTerm = containsAny(t, "몇 달", "몇 개월", "몇 주", "개월", "학기", "작년부터");
+        boolean ongoing = containsAny(t, "아직도", "지금도", "계속하고", "멈추지", "또 올");
+        boolean publicSpread = containsAny(t, "공개", "퍼졌", "유포", "공유", "단톡", "단체", "여러 명", "댓글", "게시");
+        boolean identityExposure = containsAny(t, "사진", "영상", "얼굴", "신상", "이름", "학교명", "전화번호");
+        boolean severeDistress = containsAny(t, "죽고", "자살", "자해", "극단");
+        boolean distress = severeDistress || containsAny(t, "무서", "불안", "학교 못", "등교 못", "잠을 못", "상담", "병원");
         boolean directThreat = containsAny(t, "죽이", "때리겠", "찾아가", "가만 안", "협박");
+        boolean weaponOrGroup = containsAny(t, "흉기", "칼", "위험한 물건", "여러 명", "단체로", "무리", "선배");
+        boolean resolved = containsAny(t, "삭제", "사과", "멈췄", "그만뒀", "해결");
 
         if (repeated) score += 0.8;
-        if (severeDistress) score += 1.2;
-        if (injury) score += 1.4;
-        if (directThreat) score += 1.0;
+        if (longTerm) score += 0.5;
+        if (ongoing) score += 0.4;
+        if (oneOff && !repeated && !ongoing) score -= 0.2;
+        if (publicSpread) score += 0.5;
+        if (identityExposure) score += 0.5;
+        if (directThreat) score += 0.9;
+        if (weaponOrGroup) score += 0.5;
+        if (distress) score += 0.7;
+        if (severeDistress) score += 0.9;
+        if (resolved && !ongoing && !repeated) score -= 0.4;
 
-        boolean severeSignal = severeDistress || injury || directThreat
+        double injuryScore = 0.0;
+        if (containsAny(t, "멍", "상처", "다쳤")) injuryScore = Math.max(injuryScore, 0.7);
+        if (containsAny(t, "진단", "치료", "병원", "상해")) injuryScore = Math.max(injuryScore, 1.1);
+        if (containsAny(t, "출혈", "골절", "응급실", "수술", "기절")) injuryScore = Math.max(injuryScore, 1.5);
+        score += injuryScore;
+
+        if (violenceTypes.contains("성폭력") && containsAny(t, "사진", "영상", "촬영", "유포", "온라인", "dm", "디엠")) {
+            score += 1.0;
+        }
+        if (violenceTypes.contains("갈취") && containsAny(t, "돈", "송금", "계좌", "만원", "물건")) {
+            score += 0.5;
+        }
+
+        boolean severeSignal = severeDistress || injuryScore >= 1.1 || directThreat || weaponOrGroup
                 || violenceTypes.contains("신체 폭력")
                 || violenceTypes.contains("성폭력")
                 || violenceTypes.contains("스토킹")
@@ -174,12 +201,14 @@ public class AnalysisService {
 
         double cap = 10.0;
         if (verbalOrCyberOnly && !repeated && !severeSignal) {
-            cap = 5.5;
+            cap = publicSpread || identityExposure ? 5.8 : 4.8;
+        } else if (verbalOrCyberOnly && !severeSignal) {
+            cap = 6.8;
         } else if (!severeSignal) {
             cap = 6.5;
         }
 
-        return Math.round(Math.min(cap, score) * 10.0) / 10.0;
+        return Math.round(Math.max(1.0, Math.min(cap, score)) * 10.0) / 10.0;
     }
 
     private List<Integer> detectMeasureRange(double risk) {
