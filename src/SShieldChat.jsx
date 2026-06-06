@@ -181,7 +181,7 @@ function isLikelyFollowUpAnswer(content) {
 }
 
 function hasMeaningfulTopicShift(content, previousUserMessages) {
-    if (!previousUserMessages.length || isLikelyFollowUpAnswer(content)) return false;
+    if (!previousUserMessages.length) return false;
 
     const previousText = previousUserMessages.join(' ');
     const previousGroups = detectTopicGroups(previousText);
@@ -190,6 +190,8 @@ function hasMeaningfulTopicShift(content, previousUserMessages) {
     if (previousGroups.size > 0 && currentGroups.size > 0 && !intersects(previousGroups, currentGroups)) {
         return true;
     }
+
+    if (isLikelyFollowUpAnswer(content)) return false;
 
     const previousTokens = extractTopicTokens(previousText);
     const currentTokens = extractTopicTokens(content);
@@ -595,9 +597,9 @@ const SShieldChat = () => {
             {topicPrompt && (
                 <div className="confirm-overlay" onClick={() => setTopicPrompt(null)}>
                     <div className="confirm-box topic-confirm-box" onClick={(e) => e.stopPropagation()}>
-                        <p>이 내용도 같은 상황에서 일어난 행동인가요?</p>
+                        <p>이 내용도 같은 가해자와 같은 사건에서 이어진 일인가요?</p>
                         <span className="topic-confirm-desc">
-                            같은 상황이면 현재 상담에 추가하고, 다른 사건이면 새 상담으로 분리해서 리포트가 섞이지 않게 저장합니다.
+                            같은 가해자와 같은 사건이면 현재 상담에 추가하고, 다른 사안이면 새 상담으로 분리해서 리포트가 섞이지 않게 저장합니다.
                         </span>
                         <div className="confirm-btns topic-confirm-btns">
                             <button
@@ -608,7 +610,7 @@ const SShieldChat = () => {
                                     handleSend(content);
                                 }}
                             >
-                                예, 같은 상담에 추가
+                                예, 같은 사안에 추가
                             </button>
                             <button
                                 className="confirm-btn-ok"
