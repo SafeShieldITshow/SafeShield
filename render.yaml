@@ -35,8 +35,9 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
 
-  - type: static
+  - type: web
     name: safeshield-web
+    runtime: static
     rootDir: .
     buildCommand: npm install && npm run build
     staticPublishPath: dist
