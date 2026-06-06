@@ -161,12 +161,14 @@
 }
 
 .topic-confirm-box {
-  max-width: 420px;
+  width: min(460px, calc(100vw - 32px));
+  max-width: none;
+  text-align: left;
 }
 
 .topic-confirm-desc {
   display: block;
-  margin-top: 8px;
+  margin: -10px 0 20px;
   color: var(--text-muted);
   font-size: 13px;
   line-height: 1.5;
@@ -174,6 +176,29 @@
 
 .topic-confirm-btns {
   gap: 10px;
+}
+
+.topic-confirm-btns button {
+  min-height: 44px;
+  height: auto;
+  padding: 10px 14px;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.topic-confirm-btns .confirm-btn-cancel {
+  background: rgba(126, 116, 240, 0.16);
+  color: var(--text);
+}
+
+@media (max-width: 520px) {
+  .topic-confirm-box {
+    padding: 24px 22px;
+  }
+
+  .topic-confirm-btns {
+    flex-direction: column;
+  }
 }
 
 /* 로그아웃 오버레이 */
