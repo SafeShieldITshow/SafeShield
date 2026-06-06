@@ -80,6 +80,12 @@ public class ChatService {
     @Value("${groq.api-key:}")
     private String groqApiKey;
 
+    @Value("${groq.model:llama-3.1-8b-instant}")
+    private String groqModel;
+
+    @Value("${groq.max-completion-tokens:900}")
+    private int groqMaxCompletionTokens;
+
     @Value("${gemini.api-key:}")
     private String geminiApiKey;
 
@@ -394,9 +400,12 @@ public class ChatService {
         }
 
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", "llama-3.3-70b-versatile");
+        String model = groqModel == null || groqModel.isBlank()
+                ? "llama-3.1-8b-instant"
+                : groqModel.trim();
+        body.put("model", model);
         body.put("messages", messages);
-        body.put("max_completion_tokens", 1200);
+        body.put("max_completion_tokens", Math.max(400, Math.min(groqMaxCompletionTokens, 1200)));
         body.put("temperature", 0.1);
 
         ResponseEntity<Map> res = aiClient.exchange(

@@ -34,6 +34,8 @@ SECRET = os.getenv("SECRET_KEY", "safeshield-dev-secret")
 ALGORITHM = "HS256"
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GROQ_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_COMPLETION_TOKENS", "900"))
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 DB = os.path.join(os.path.dirname(__file__), "safeshield.db")
 
@@ -171,9 +173,9 @@ def _call_groq(msgs):
     data = _http_post(
         "https://api.groq.com/openai/v1/chat/completions",
         {"Content-Type": "application/json", "Authorization": f"Bearer {GROQ_KEY}"},
-        {"model": "llama-3.3-70b-versatile", "messages":
+        {"model": GROQ_MODEL, "messages":
             [{"role": "system", "content": SYSTEM}] + msgs,
-         "max_tokens": 1024, "temperature": 0.3}
+         "max_tokens": max(400, min(GROQ_MAX_TOKENS, 1200)), "temperature": 0.3}
     )
     return data["choices"][0]["message"]["content"]
 
