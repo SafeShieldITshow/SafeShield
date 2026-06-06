@@ -13,7 +13,11 @@ import java.nio.charset.StandardCharsets;
 public class SafeShieldApplication {
     public static void main(String[] args) {
         Dotenv.configure().ignoreIfMissing().load()
-                .entries().forEach(e -> System.setProperty(e.getKey(), e.getValue()));
+                .entries().forEach(e -> {
+                    if (!hasValue(e.getKey())) {
+                        System.setProperty(e.getKey(), e.getValue());
+                    }
+                });
         configureDatabaseUrl();
         SpringApplication.run(SafeShieldApplication.class, args);
     }

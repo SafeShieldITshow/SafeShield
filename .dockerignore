@@ -1,0 +1,15 @@
+node_modules/
+dist/
+SafeShield-main/
+
+backend/target/
+backend/.env
+backend/*.db
+backend/*.mv.db
+backend/*.lock.db
+backend/*.trace.db
+
+.git/
+.idea/
+.vercel/
+.railway/
