@@ -32,3 +32,5 @@ backend/target/
 *.njsproj
 *.sln
 *.sw?
+.vercel
+SafeShield-main/
