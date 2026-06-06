@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './SShieldChat.css';
-import { api, clearSession, getSession, setSession } from './api.js';
+import { api, clearSession, setSession } from './api.js';
 import SessionHistory from './SessionHistory.jsx';
 
 const EXAMPLE_QUESTIONS = [
@@ -212,10 +212,8 @@ const toUiMessage = (message) => ({
 });
 
 const SShieldChat = () => {
-    const initialSessionIdRef = useRef(getSession());
-    const initialConversationKey = initialSessionIdRef.current
-        ? `session:${initialSessionIdRef.current}`
-        : `draft:${Date.now()}`;
+    const initialSessionIdRef = useRef(null);
+    const initialConversationKey = `draft:${Date.now()}`;
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
@@ -279,19 +277,13 @@ const SShieldChat = () => {
     }, [activateConversation]);
 
     useEffect(() => {
-        const savedSessionId = getSession();
-        loadSessions().then((items) => {
-            if (savedSessionId) {
-                loadMessagesForSession(savedSessionId);
-            } else if (items.length > 0) {
-                loadMessagesForSession(items[0].session_id);
-            }
-        });
+        localStorage.removeItem('ss_session');
+        loadSessions();
 
         return () => {
             if (typingTimerRef.current) clearInterval(typingTimerRef.current);
         };
-    }, [loadMessagesForSession, loadSessions]);
+    }, [loadSessions]);
 
     useEffect(() => {
         if (scrollRef.current && shouldAutoScrollRef.current) {
