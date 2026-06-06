@@ -27,7 +27,7 @@ const SessionHistory = ({ sessions: providedSessions, activeSessionId, onSelect,
             return;
         }
         setSession(id);
-        navigate('/chat');
+        navigate(`/chat?session=${id}`);
     };
 
     return (

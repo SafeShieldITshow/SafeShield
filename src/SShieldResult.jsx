@@ -111,6 +111,8 @@ const SShieldResult = () => {
         clearSession();
         navigate('/', { replace: true });
     };
+    const reportChatPath = report?.session_id ? `/chat?session=${report.session_id}` : '/chat';
+    const goToReportChat = () => navigate(reportChatPath);
 
     return (
         <div className="ss-wrap">
@@ -129,7 +131,7 @@ const SShieldResult = () => {
                         <nav className="ss-nav-list">
                             <div className="ss-nav-item active"><span className="ss-emoji-icon">R</span><span className="ss-nav-text">분석 결과</span></div>
                             <div className="ss-nav-item" onClick={() => navigate('/mypage')}><span className="ss-emoji-icon">M</span><span className="ss-nav-text">마이페이지</span></div>
-                            <div className="ss-nav-item" onClick={() => navigate('/chat')}><span className="ss-emoji-icon">C</span><span className="ss-nav-text">상담</span></div>
+                            <div className="ss-nav-item" onClick={goToReportChat}><span className="ss-emoji-icon">C</span><span className="ss-nav-text">상담</span></div>
                         </nav>
                         <SessionHistory />
                         <div className="ss-logout-section">
@@ -144,12 +146,12 @@ const SShieldResult = () => {
                 <header className="ss-header">
                     <div className="ss-logo">S-<span className="logo-accent">Shield</span></div>
                     <nav className="ss-mobile-nav" aria-label="모바일 메뉴">
-                        <button onClick={() => navigate('/chat')}>상담</button>
+                        <button onClick={goToReportChat}>상담</button>
                         <button className="active">결과</button>
                         <button onClick={() => navigate('/mypage')}>마이</button>
                         <button onClick={() => navigate('/mypage#session-history')}>기록</button>
                     </nav>
-                    <button className="ss-back-btn" onClick={() => navigate('/chat')}>상담으로 돌아가기</button>
+                    <button className="ss-back-btn" onClick={goToReportChat}>상담으로 돌아가기</button>
                 </header>
 
                 <div className="ss-content-scroll">
@@ -280,7 +282,7 @@ const SShieldResult = () => {
                                 <h2 className="ss-sub-title">다음 행동</h2>
                                 <div className="ss-actions">
                                     <a href="tel:117" className="ss-action-link"><button>117 학교폭력 신고</button></a>
-                                    <button onClick={() => navigate('/chat')}>상담 이어가기</button>
+                                    <button onClick={goToReportChat}>상담 이어가기</button>
                                 </div>
                             </>
                         )}

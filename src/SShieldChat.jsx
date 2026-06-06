@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import './SShieldChat.css';
 import { api, clearSession, setSession } from './api.js';
 import SessionHistory from './SessionHistory.jsx';
@@ -234,6 +234,8 @@ const SShieldChat = () => {
     const messageLoadSequenceRef = useRef(0);
     const shouldAutoScrollRef = useRef(true);
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const requestedSessionParam = searchParams.get('session');
     const isCurrentLoading = pendingKeys.has(conversationKey);
 
     const activateConversation = useCallback((id, key = `session:${id}`) => {
@@ -277,13 +279,19 @@ const SShieldChat = () => {
     }, [activateConversation]);
 
     useEffect(() => {
-        localStorage.removeItem('ss_session');
         loadSessions();
+
+        const requestedSessionId = Number(requestedSessionParam);
+        if (Number.isInteger(requestedSessionId) && requestedSessionId > 0) {
+            loadMessagesForSession(requestedSessionId);
+        } else {
+            localStorage.removeItem('ss_session');
+        }
 
         return () => {
             if (typingTimerRef.current) clearInterval(typingTimerRef.current);
         };
-    }, [loadSessions]);
+    }, [loadSessions, loadMessagesForSession, requestedSessionParam]);
 
     useEffect(() => {
         if (scrollRef.current && shouldAutoScrollRef.current) {

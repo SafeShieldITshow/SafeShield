@@ -159,6 +159,7 @@ public class ReportService {
 
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("id", report.getId());
+            map.put("session_id", report.getSession() == null ? null : report.getSession().getId());
             map.put("title", report.getTitle());
             map.put("summary", report.getSummary());
             map.put("risk_score", report.getRiskScore());
