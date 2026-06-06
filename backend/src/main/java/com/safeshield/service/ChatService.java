@@ -224,6 +224,12 @@ public class ChatService {
     }
 
     private String getAiReply(List<Message> history) {
+        String latestUserMessage = latestUserMessage(history);
+        if (isIrrelevantInput(latestUserMessage)) {
+            lastProvider = "guardrail";
+            return buildIrrelevantInputReply();
+        }
+
         PromptContext promptContext = buildPromptContext(history);
         Exception lastError = null;
 
@@ -333,6 +339,44 @@ public class ChatService {
         }
 
         return reply.toString().trim();
+    }
+
+    private String latestUserMessage(List<Message> history) {
+        for (int i = history.size() - 1; i >= 0; i--) {
+            Message message = history.get(i);
+            if ("user".equals(message.getRole())) return message.getContent() == null ? "" : message.getContent().trim();
+        }
+        return "";
+    }
+
+    private boolean isIrrelevantInput(String text) {
+        String t = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+        if (t.isBlank()) return false;
+        if (t.length() <= 1) return true;
+        boolean hasConsultationSignal = containsAny(t,
+                "학교", "같은 반", "반 친구", "친구", "선배", "후배", "학생", "담임", "선생", "학원",
+                "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
+                "sns", "카톡", "단톡", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "갈취", "스토킹",
+                "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담");
+        if (hasConsultationSignal) return false;
+
+        boolean nuisance = containsAny(t, "똥", "똥싸", "오줌", "방귀", "ㅋㅋ", "ㅎㅎ", "ㅗ", "시발", "씨발", "병신", "바보", "메롱");
+        boolean tooShortForCase = t.replaceAll("\\s+", "").length() < 8;
+        return nuisance || tooShortForCase;
+    }
+
+    private String buildIrrelevantInputReply() {
+        return """
+                학교폭력 상담과 직접 관련된 사건 내용이 아직 확인되지 않았습니다.
+
+                이 채팅에서는 학교폭력, 사이버폭력, 따돌림, 협박, 폭행, 증거 정리처럼 상담에 필요한 내용만 분석할 수 있습니다.
+
+                상담을 이어가려면 아래처럼 적어주세요.
+                • 누가 어떤 행동을 했는지
+                • 상대가 학교 관계자인지
+                • 언제부터 몇 번 있었는지
+                • 캡처, 사진, 진단서, 목격자 같은 증거가 있는지
+                """.trim();
     }
 
     private String callGroqApi(List<Message> history, String systemPrompt) {
@@ -857,7 +901,6 @@ public class ChatService {
         if (containsAny(t, "따돌", "왕따", "무시", "소외")) types.add("따돌림");
         if (containsAny(t, "성추행", "성희롱", "성적")) types.add("성폭력");
         if (containsAny(t, "돈", "빼앗", "갈취", "강요")) types.add("갈취");
-        if (types.isEmpty()) types.add("언어 폭력");
         return types;
     }
 

@@ -91,6 +91,17 @@ class AnalysisServiceTest {
         assertTrue(minor.riskScore() < 6.5, "단발성 경미 상해는 자동으로 최고위험이 되지 않아야 합니다.");
     }
 
+    @Test
+    void rejectsIrrelevantInputAsNotReadyForReport() {
+        ReportReadiness readiness = analysisService.assessReportReadiness("똥싸기", 2);
+        var result = analysisService.analyze("똥싸기", readiness);
+
+        assertFalse(readiness.ready(), "학교폭력과 무관한 입력은 리포트 준비 완료가 되면 안 됩니다.");
+        assertFalse(readiness.schoolViolenceLikely(), "학교폭력 단서가 없는 입력은 학교폭력 가능성으로 보지 않아야 합니다.");
+        assertTrue(result.violenceTypes().isEmpty(), "무관 입력을 언어 폭력으로 강제 분류하면 안 됩니다.");
+        assertTrue(result.riskScore() <= 4.5, "무관 입력은 위험도를 낮게 제한해야 합니다.");
+    }
+
     private ReportReadiness readySchoolViolence() {
         return new ReportReadiness(
                 true,

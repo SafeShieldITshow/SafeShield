@@ -63,6 +63,7 @@ public class AnalysisService {
         String t = normalize(text);
         List<String> missing = new ArrayList<>();
         List<String> facts = new ArrayList<>();
+        boolean relevantInput = isRelevantConsultationInput(t);
 
         boolean hasConcreteIncident = containsAny(t, "때렸", "맞았", "욕", "모욕", "비방", "사진", "게시", "댓글", "협박",
                 "따돌", "돈", "갈취", "성희롱", "성추행", "괴롭", "놀림", "밀쳤", "사과", "제가", "내가");
@@ -86,12 +87,15 @@ public class AnalysisService {
         String role = detectRole(t);
         boolean schoolContext = hasSchoolContext(t);
         boolean hasViolenceType = !detectViolenceTypes(t).isEmpty();
-        boolean ready = userMessageCount >= 2 && missing.size() <= 1;
+        boolean ready = relevantInput && userMessageCount >= 2 && missing.size() <= 1;
         boolean lowSchoolViolence = ready && (!schoolContext || !hasViolenceType);
 
         String status;
         String reason;
-        if (!ready) {
+        if (!relevantInput) {
+            status = "상담 내용 확인 필요";
+            reason = "학교폭력 상담과 직접 관련된 사건 내용이 아직 확인되지 않았습니다.";
+        } else if (!ready) {
             status = "추가 확인 필요";
             reason = "리포트 생성 전에 핵심 정보 " + Math.min(2, missing.size()) + "가지를 더 확인해야 합니다.";
         } else if (lowSchoolViolence) {
@@ -108,7 +112,16 @@ public class AnalysisService {
             reason = "학교 관계와 폭력 유형 단서가 확인되어 리포트 생성이 가능합니다.";
         }
 
-        return new ReportReadiness(ready, status, reason, missing.stream().limit(2).toList(), facts, !lowSchoolViolence);
+        return new ReportReadiness(ready, status, reason, missing.stream().limit(2).toList(), facts, relevantInput && !lowSchoolViolence);
+    }
+
+    private boolean isRelevantConsultationInput(String text) {
+        if (text.isBlank()) return false;
+        return containsAny(text,
+                "학교", "같은 반", "반 친구", "친구", "선배", "후배", "동급생", "학생", "담임", "선생", "학원",
+                "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
+                "sns", "카톡", "단톡", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "갈취", "스토킹",
+                "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담");
     }
 
     private List<String> detectViolenceTypes(String text) {
