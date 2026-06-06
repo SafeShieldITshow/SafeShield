@@ -114,6 +114,37 @@ GOOGLE_CLIENT_SECRET
 https://safeshield-api.onrender.com/login/oauth2/code/google
 ```
 
+### SQLite로 배포하는 경우
+
+SQLite도 사용할 수 있습니다. 단, SQLite는 파일 DB이므로 배포 서버에 영구 볼륨이 필요합니다. 서버 재시작/재배포 후에도 파일이 유지되는 환경에서만 사용하세요.
+
+권장 구조:
+
+- 백엔드: Fly.io Machine + Volume
+- DB 파일: `/data/safeshield.db`
+- 프런트엔드: Render Static Site 또는 다른 정적 호스팅
+
+백엔드 환경변수:
+
+```text
+SPRING_DATASOURCE_URL=jdbc:sqlite:/data/safeshield.db
+FRONTEND_URL=https://프론트주소
+CORS_ALLOWED_ORIGINS=https://프론트주소
+GOOGLE_REDIRECT_URI=https://백엔드주소/login/oauth2/code/google
+```
+
+Fly.io 예시 설정은 `backend/fly.toml.example`에 있습니다. 실제 배포 시 파일명을 `fly.toml`로 바꾸고 앱 이름과 프런트 주소를 맞춘 뒤 사용합니다.
+
+```powershell
+cd backend
+copy fly.toml.example fly.toml
+fly volumes create safeshield_data --size 1 --region nrt
+fly secrets set GROQ_API_KEY=... GEMINI_API_KEY=... LAW_API_OC=... GOOGLE_CLIENT_ID=... GOOGLE_CLIENT_SECRET=...
+fly deploy
+```
+
+Render에서도 SQLite를 쓰려면 web service에 persistent disk를 붙이고 `SPRING_DATASOURCE_URL=jdbc:sqlite:/data/safeshield.db`처럼 설정하면 됩니다. 다만 Render persistent disk는 무료 web service에는 붙일 수 없습니다.
+
 ## 검증
 
 ```powershell

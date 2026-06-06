@@ -1,0 +1,22 @@
+app = "safeshield-api"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  SPRING_DATASOURCE_URL = "jdbc:sqlite:/data/safeshield.db"
+  FRONTEND_URL = "https://safeshield-web.onrender.com"
+  CORS_ALLOWED_ORIGINS = "https://safeshield-web.onrender.com"
+  GOOGLE_REDIRECT_URI = "https://safeshield-api.fly.dev/login/oauth2/code/google"
+
+[mounts]
+  source = "safeshield_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
