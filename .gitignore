@@ -11,6 +11,16 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+backend/.env
+run-logs/
+backend/__pycache__/
+backend/*.pyc
+backend/*.db
+backend/*.mv.db
+backend/*.lock.db
+backend/*.trace.db
+backend/target/
 
 # Editor directories and files
 .vscode/*

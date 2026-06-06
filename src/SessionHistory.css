@@ -1,0 +1,95 @@
+.ss-session-history {
+  padding: 0 18px;
+  margin: 8px 0 22px;
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+.ss-session-history::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ss-session-history::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+.ss-session-title {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+
+.ss-session-empty {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0;
+  padding: 12px 0;
+}
+
+.ss-session-item {
+  width: 100%;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-sub);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background var(--ease), border-color var(--ease), color var(--ease);
+}
+
+.ss-session-item + .ss-session-item {
+  margin-top: 6px;
+}
+
+.ss-session-item span {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ss-session-item small {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.ss-session-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border-faint);
+  color: var(--text);
+}
+
+.ss-session-item.active {
+  background: var(--accent-dim);
+  border-color: rgba(126, 116, 240, 0.32);
+  color: var(--text);
+}
+
+.ss-session-history.page-variant {
+  padding: 0;
+  margin: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.page-variant .ss-session-title {
+  display: none;
+}
+
+.page-variant .ss-session-item {
+  background: var(--surface);
+  border-color: var(--border);
+  padding: 14px 16px;
+}
+
+.page-variant .ss-session-item span {
+  font-size: 14px;
+}
