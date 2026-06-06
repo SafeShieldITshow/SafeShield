@@ -117,6 +117,89 @@ function hasTopicShiftHint(content) {
     ].some((pattern) => pattern.test(text));
 }
 
+const TOPIC_STOP_WORDS = new Set([
+    '그리고', '근데', '그런데', '그래서', '저는', '제가', '내가', '나는', '친구',
+    '상대', '상대방', '학교', '오늘', '어제', '계속', '그냥', '진짜', '너무',
+    '어떻게', '해야', '하나요', '있어요', '했어요', '당했어요'
+]);
+
+const TOPIC_GROUPS = [
+    { name: 'cyber', patterns: [/sns/i, /카톡/, /단톡/, /채팅/, /dm/i, /인스타/, /게시/, /댓글/, /사진/, /온라인/] },
+    { name: 'verbal', patterns: [/욕/, /모욕/, /비방/, /협박/, /소문/, /놀림/, /명예훼손/] },
+    { name: 'physical', patterns: [/때렸/, /맞았/, /폭행/, /밀쳤/, /발로/, /주먹/, /상처/, /멍/] },
+    { name: 'exclusion', patterns: [/따돌/, /왕따/, /무시/, /소외/, /배제/] },
+    { name: 'sexual', patterns: [/성추행/, /성희롱/, /성적/, /몸을/, /수치심/] },
+    { name: 'money', patterns: [/돈/, /갈취/, /빼앗/, /내놔/, /물건/, /강요/] },
+    { name: 'stalking', patterns: [/스토킹/, /따라/, /기다리/, /집 앞/, /계속 연락/] },
+    { name: 'self', patterns: [/내가/, /제가/, /나도/, /제가 먼저/, /내가 먼저/, /사과/, /올렸/, /때렸/, /욕했/] },
+    { name: 'other_person', patterns: [/동생/, /부모/, /선생/, /담임/, /선배/, /후배/, /친구가/, /아이/] },
+];
+
+const FOLLOW_UP_PATTERNS = [
+    /같은\s*반/, /반\s*친구/, /동급생/, /선배/, /후배/, /학생/,
+    /어제|오늘|방금|지난|부터|계속|반복|매일|몇\s*번|한\s*번/,
+    /캡처|증거|녹음|사진|목격|진단서|메시지|URL|url/,
+    /네|아니요|맞아요|아마|모르겠|기억/
+];
+
+function normalizeTopicText(content) {
+    return String(content || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ');
+}
+
+function hasExplicitTopicShiftHint(content) {
+    const text = normalizeTopicText(content);
+    return hasTopicShiftHint(content) || [
+        /다른\s*(사건|얘기|상담|내용|상황|문제)/,
+        /새\s*(사건|상담|얘기|내용|문제)/,
+        /별개/,
+        /이번(?:엔|에는)\s*(다른|제가|내가|친구가|동생이|선배가|후배가)/,
+    ].some((pattern) => pattern.test(text));
+}
+
+function detectTopicGroups(content) {
+    const text = normalizeTopicText(content);
+    return new Set(TOPIC_GROUPS
+        .filter((group) => group.patterns.some((pattern) => pattern.test(text)))
+        .map((group) => group.name));
+}
+
+function extractTopicTokens(content) {
+    return new Set(normalizeTopicText(content)
+        .split(/\s+/)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 2 && !TOPIC_STOP_WORDS.has(token))
+        .slice(0, 40));
+}
+
+function intersects(a, b) {
+    return [...a].some((item) => b.has(item));
+}
+
+function isLikelyFollowUpAnswer(content) {
+    const text = normalizeTopicText(content);
+    return text.length <= 28 || FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function hasMeaningfulTopicShift(content, previousUserMessages) {
+    if (!previousUserMessages.length || isLikelyFollowUpAnswer(content)) return false;
+
+    const previousText = previousUserMessages.join(' ');
+    const previousGroups = detectTopicGroups(previousText);
+    const currentGroups = detectTopicGroups(content);
+
+    if (previousGroups.size > 0 && currentGroups.size > 0 && !intersects(previousGroups, currentGroups)) {
+        return true;
+    }
+
+    const previousTokens = extractTopicTokens(previousText);
+    const currentTokens = extractTopicTokens(content);
+    if (previousTokens.size < 3 || currentTokens.size < 3) return false;
+
+    const sharedCount = [...currentTokens].filter((token) => previousTokens.has(token)).length;
+    const overlapRatio = sharedCount / Math.min(previousTokens.size, currentTokens.size);
+    return overlapRatio < 0.2;
+}
+
 const toUiMessage = (message) => ({
     id: message.id,
     type: message.role === 'assistant' ? 'ai' : 'user',
@@ -249,11 +332,18 @@ const SShieldChat = () => {
         }, 16);
     };
 
-    const shouldConfirmTopic = (content) => (
-        Boolean(sessionIdRef.current)
-        && messages.some((message) => message.type === 'user')
-        && hasTopicShiftHint(content)
-    );
+    const shouldConfirmTopic = (content) => {
+        const previousUserMessages = messages
+            .filter((message) => message.type === 'user')
+            .map((message) => message.text || '');
+
+        return Boolean(sessionIdRef.current)
+            && previousUserMessages.length > 0
+            && (
+                hasExplicitTopicShiftHint(content)
+                || hasMeaningfulTopicShift(content, previousUserMessages)
+            );
+    };
 
     const sendOrAskTopic = (text) => {
         const content = (text || input).trim();
@@ -505,9 +595,9 @@ const SShieldChat = () => {
             {topicPrompt && (
                 <div className="confirm-overlay" onClick={() => setTopicPrompt(null)}>
                     <div className="confirm-box topic-confirm-box" onClick={(e) => e.stopPropagation()}>
-                        <p>이 내용은 지금 상담 중인 사건에서 일어난 추가 상황인가요?</p>
+                        <p>이 내용도 같은 상황에서 일어난 행동인가요?</p>
                         <span className="topic-confirm-desc">
-                            다른 사건이면 새 상담으로 분리해서 리포트가 섞이지 않게 저장합니다.
+                            같은 상황이면 현재 상담에 추가하고, 다른 사건이면 새 상담으로 분리해서 리포트가 섞이지 않게 저장합니다.
                         </span>
                         <div className="confirm-btns topic-confirm-btns">
                             <button
@@ -518,7 +608,7 @@ const SShieldChat = () => {
                                     handleSend(content);
                                 }}
                             >
-                                같은 사건에 추가
+                                예, 같은 상담에 추가
                             </button>
                             <button
                                 className="confirm-btn-ok"
@@ -528,7 +618,7 @@ const SShieldChat = () => {
                                     handleSend(content, { forceNewSession: true });
                                 }}
                             >
-                                다른 상담으로 시작
+                                아니요, 새 상담으로 시작
                             </button>
                         </div>
                     </div>
