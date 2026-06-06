@@ -224,6 +224,7 @@ public class ChatService {
 
     private String getAiReply(List<Message> history) {
         PromptContext promptContext = buildPromptContext(history);
+        Exception lastError = null;
 
         if (groqApiKey != null && !groqApiKey.isBlank() && System.currentTimeMillis() > groqDisabledUntil) {
             try {
@@ -234,6 +235,7 @@ public class ChatService {
                 lastProvider = "groq";
                 return reply;
             } catch (Exception e) {
+                lastError = e;
                 groqDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
                 logProviderFailure("Groq", e);
             }
@@ -249,6 +251,7 @@ public class ChatService {
                 lastProvider = "gemini";
                 return reply;
             } catch (Exception e) {
+                lastError = e;
                 geminiDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
                 logProviderFailure("Gemini", e);
             }
@@ -263,8 +266,17 @@ public class ChatService {
                 lastProvider = "claude";
                 return reply;
             } catch (Exception e) {
+                lastError = e;
                 logProviderFailure("Claude", e);
             }
+        }
+
+        String fallback = buildFallbackReply(history, promptContext.lawContext());
+        if (!fallback.isBlank()) {
+            lastProvider = "law_fallback";
+            System.err.println("[AI] 모든 외부 공급자 실패 후 법령 기반 fallback 응답 반환"
+                    + (lastError == null ? "" : " (" + lastError.getClass().getSimpleName() + ")"));
+            return fallback;
         }
 
         lastProvider = "unavailable";
@@ -272,6 +284,56 @@ public class ChatService {
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "AI 상담 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
         );
+    }
+
+    private String buildFallbackReply(List<Message> history, String lawContext) {
+        String combined = history.stream()
+                .filter(message -> "user".equals(message.getRole()))
+                .map(Message::getContent)
+                .collect(Collectors.joining(" "))
+                .trim();
+        if (combined.isBlank()) return "";
+
+        List<String> types = detectTypes(combined);
+        ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessageCount(history));
+        List<String> citations = selectFallbackCitations(lawContext);
+        if (citations.isEmpty()) return "";
+
+        StringBuilder reply = new StringBuilder();
+        reply.append("지금까지 파악한 상황은 ")
+                .append(summarizeSituation(combined))
+                .append("\n\n");
+
+        reply.append("🔎 현재 판단\n");
+        reply.append("• 확인된 유형: ").append(String.join(", ", types)).append("\n");
+        reply.append("• 리포트 상태: ").append(readiness.status()).append("\n");
+        if (!readiness.reason().isBlank()) {
+            reply.append("• 판단 이유: ").append(readiness.reason()).append("\n");
+        }
+
+        reply.append("\n⚖️ 관련 법률\n");
+        citations.forEach(citation -> reply.append("• ").append(citation)
+                .append(": 현재 사실관계와 연결해 적용 가능성을 확인해야 합니다.\n"));
+
+        reply.append("\n🗂️ 증거 확보\n");
+        for (String evidence : fallbackEvidence(types)) {
+            reply.append("• ").append(evidence).append("\n");
+        }
+
+        reply.append("\n💬 다음 단계\n");
+        for (String action : fallbackActions(readiness)) {
+            reply.append("• ").append(action).append("\n");
+        }
+
+        if (!readiness.ready() && !readiness.missingInfo().isEmpty()) {
+            reply.append("\n❓ 확인 질문\n");
+            readiness.missingInfo().stream().limit(2)
+                    .forEach(item -> reply.append("• ").append(item).append(" 알려주세요.\n"));
+        } else {
+            reply.append("\n리포트를 생성할 수 있습니다.\n");
+        }
+
+        return reply.toString().trim();
     }
 
     private String callGroqApi(List<Message> history, String systemPrompt) {
@@ -556,6 +618,60 @@ public class ChatService {
         return references;
     }
 
+    private static List<String> selectFallbackCitations(String lawContext) {
+        Map<String, Set<String>> allowed = parseAllowedCitations(lawContext);
+        List<String> citations = new ArrayList<>();
+        allowed.forEach((law, articles) -> articles.stream().limit(1)
+                .forEach(article -> citations.add(law + " 제" + article + "조")));
+        return citations.stream().limit(2).toList();
+    }
+
+    private static String summarizeSituation(String text) {
+        String normalized = text.replaceAll("\\s+", " ").trim();
+        if (normalized.length() <= 90) return normalized + "으로 보입니다.";
+        return normalized.substring(0, 90) + "...로 보입니다.";
+    }
+
+    private static List<String> fallbackEvidence(List<String> types) {
+        List<String> evidence = new ArrayList<>();
+        if (types.contains("사이버 폭력")) {
+            evidence.add("게시글·댓글·사진이 보이는 전체 화면 캡처");
+            evidence.add("URL, 게시 시간, 계정명, 닉네임");
+            evidence.add("삭제되기 전 원본 이미지와 대화방 정보");
+        } else {
+            evidence.add("일시, 장소, 상대방, 목격자를 적은 사건 메모");
+            evidence.add("대화 내용, 녹음, 사진, 진단서 등 남아 있는 자료");
+            evidence.add("반복 여부와 이후 피해 상황을 확인할 수 있는 기록");
+        }
+        evidence.add("보호자나 담임에게 공유한 날짜와 답변 내용");
+        return evidence.stream().distinct().limit(4).toList();
+    }
+
+    private static List<String> fallbackActions(ReportReadiness readiness) {
+        if (!readiness.ready()) {
+            return List.of(
+                    "부족한 정보를 먼저 확인한 뒤 같은 채팅에 이어서 답하세요.",
+                    "증거가 사라질 수 있으니 캡처와 원본 보관을 먼저 하세요."
+            );
+        }
+        if (!readiness.schoolViolenceLikely()) {
+            return List.of(
+                    "학교 관계가 있는 사건인지 먼저 확인하세요.",
+                    "학교폭력으로 보기 어렵다면 플랫폼 신고나 일반 상담 경로를 함께 검토하세요."
+            );
+        }
+        if (readiness.status().contains("가해")) {
+            return List.of(
+                    "게시물이나 발언이 남아 있다면 즉시 중단하고 삭제 여부를 확인하세요.",
+                    "보호자나 담임에게 사실관계를 숨기지 말고 설명하고 피해 회복 방안을 정리하세요."
+            );
+        }
+        return List.of(
+                "보호자나 담임에게 상황과 증거를 공유하세요.",
+                "위험이 계속되면 117 학교폭력 상담을 요청하세요."
+        );
+    }
+
     private static String firstNonNull(String... values) {
         for (String value : values) {
             if (value != null) return value;
@@ -645,15 +761,25 @@ public class ChatService {
                 && response.getStatusCode().value() == 429) {
             return 30_000L;
         }
-        return 60_000L;
+        if (error instanceof RestClientResponseException) {
+            return 60_000L;
+        }
+        return 5_000L;
     }
 
     private void logProviderFailure(String provider, Exception error) {
         String reason = error.getClass().getSimpleName();
         if (error instanceof RestClientResponseException response) {
             reason += " HTTP " + response.getStatusCode().value();
+        } else if (error.getMessage() != null && !error.getMessage().isBlank()) {
+            reason += ": " + compactLogMessage(error.getMessage());
         }
         System.err.println("[AI] " + provider + " 호출 실패, 다음 공급자로 전환 (" + reason + ")");
+    }
+
+    private static String compactLogMessage(String message) {
+        String compacted = message.replaceAll("\\s+", " ").trim();
+        return compacted.length() <= 120 ? compacted : compacted.substring(0, 120) + "...";
     }
 
     public Map<String, Object> getProviderStatus() {
