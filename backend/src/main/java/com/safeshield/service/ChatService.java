@@ -565,7 +565,7 @@ public class ChatService {
             String law = findLawForLine(line, allowed.keySet());
             if (law == null || !allowed.get(law).containsAll(references)) return false;
         }
-        return citationCount >= 1 && citationCount <= 2;
+        return citationCount >= 1 && citationCount <= 3;
     }
 
     private static String sanitizeGeneratedReply(String reply) {

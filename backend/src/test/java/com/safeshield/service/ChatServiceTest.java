@@ -57,6 +57,26 @@ class ChatServiceTest {
     }
 
     @Test
+    void acceptsUpToThreeAllowedCitationsForCyberViolence() {
+        String reply = """
+                SNS 사진 게시와 비방 글이 함께 있는 사이버 폭력 관련 상담으로 보입니다.
+
+                ⚖️ 관련 법률
+                • 학교폭력 예방 및 대책에 관한 법률 제2조: 학교폭력 해당성을 확인할 수 있습니다.
+                • 형법 제307조: 공개된 비방 내용에 따라 적용 가능성이 있습니다.
+                • 형법 제311조: 모욕 표현 여부도 함께 확인할 수 있습니다.
+
+                🗂️ 증거 확보
+                • 게시글 전체 화면과 URL을 보관하세요.
+
+                💬 다음 단계
+                보호자와 담임에게 증거를 공유하고 117에 상담을 요청하세요.
+                """;
+
+        assertTrue(ChatService.isGeneratedReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
     void rejectsForeignLanguageWord() {
         String reply = """
                 SNS 게시물로 힘든 상황입니다.
