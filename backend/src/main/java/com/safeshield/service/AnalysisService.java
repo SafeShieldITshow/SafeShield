@@ -42,7 +42,7 @@ public class AnalysisService {
             lawScores = new ArrayList<>(lawScores.subList(0, 5));
         }
         List<Integer> measureRange = detectMeasureRange(riskScore);
-        List<String> evidenceGuide = evidenceGuideService.getEvidenceGuide(violenceTypes);
+        List<String> evidenceGuide = evidenceGuideService.getEvidenceGuide(violenceTypes, text);
         List<String> findings = buildKeyFindings(text, violenceTypes, readiness);
         List<String> actions = buildRecommendedActions(readiness, violenceTypes);
 

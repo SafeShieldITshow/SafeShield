@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AnalysisServiceTest {
@@ -38,6 +39,20 @@ class AnalysisServiceTest {
 
         assertTrue(result.riskScore() >= 8.0, "반복 신체 폭력과 상해, 협박은 높은 위험도로 봐야 합니다.");
         assertTrue(result.expectedMeasureRange().get(1) >= 7, "고위험 사안은 조치 범위 상한이 높아야 합니다.");
+    }
+
+    @Test
+    void buildsSpecificEvidenceGuideForCyberPosting() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var result = analysisService.analyze(
+                "같은 반 친구가 SNS에 제 사진과 비방 글을 올렸고 캡처와 URL이 있습니다.",
+                readiness
+        );
+
+        assertTrue(result.evidenceGuide().contains("게시물 전체 화면 캡처"));
+        assertTrue(result.evidenceGuide().contains("URL·작성자·게시시간 기록"));
+        assertFalse(result.evidenceGuide().contains("진단서·진료 기록"));
     }
 
     private ReportReadiness readySchoolViolence() {

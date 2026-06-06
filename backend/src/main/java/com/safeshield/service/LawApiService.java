@@ -19,6 +19,8 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentHashMap.KeySetView;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 public class LawApiService {
@@ -52,6 +54,13 @@ public class LawApiService {
 
     private static final String SEARCH_URL = "https://www.law.go.kr/DRF/lawSearch.do";
     private static final String CONTENT_URL = "https://www.law.go.kr/DRF/lawService.do";
+    private static final Pattern LAW_HEADER_PATTERN =
+            Pattern.compile("^===\\s*(.+?)\\s*===$");
+    private static final Pattern ARTICLE_REFERENCE_PATTERN = Pattern.compile(
+            "제\\s*(\\d+)\\s*조\\s*의\\s*(\\d+)"
+                    + "|제\\s*(\\d+)\\s*의\\s*(\\d+)\\s*조"
+                    + "|제\\s*(\\d+)\\s*조"
+    );
     private static final Map<String, LawDefinition> DEFINITIONS = Map.ofEntries(
             Map.entry("학교폭력예방법", new LawDefinition("학교폭력 예방 및 대책에 관한 법률",
                     List.of("2", "16", "17"))),
@@ -155,36 +164,113 @@ public class LawApiService {
         }
     }
 
-    public String getContextForViolenceTypes(List<String> violenceTypes) {
+    public String getContextForCase(String userText, List<String> violenceTypes) {
+        Map<String, Set<String>> selected = selectRelevantArticles(userText, violenceTypes);
         StringBuilder sb = new StringBuilder();
-        appendOrFetch(sb, "학교폭력예방법");
-
-        if (violenceTypes.contains("신체 폭력")) {
-            appendOrFetch(sb, "형법_폭력");
-            appendOrFetch(sb, "아동복지법");
-            appendOrFetch(sb, "민법_배상");
-        }
-        if (violenceTypes.contains("언어 폭력")) {
-            appendOrFetch(sb, "형법_폭력");
-        }
-        if (violenceTypes.contains("사이버 폭력")) {
-            appendOrFetch(sb, "형법_폭력");
-        }
-        if (violenceTypes.contains("성폭력")) {
-            appendOrFetch(sb, "성폭력처벌법");
-            appendOrFetch(sb, "아청법");
-        }
-        if (violenceTypes.contains("스토킹")) {
-            appendOrFetch(sb, "스토킹처벌법");
-        }
-        if (violenceTypes.contains("갈취")) {
-            appendOrFetch(sb, "형법_폭력");
-            appendOrFetch(sb, "민법_배상");
-        }
+        selected.forEach((key, articles) -> appendOrFetch(sb, key, articles));
         return sb.toString().trim();
     }
 
-    private void appendOrFetch(StringBuilder sb, String key) {
+    public String getContextForViolenceTypes(List<String> violenceTypes) {
+        return getContextForCase("", violenceTypes);
+    }
+
+    static Map<String, Set<String>> selectRelevantArticles(String userText, List<String> violenceTypes) {
+        String text = userText == null ? "" : userText.toLowerCase(Locale.ROOT);
+        List<String> types = violenceTypes == null ? List.of() : violenceTypes;
+        Map<String, Set<String>> selected = new LinkedHashMap<>();
+
+        addArticles(selected, "학교폭력예방법", "2");
+        if (containsAny(text, "제가", "내가", "가해", "사과", "처벌", "올렸", "때렸", "욕했")) {
+            addArticles(selected, "학교폭력예방법", "17");
+        } else {
+            addArticles(selected, "학교폭력예방법", "16");
+        }
+
+        if (types.contains("신체 폭력")) {
+            if (containsAny(text, "멍", "상처", "출혈", "골절", "진단", "치료", "병원", "상해", "다쳤")) {
+                addArticles(selected, "형법_폭력", "257");
+            }
+            if (containsAny(text, "때렸", "맞았", "폭행", "밀쳤", "발로", "주먹")) {
+                addArticles(selected, "형법_폭력", "260");
+            }
+            if (containsAny(text, "흉기", "위험한 물건", "여러 명", "단체로")) {
+                addArticles(selected, "형법_폭력", "261");
+            }
+            if (containsAny(text, "협박", "죽이", "찾아가", "때리겠", "가만 안")) {
+                addArticles(selected, "형법_폭력", "283");
+            }
+            if (!selected.containsKey("형법_폭력")) addArticles(selected, "형법_폭력", "260");
+        }
+
+        if (types.contains("언어 폭력")) {
+            if (containsAny(text, "협박", "죽이", "찾아가", "때리겠", "가만 안")) {
+                addArticles(selected, "형법_폭력", "283");
+            }
+            if (containsAny(text, "소문", "비방", "명예훼손", "허위", "사실을 말", "퍼뜨")) {
+                addArticles(selected, "형법_폭력", "307");
+            }
+            if (containsAny(text, "욕", "모욕", "비하", "놀림", "꺼져", "댓글")) {
+                addArticles(selected, "형법_폭력", "311");
+            }
+            if (!selected.containsKey("형법_폭력")) addArticles(selected, "형법_폭력", "311");
+        }
+
+        if (types.contains("사이버 폭력")) {
+            if (containsAny(text, "사진", "게시", "비방", "소문", "명예훼손", "허위", "인스타", "sns", "온라인")) {
+                addArticles(selected, "형법_폭력", "307");
+            }
+            if (containsAny(text, "욕", "모욕", "비하", "댓글", "놀림")) {
+                addArticles(selected, "형법_폭력", "311");
+            }
+            if (containsAny(text, "협박", "죽이", "찾아가", "때리겠", "가만 안")) {
+                addArticles(selected, "형법_폭력", "283");
+            }
+            if (!selected.containsKey("형법_폭력")) addArticles(selected, "형법_폭력", "307");
+        }
+
+        if (types.contains("성폭력")) {
+            addArticles(selected, "성폭력처벌법", "2");
+            if (containsAny(text, "dm", "디엠", "카톡", "메시지", "사진", "영상", "온라인")) {
+                addArticles(selected, "성폭력처벌법", "13");
+            }
+            if (containsAny(text, "촬영", "카메라", "사진", "영상", "유포", "올렸")) {
+                addArticles(selected, "성폭력처벌법", "14");
+            }
+            if (containsAny(text, "청소년", "중학생", "고등학생", "초등학생", "미성년")) {
+                addArticles(selected, "아청법", "7");
+            }
+        }
+
+        if (types.contains("스토킹")) {
+            addArticles(selected, "스토킹처벌법", "2");
+            if (containsAny(text, "반복", "계속", "매일", "여러 번")) addArticles(selected, "스토킹처벌법", "18");
+        }
+
+        if (types.contains("갈취")) {
+            addArticles(selected, "형법_폭력", "350");
+            if (containsAny(text, "협박", "강요", "내놔", "때리겠")) addArticles(selected, "형법_폭력", "283");
+        }
+
+        if (containsAny(text, "치료비", "손해배상", "위자료", "배상")) {
+            addArticles(selected, "민법_배상", "750", "751");
+        }
+
+        return selected;
+    }
+
+    private static void addArticles(Map<String, Set<String>> selected, String key, String... articles) {
+        selected.computeIfAbsent(key, ignored -> new LinkedHashSet<>()).addAll(List.of(articles));
+    }
+
+    private static boolean containsAny(String text, String... words) {
+        for (String word : words) {
+            if (text.contains(word)) return true;
+        }
+        return false;
+    }
+
+    private void appendOrFetch(StringBuilder sb, String key, Set<String> articles) {
         String v = cache.get(key);
         if (v == null && oc != null && !oc.isBlank()) {
             LawDefinition definition = DEFINITIONS.get(key);
@@ -194,7 +280,55 @@ public class LawApiService {
             }
         }
         if (v == null) v = FALLBACK_CONTEXTS.get(key);
-        if (v != null) sb.append(v).append("\n\n");
+        if (v != null) {
+            String filtered = filterContextByArticles(v, articles);
+            if (!filtered.isBlank()) sb.append(filtered).append("\n\n");
+        }
+    }
+
+    private static String filterContextByArticles(String context, Set<String> targetArticles) {
+        if (context == null || context.isBlank()) return "";
+        if (targetArticles == null || targetArticles.isEmpty()) return context.trim();
+
+        StringBuilder filtered = new StringBuilder();
+        boolean include = false;
+        boolean hasArticle = false;
+        for (String line : context.split("\\R")) {
+            if (LAW_HEADER_PATTERN.matcher(line.trim()).matches()) {
+                filtered.append(line).append("\n");
+                include = false;
+                continue;
+            }
+
+            String article = articleReferenceOfLine(line);
+            if (article != null) {
+                include = targetArticles.stream().anyMatch(target -> articleMatches(article, target));
+                if (include) {
+                    hasArticle = true;
+                    filtered.append(line).append("\n");
+                }
+                continue;
+            }
+
+            if (include) filtered.append(line).append("\n");
+        }
+
+        return hasArticle ? filtered.toString().trim() : "";
+    }
+
+    private static String articleReferenceOfLine(String line) {
+        Matcher matcher = ARTICLE_REFERENCE_PATTERN.matcher(line.trim());
+        if (!matcher.lookingAt()) return null;
+        String base = firstNonNull(matcher.group(1), matcher.group(3), matcher.group(5));
+        String detail = firstNonNull(matcher.group(2), matcher.group(4));
+        return detail == null ? base : base + "의" + detail;
+    }
+
+    private static String firstNonNull(String... values) {
+        for (String value : values) {
+            if (value != null) return value;
+        }
+        return null;
     }
 
     public Map<String, Object> getStatus() {

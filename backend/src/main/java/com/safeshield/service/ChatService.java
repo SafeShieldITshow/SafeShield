@@ -438,14 +438,14 @@ public class ChatService {
                 .collect(Collectors.joining(" "));
         List<String> violenceTypes = detectTypes(combined);
         ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessageCount(history));
-        String lawContext = lawApiService.getContextForViolenceTypes(violenceTypes);
+        String lawContext = lawApiService.getContextForCase(combined, violenceTypes);
         if (lawContext == null || lawContext.isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     "법령 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
             );
         }
-        if (lawContext.length() > 4500) lawContext = lawContext.substring(0, 4500);
+        if (lawContext.length() > 2600) lawContext = lawContext.substring(0, 2600);
 
         String allowedCitations = formatAllowedCitations(lawContext);
 
