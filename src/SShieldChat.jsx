@@ -23,6 +23,37 @@ const removeInlineDisclaimer = (text = '') => text
     .join('\n')
     .trim();
 
+const normalizeConfirmationPrompts = (prompts = []) => (Array.isArray(prompts) ? prompts : [])
+    .map((prompt) => ({
+        id: prompt.id || prompt.question,
+        question: String(prompt.question || '').trim(),
+        options: (Array.isArray(prompt.options) ? prompt.options : [])
+            .map((option) => ({
+                label: String(option.label || '').trim(),
+                message: String(option.message || option.label || '').trim(),
+            }))
+            .filter((option) => option.label && option.message),
+    }))
+    .filter((prompt) => prompt.question && prompt.options.length);
+
+const clearConfirmationPrompts = (items) => items.map((message) => (
+    message.confirmationPrompts?.length ? { ...message, confirmationPrompts: [] } : message
+));
+
+const attachPromptsToLatestAiMessage = (items, prompts) => {
+    const normalized = normalizeConfirmationPrompts(prompts);
+    if (!normalized.length) return clearConfirmationPrompts(items);
+
+    const next = clearConfirmationPrompts(items);
+    for (let i = next.length - 1; i >= 0; i -= 1) {
+        if (next[i].type === 'ai') {
+            next[i] = { ...next[i], confirmationPrompts: normalized };
+            return next;
+        }
+    }
+    return next;
+};
+
 function now() {
     return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
 }
@@ -227,6 +258,7 @@ const SShieldChat = () => {
     const [showReport, setShowReport] = useState(false);
     const [generatingReport, setGeneratingReport] = useState(false);
     const scrollRef = useRef(null);
+    const inputRef = useRef(null);
     const typingTimerRef = useRef(null);
     const sessionIdRef = useRef(initialSessionIdRef.current);
     const conversationKeyRef = useRef(initialConversationKey);
@@ -263,10 +295,10 @@ const SShieldChat = () => {
         try {
             const items = await api.get(`/chat/sessions/${id}/messages`);
             if (loadSequence !== messageLoadSequenceRef.current) return;
-            const uiMessages = items.length ? items.map(toUiMessage) : [initialMessage()];
-            setMessages(uiMessages);
             const readiness = await api.get(`/chat/sessions/${id}/readiness`);
             if (loadSequence !== messageLoadSequenceRef.current) return;
+            const uiMessages = items.length ? items.map(toUiMessage) : [initialMessage()];
+            setMessages(attachPromptsToLatestAiMessage(uiMessages, readiness.confirmation_prompts));
             setShowReport(Boolean(readiness.ready));
         } catch {
             if (loadSequence !== messageLoadSequenceRef.current) return;
@@ -312,13 +344,14 @@ const SShieldChat = () => {
         }
     };
 
-    const appendTypingReply = (reply) => {
+    const appendTypingReply = (reply, confirmationPrompts = []) => {
         const id = `a-${Date.now()}`;
         const safeReply = removeInlineDisclaimer(reply)
             || '답변을 생성하지 못했습니다. 다시 시도해 주세요.';
+        const prompts = normalizeConfirmationPrompts(confirmationPrompts);
         let index = 0;
 
-        setMessages((prev) => [...prev, { id, type: 'ai', text: '', time: now() }]);
+        setMessages((prev) => [...clearConfirmationPrompts(prev), { id, type: 'ai', text: '', time: now(), confirmationPrompts: [] }]);
         if (typingTimerRef.current) clearInterval(typingTimerRef.current);
 
         typingTimerRef.current = setInterval(() => {
@@ -330,6 +363,11 @@ const SShieldChat = () => {
             if (index >= safeReply.length) {
                 clearInterval(typingTimerRef.current);
                 typingTimerRef.current = null;
+                if (prompts.length) {
+                    setMessages((prev) => prev.map((message) => (
+                        message.id === id ? { ...message, confirmationPrompts: prompts } : message
+                    )));
+                }
             }
         }, 16);
     };
@@ -375,7 +413,7 @@ const SShieldChat = () => {
             setShowReport(false);
         }
         setMessages((prev) => [
-            ...(options.forceNewSession ? [] : prev),
+            ...(options.forceNewSession ? [] : clearConfirmationPrompts(prev)),
             { id: `u-${Date.now()}`, type: 'user', text: content, time: now() },
         ]);
         pendingKeysRef.current.add(targetKey);
@@ -392,7 +430,7 @@ const SShieldChat = () => {
                     activateConversation(data.session_id);
                 }
                 setShowReport(Boolean(data.report_ready));
-                appendTypingReply(data.reply);
+                appendTypingReply(data.reply, data.confirmation_prompts);
             }
             loadSessions();
         } catch (e) {
@@ -425,6 +463,20 @@ const SShieldChat = () => {
         } finally {
             setGeneratingReport(false);
         }
+    };
+
+    const handleConfirmationOption = (option) => {
+        if (isCurrentLoading) return;
+        const message = String(option?.message || '').trim();
+        if (!message) return;
+
+        if (option.label === '직접 입력' || message.endsWith(':')) {
+            setInput(message.endsWith(':') ? `${message} ` : message);
+            setTimeout(() => inputRef.current?.focus(), 0);
+            return;
+        }
+
+        handleSend(message);
     };
 
     const handleNewChat = () => {
@@ -522,6 +574,27 @@ const SShieldChat = () => {
                                             <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
                                         ))}
                                 </div>
+                                {msg.type === 'ai' && msg.confirmationPrompts?.length > 0 && (
+                                    <div className="confirmation-prompts">
+                                        {msg.confirmationPrompts.map((prompt) => (
+                                            <div className="confirmation-prompt" key={prompt.id || prompt.question}>
+                                                <p>{prompt.question}</p>
+                                                <div className="confirmation-options">
+                                                    {prompt.options.map((option) => (
+                                                        <button
+                                                            key={`${prompt.id}-${option.label}`}
+                                                            type="button"
+                                                            onClick={() => handleConfirmationOption(option)}
+                                                            disabled={isCurrentLoading}
+                                                        >
+                                                            {option.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                                 <span className="msg-time">{msg.time}</span>
                             </div>
                         </div>
@@ -559,6 +632,7 @@ const SShieldChat = () => {
 
                     <div className="ss-input-box">
                         <input
+                            ref={inputRef}
                             type="text"
                             placeholder="상황을 입력해 주세요"
                             value={input}

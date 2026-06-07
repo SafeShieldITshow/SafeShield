@@ -156,7 +156,8 @@ public class ChatService {
                 "report_ready", readiness.ready(),
                 "report_status", readiness.status(),
                 "report_reason", readiness.reason(),
-                "missing_info", readiness.missingInfo()
+                "missing_info", readiness.missingInfo(),
+                "confirmation_prompts", confirmationPrompts(readiness)
         );
     }
 
@@ -186,8 +187,76 @@ public class ChatService {
                 "status", readiness.status(),
                 "reason", readiness.reason(),
                 "missing_info", readiness.missingInfo(),
+                "confirmation_prompts", confirmationPrompts(readiness),
                 "school_violence_likely", readiness.schoolViolenceLikely()
         );
+    }
+
+    private List<Map<String, Object>> confirmationPrompts(ReportReadiness readiness) {
+        if (readiness.ready() || readiness.missingInfo().isEmpty()) return List.of();
+        return readiness.missingInfo().stream()
+                .limit(2)
+                .map(this::confirmationPrompt)
+                .toList();
+    }
+
+    private Map<String, Object> confirmationPrompt(String missingInfo) {
+        Map<String, Object> prompt = new LinkedHashMap<>();
+        prompt.put("id", confirmationId(missingInfo));
+        prompt.put("question", toConfirmationQuestion(missingInfo));
+        prompt.put("options", confirmationOptions(missingInfo));
+        return prompt;
+    }
+
+    private String confirmationId(String missingInfo) {
+        if (missingInfo.contains("무슨 일")) return "incident";
+        if (missingInfo.contains("학교 관계")) return "relationship";
+        if (missingInfo.contains("언제")) return "timeline";
+        if (missingInfo.contains("증거")) return "evidence";
+        return "detail";
+    }
+
+    private List<Map<String, String>> confirmationOptions(String missingInfo) {
+        if (missingInfo.contains("무슨 일")) {
+            return List.of(
+                    option("욕설·비방", "확인 답변: 상대가 욕설이나 비방을 했습니다."),
+                    option("사진·게시물", "확인 답변: 사진이나 게시물이 올라왔습니다."),
+                    option("신체 폭력", "확인 답변: 때리거나 밀치는 신체 폭력이 있었습니다."),
+                    option("직접 입력", "확인 답변: ")
+            );
+        }
+        if (missingInfo.contains("학교 관계")) {
+            return List.of(
+                    option("같은 반", "확인 답변: 상대는 같은 반 학생입니다."),
+                    option("같은 학교", "확인 답변: 상대는 같은 학교 학생입니다."),
+                    option("학교 밖", "확인 답변: 상대는 학교 관계자가 아닙니다."),
+                    option("모르겠음", "확인 답변: 상대가 학교 관계자인지는 아직 모르겠습니다.")
+            );
+        }
+        if (missingInfo.contains("언제")) {
+            return List.of(
+                    option("한 번", "확인 답변: 현재까지는 한 번 발생했습니다."),
+                    option("여러 번", "확인 답변: 비슷한 일이 여러 번 반복됐습니다."),
+                    option("지금도 계속", "확인 답변: 지금도 계속되고 있습니다."),
+                    option("기억 안 남", "확인 답변: 정확한 시점이나 횟수는 아직 기억나지 않습니다.")
+            );
+        }
+        if (missingInfo.contains("증거")) {
+            return List.of(
+                    option("캡처 있음", "확인 답변: 캡처나 URL을 가지고 있습니다."),
+                    option("사진·진단서 있음", "확인 답변: 사진, 진단서, 병원 기록 중 일부가 있습니다."),
+                    option("목격자 있음", "확인 답변: 상황을 본 목격자가 있습니다."),
+                    option("아직 없음", "확인 답변: 아직 확보한 증거는 없습니다.")
+            );
+        }
+        return List.of(
+                option("확인됨", "확인 답변: 해당 정보를 확인했습니다."),
+                option("모르겠음", "확인 답변: 해당 정보는 아직 모르겠습니다.")
+        );
+    }
+
+    private Map<String, String> option(String label, String message) {
+        return Map.of("label", label, "message", message);
     }
 
     public List<Map<String, Object>> getSessions(User user) {

@@ -47,6 +47,14 @@
 .ss-msg-row         { display: flex; width: 100%; }
 .ss-msg-row.user    { justify-content: flex-end; }
 .ss-msg-row.ai      { justify-content: flex-start; }
+.ss-msg-col {
+  max-width: min(760px, 82%);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.user .ss-msg-col { align-items: flex-end; }
+.ai .ss-msg-col   { align-items: flex-start; }
 
 .ss-msg-bubble {
   max-width: 100%;
@@ -107,6 +115,60 @@
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.12);
   font-size: 0.92em;
+}
+
+.confirmation-prompts {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 2px;
+}
+
+.confirmation-prompt {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(66, 58, 130, 0.46);
+  box-shadow: var(--shadow-sm);
+}
+
+.confirmation-prompt p {
+  margin: 0 0 9px;
+  color: #f7f5ff;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.confirmation-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.confirmation-options button {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.25;
+  cursor: pointer;
+  transition: background var(--ease), transform var(--ease), border-color var(--ease);
+}
+
+.confirmation-options button:hover:not(:disabled) {
+  background: rgba(126, 116, 240, 0.34);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+}
+
+.confirmation-options button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* 입력창 */
