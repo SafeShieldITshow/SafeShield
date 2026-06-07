@@ -239,21 +239,6 @@ public class ChatService {
         PromptContext promptContext = buildPromptContext(history);
         Exception lastError = null;
 
-        if (groqApiKey != null && !groqApiKey.isBlank() && System.currentTimeMillis() > groqDisabledUntil) {
-            try {
-                String reply = requireValidGeneratedReply(
-                        callGroqApi(history, promptContext.prompt()),
-                        promptContext.lawContext()
-                );
-                lastProvider = "groq";
-                return reply;
-            } catch (Exception e) {
-                lastError = e;
-                groqDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
-                logProviderFailure("Groq", e);
-            }
-        }
-
         if (geminiApiKey != null && !geminiApiKey.isBlank()
                 && System.currentTimeMillis() > geminiDisabledUntil) {
             try {
@@ -267,6 +252,21 @@ public class ChatService {
                 lastError = e;
                 geminiDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
                 logProviderFailure("Gemini", e);
+            }
+        }
+
+        if (groqApiKey != null && !groqApiKey.isBlank() && System.currentTimeMillis() > groqDisabledUntil) {
+            try {
+                String reply = requireValidGeneratedReply(
+                        callGroqApi(history, promptContext.prompt()),
+                        promptContext.lawContext()
+                );
+                lastProvider = "groq";
+                return reply;
+            } catch (Exception e) {
+                lastError = e;
+                groqDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
+                logProviderFailure("Groq", e);
             }
         }
 
@@ -490,7 +490,8 @@ public class ChatService {
                 .map(Message::getContent)
                 .collect(Collectors.joining(" "));
         List<String> violenceTypes = detectTypes(combined);
-        ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessageCount(history));
+        long userMessages = userMessageCount(history);
+        ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessages);
         String lawContext = lawApiService.getContextForCase(combined, violenceTypes);
         if (lawContext == null || lawContext.isBlank()) {
             throw new ResponseStatusException(
@@ -501,6 +502,9 @@ public class ChatService {
         if (lawContext.length() > 2600) lawContext = lawContext.substring(0, 2600);
 
         String allowedCitations = formatAllowedCitations(lawContext);
+        String openingLine = userMessages <= 1
+                ? "상황 정리: 사건 유형, 학교 관계, 증거 상태를 자연스러운 한 문장으로 요약"
+                : "추가로 반영한 점: 직전 답변 뒤 새로 확인된 단서 또는 판단 변화 1줄";
 
         String prompt = """
                 당신은 학교폭력 피해 학생을 돕는 한국 법률 정보 상담 AI입니다.
@@ -512,6 +516,7 @@ public class ChatService {
                 3. 이전 답변과 같은 문장을 반복하지 말고, 이번 입력이 판단을 바꾼 점이나 새로 확인한 단서를 먼저 말하세요.
                 4. 모든 문장은 자연스러운 한국어로 작성하세요. AI, SNS, URL, DM, CCTV, PDF, ID, IP 외 외국어 단어를 쓰지 마세요.
                 5. 사용자를 '당신'이라고 부르지 말고 2인칭 표현을 생략하세요.
+                5-1. 유형명은 신체 폭력, 언어 폭력, 사이버 폭력, 따돌림, 성폭력, 스토킹, 갈취 중 필요한 것만 사용하세요.
                 6. 법령명과 조문 번호는 아래 '허용 인용 목록'에서 현재 상황과 직접 관련된 항목만 최대 2개 골라 글자 그대로 복사하세요.
                 7. 허용 인용 목록에 없는 법령, 조문, 조문명은 절대 쓰지 마세요. 특히 정보통신망법을 임의로 인용하지 마세요.
                 8. 법률 설명은 참고 법령 내용의 범위를 벗어나 단정하지 말고, "적용 가능성이 있습니다", "확인이 필요합니다"처럼 말하세요.
@@ -525,12 +530,12 @@ public class ChatService {
                 16. 사용자가 본인이 한 행동을 말하면 비난하지 말고, 피해 회복·게시물 삭제·사과·보호자/담임 공유 중심으로 안내하세요.
                 17. 학교폭력 해당성이 낮으면 억지로 학폭으로 단정하지 말고, 해당성이 낮은 이유와 다른 대응 경로를 말하세요.
                 18. 전체 답변은 900자 이내로, 짧지만 실질적인 상담처럼 작성하세요.
+                19. '사건 유형·관계·증거 상태를 한 문장으로 요약', '증거 항목 1', '증거 항목 2' 같은 작성 지시문을 답변에 그대로 쓰지 마세요.
+                20. 첫 사용자 메시지에는 '이번에 새로 반영한 점'이라고 쓰지 마세요.
 
                 # 답변 형식
 
-                이번에 새로 반영한 점: 새로 확인된 단서나 판단 변화 1줄
-
-                사용자 문장을 그대로 붙여넣지 말고, 사건 유형·관계·증거 상태를 한 문장으로 요약
+                """ + openingLine + """
 
                 🔎 현재 판단
                 • 확인된 유형과 위험 신호를 구체적으로 설명
@@ -541,9 +546,9 @@ public class ChatService {
                 • 필요한 경우 두 번째 법령: 적용 가능성과 한계 설명
 
                 🗂️ 증거 확보
-                • 증거 항목 1: 어떻게 보관할지
-                • 증거 항목 2: 무엇이 보이게 남길지
-                • 증거 항목 3: 추가로 있으면 좋은 자료
+                • 현재 남아 있는 자료 중 가장 중요한 증거와 보관 방법
+                • 작성자, 시간, URL, 원본 화면 등 반드시 보이게 남길 정보
+                • 추가로 확보하면 좋은 자료
 
                 💬 다음 단계
                 오늘 할 일 2개를 순서대로 안내
@@ -595,6 +600,7 @@ public class ChatService {
 
     static boolean isGeneratedReplyValid(String reply, String lawContext) {
         if (reply == null || reply.isBlank() || reply.length() > 1800) return false;
+        if (containsForbiddenTemplatePhrase(reply)) return false;
         if (!reply.contains("관련 법률")
                 || !(reply.contains("보관해야 할 증거") || reply.contains("증거 확보"))
                 || !reply.contains("다음 단계")) {
@@ -622,6 +628,19 @@ public class ChatService {
             if (law == null || !allowed.get(law).containsAll(references)) return false;
         }
         return citationCount >= 1 && citationCount <= 3;
+    }
+
+    private static boolean containsForbiddenTemplatePhrase(String reply) {
+        return reply.contains("사건 유형·관계·증거 상태를 한 문장으로 요약")
+                || reply.contains("증거 항목 1")
+                || reply.contains("증거 항목 2")
+                || reply.contains("증거 항목 3")
+                || reply.contains("허용 인용 목록")
+                || reply.contains("참고 법령")
+                || reply.contains("# 답변 형식")
+                || reply.contains("이번에 새로 반영한 점")
+                || reply.contains("확인된 유형: 학교폭력, 사이버폭력")
+                || reply.contains("확인된 유형: 학교폭력");
     }
 
     private static String sanitizeGeneratedReply(String reply) {

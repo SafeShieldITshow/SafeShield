@@ -93,4 +93,24 @@ class ChatServiceTest {
 
         assertFalse(ChatService.isGeneratedReplyValid(reply, LAW_CONTEXT));
     }
+
+    @Test
+    void rejectsPromptTemplateLeak() {
+        String reply = """
+                이번에 새로 반영한 점: SNS 게시물이 아직 남아 있습니다.
+
+                사건 유형·관계·증거 상태를 한 문장으로 요약: 같은 반 친구가 SNS에 사진을 올린 사건입니다.
+
+                ⚖️ 관련 법률
+                • 학교폭력 예방 및 대책에 관한 법률 제2조: 적용 가능성을 확인할 수 있습니다.
+
+                🗂️ 증거 확보
+                • 증거 항목 1: 캡처와 URL을 보관하세요.
+
+                💬 다음 단계
+                보호자와 담임에게 공유하세요.
+                """;
+
+        assertFalse(ChatService.isGeneratedReplyValid(reply, LAW_CONTEXT));
+    }
 }
