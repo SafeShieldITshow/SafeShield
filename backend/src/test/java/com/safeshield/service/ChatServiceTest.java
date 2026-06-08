@@ -113,4 +113,34 @@ class ChatServiceTest {
 
         assertFalse(ChatService.isGeneratedReplyValid(reply, LAW_CONTEXT));
     }
+
+    @Test
+    void acceptsConversationalReplyWithoutAnalysisTemplate() {
+        String reply = """
+                지금 바로 분석으로 넘기기보다 먼저 상황을 정리해도 됩니다.
+                방금 말한 불안감도 상담 기록에 남고, 리포트에서는 대응 필요성을 판단할 때 함께 반영됩니다.
+                지금 가장 걱정되는 게 보복인지, 증거 부족인지, 학교에 말하는 것인지부터 하나만 골라도 됩니다.
+                """;
+
+        assertTrue(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
+    void rejectsAnalysisTemplateInConversationalReply() {
+        String reply = """
+                🔎 현재 판단
+                감정 표현이 확인됩니다.
+
+                ⚖️ 관련 법률
+                • 학교폭력 예방 및 대책에 관한 법률 제2조: 적용 가능성이 있습니다.
+
+                🗂️ 증거 확보
+                • 캡처를 보관하세요.
+
+                💬 다음 단계
+                보호자에게 말하세요.
+                """;
+
+        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
 }

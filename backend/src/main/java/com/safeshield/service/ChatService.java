@@ -39,7 +39,12 @@ import java.util.stream.Collectors;
 @Service
 public class ChatService {
 
-    private record PromptContext(String prompt, String lawContext) {}
+    private enum ReplyMode {
+        ANALYSIS,
+        CONVERSATION
+    }
+
+    private record PromptContext(String prompt, String lawContext, ReplyMode mode) {}
 
     private static final Pattern LAW_HEADER_PATTERN =
             Pattern.compile("^===\\s*(.+?)\\s*===$");
@@ -343,8 +348,11 @@ public class ChatService {
 
     private String getAiReply(List<Message> history) {
         String latestUserMessage = latestUserMessage(history);
-        if (isIrrelevantInput(latestUserMessage)) {
+        if (isIrrelevantInput(latestUserMessage) && !isConversationalFollowUp(latestUserMessage, history)) {
             lastProvider = "guardrail";
+            if (isPerpetratorContext(combinedUserText(history))) {
+                return buildPerpetratorOffTopicReply();
+            }
             return buildIrrelevantInputReply();
         }
 
@@ -356,7 +364,7 @@ public class ChatService {
             try {
                 String reply = requireValidGeneratedReply(
                         callGeminiApi(history, promptContext.prompt()),
-                        promptContext.lawContext()
+                        promptContext
                 );
                 lastProvider = "gemini";
                 return reply;
@@ -371,7 +379,7 @@ public class ChatService {
             try {
                 String reply = requireValidGeneratedReply(
                         callGroqApi(history, promptContext.prompt()),
-                        promptContext.lawContext()
+                        promptContext
                 );
                 lastProvider = "groq";
                 return reply;
@@ -386,7 +394,7 @@ public class ChatService {
             try {
                 String reply = requireValidGeneratedReply(
                         callClaudeApi(history, promptContext.prompt()),
-                        promptContext.lawContext()
+                        promptContext
                 );
                 lastProvider = "claude";
                 return reply;
@@ -396,7 +404,7 @@ public class ChatService {
             }
         }
 
-        String fallback = buildFallbackReply(history, promptContext.lawContext());
+        String fallback = buildFallbackReply(history, promptContext);
         if (!fallback.isBlank()) {
             lastProvider = "law_fallback";
             System.err.println("[AI] 모든 외부 공급자 실패 후 법령 기반 fallback 응답 반환"
@@ -411,7 +419,12 @@ public class ChatService {
         );
     }
 
-    private String buildFallbackReply(List<Message> history, String lawContext) {
+    private String buildFallbackReply(List<Message> history, PromptContext promptContext) {
+        if (promptContext.mode() == ReplyMode.CONVERSATION) {
+            return buildConversationalFallbackReply(history);
+        }
+
+        String lawContext = promptContext.lawContext();
         String combined = history.stream()
                 .filter(message -> "user".equals(message.getRole()))
                 .map(Message::getContent)
@@ -456,12 +469,88 @@ public class ChatService {
         return reply.toString().trim();
     }
 
+    private String buildConversationalFallbackReply(List<Message> history) {
+        String latest = latestUserMessage(history);
+        String combined = history.stream()
+                .filter(message -> "user".equals(message.getRole()))
+                .map(Message::getContent)
+                .collect(Collectors.joining(" "))
+                .trim();
+        ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessageCount(history));
+        boolean perpetratorContext = isPerpetratorContext(combined);
+
+        if (perpetratorContext) {
+            if (!hasCaseFactSignal(latest) && !isAcknowledgement(latest) && !isEmotionalConversation(latest)) {
+                return """
+                        지금 상담은 본인이 한 행동과 피해 회복을 기준으로 정리 중입니다.
+                        방금 말한 내용이 이 사안에 반영할 내용이면 어떤 행동을 중단했는지, 사과나 삭제를 했는지처럼 연결해서 말해 주세요.
+                        전혀 다른 사안이면 새 상담으로 분리하는 편이 리포트가 섞이지 않습니다.
+                        """.trim();
+            }
+            if (containsAny(latest, "내가 피해", "제가 피해", "당했", "맞았어", "욕먹", "괴롭힘 당")) {
+                return """
+                        지금까지의 상담은 본인이 한 행동이 있는 사안으로 정리되어 있습니다.
+                        피해를 당한 별도 사안이라면 새 상담으로 분리하는 게 맞고, 같은 사안에서 서로 충돌이 있었던 내용이면 그 관계를 분명히 적어야 합니다.
+                        같은 사안 안에서 있었던 일인가요, 아니면 별도 사안인가요?
+                        """.trim();
+            }
+            if (isAcknowledgement(latest)) {
+                return """
+                        알겠습니다. 지금까지 내용은 가해 또는 연루 가능성 관점으로 상담 기록에 남아 리포트에 반영됩니다.
+                        이어서 말할 때는 본인이 한 행동, 중단한 조치, 사과나 피해 회복 상황을 중심으로 적어 주세요.
+                        """.trim();
+            }
+            return """
+                    이 내용은 기존 가해 또는 연루 가능성 사안에 추가로 반영하겠습니다.
+                    리포트에서는 본인이 한 행동, 피해 회복 노력, 재발 방지 계획이 일관되게 정리됩니다.
+                    지금 기준으로는 추가 행동을 멈추고, 보호자나 담임에게 사실관계를 숨기지 않고 공유하는 것이 우선입니다.
+                    """.trim();
+        }
+
+        if (containsAny(latest, "고마워", "감사", "알겠", "응", "네", "ㅇㅋ", "오케이")) {
+            if (readiness.ready()) {
+                return "알겠습니다. 지금까지 확인된 내용은 상담 기록에 남아 있어서 리포트에도 반영됩니다.\n추가로 생각나는 변화가 있으면 이어서 말해 주세요.";
+            }
+            return "알겠습니다. 아직 리포트에는 몇 가지 확인이 더 필요합니다.\n생각나는 만큼만 이어서 말해 주면, 그 내용까지 상담 기록에 반영하겠습니다.";
+        }
+
+        if (containsAny(latest, "힘들", "무서", "불안", "짜증", "괴롭", "말하기", "모르겠", "걱정")) {
+            return """
+                    바로 분석부터 밀어붙이지 않고, 먼저 상황을 정리해 보겠습니다.
+                    지금 말한 감정과 어려움도 상담 기록에 남고, 리포트에서는 피해 정도나 대응 필요성을 판단할 때 함께 반영됩니다.
+                    당장 한 가지만 고르면 됩니다. 지금 가장 걱정되는 게 상대의 보복, 증거 부족, 학교에 말하는 것 중 어디에 가까운가요?
+                    """.trim();
+        }
+
+        if (readiness.ready()) {
+            return """
+                    방금 말한 내용은 기존 상담에 추가로 반영됩니다.
+                    리포트를 만들면 현재까지의 대화 전체를 기준으로 유형, 증거 상태, 권장 조치가 다시 계산됩니다.
+                    더 이어서 말해도 되고, 새 사건이라면 새 상담으로 분리하는 게 좋습니다.
+                    """.trim();
+        }
+
+        return """
+                이 내용도 상담 기록에 반영해 두겠습니다.
+                리포트를 정확히 만들려면 아직 사건 내용, 학교 관계, 시점, 증거 중 빠진 부분을 더 확인해야 합니다.
+                편하게 이어서 말해 주세요. 길게 정리하지 않아도 됩니다.
+                """.trim();
+    }
+
     private String latestUserMessage(List<Message> history) {
         for (int i = history.size() - 1; i >= 0; i--) {
             Message message = history.get(i);
             if ("user".equals(message.getRole())) return message.getContent() == null ? "" : message.getContent().trim();
         }
         return "";
+    }
+
+    private String combinedUserText(List<Message> history) {
+        return history.stream()
+                .filter(message -> "user".equals(message.getRole()))
+                .map(Message::getContent)
+                .collect(Collectors.joining(" "))
+                .trim();
     }
 
     private boolean isIrrelevantInput(String text) {
@@ -474,10 +563,9 @@ public class ChatService {
                 "sns", "카톡", "단톡", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "갈취", "스토킹",
                 "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담");
         if (hasConsultationSignal) return false;
+        if (isAcknowledgement(t) || isEmotionalConversation(t)) return false;
 
-        boolean nuisance = containsAny(t, "똥", "똥싸", "오줌", "방귀", "ㅋㅋ", "ㅎㅎ", "ㅗ", "시발", "씨발", "병신", "바보", "메롱");
-        boolean tooShortForCase = t.replaceAll("\\s+", "").length() < 8;
-        return nuisance || tooShortForCase;
+        return true;
     }
 
     private String buildIrrelevantInputReply() {
@@ -492,6 +580,29 @@ public class ChatService {
                 • 언제부터 몇 번 있었는지
                 • 캡처, 사진, 진단서, 목격자 같은 증거가 있는지
                 """.trim();
+    }
+
+    private String buildPerpetratorOffTopicReply() {
+        return """
+                지금 상담은 본인이 한 행동과 피해 회복을 기준으로 정리 중입니다.
+                방금 내용은 이 사안과 직접 연결되는 정보로 보기 어렵습니다.
+                같은 사안에 반영할 내용이면 삭제·사과·피해 회복·재발 방지 중 무엇과 관련되는지 말해 주세요. 다른 사안이면 새 상담으로 분리하는 편이 좋습니다.
+                """.trim();
+    }
+
+    private boolean isConversationalFollowUp(String text, List<Message> history) {
+        if (userMessageCount(history) <= 1) return false;
+        return isAcknowledgement(text)
+                || isEmotionalConversation(text)
+                || containsAny(text, "어떡", "어떻게", "괜찮", "말해", "얘기", "상담", "리포트", "기록", "반영");
+    }
+
+    private boolean isAcknowledgement(String text) {
+        return containsAny(text, "고마워", "감사", "알겠", "응", "네", "ㅇㅋ", "오케이", "맞아", "그래");
+    }
+
+    private boolean isEmotionalConversation(String text) {
+        return containsAny(text, "힘들", "무서", "불안", "짜증", "괴롭", "말하기", "모르겠", "걱정", "답답", "억울");
     }
 
     private String callGroqApi(List<Message> history, String systemPrompt) {
@@ -601,6 +712,8 @@ public class ChatService {
         List<String> violenceTypes = detectTypes(combined);
         long userMessages = userMessageCount(history);
         ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessages);
+        String latest = latestUserMessage(history);
+        ReplyMode replyMode = determineReplyMode(history, latest, combined);
         String lawContext = lawApiService.getContextForCase(combined, violenceTypes);
         if (lawContext == null || lawContext.isBlank()) {
             throw new ResponseStatusException(
@@ -611,12 +724,16 @@ public class ChatService {
         if (lawContext.length() > 2600) lawContext = lawContext.substring(0, 2600);
 
         String allowedCitations = formatAllowedCitations(lawContext);
+        if (replyMode == ReplyMode.CONVERSATION) {
+            return new PromptContext(buildConversationPrompt(readiness, allowedCitations, lawContext, history), lawContext, replyMode);
+        }
+
         String openingLine = userMessages <= 1
                 ? "상황 정리: 사건 유형, 학교 관계, 증거 상태를 자연스러운 한 문장으로 요약"
                 : "추가로 반영한 점: 직전 답변 뒤 새로 확인된 단서 또는 판단 변화 1줄";
 
         String prompt = """
-                당신은 학교폭력 피해 학생을 돕는 한국 법률 정보 상담 AI입니다.
+                당신은 학교폭력 관련 학생과 보호자를 돕는 한국 법률 정보 상담 AI입니다.
                 목표는 뻔한 위로가 아니라, 사용자가 "내 상황이 어떤 유형이고 지금 무엇을 해야 하는지" 바로 판단하도록 돕는 것입니다.
 
                 # 반드시 지킬 규칙
@@ -673,7 +790,107 @@ public class ChatService {
 
                 # 참고 법령
                 """ + lawContext;
-        return new PromptContext(prompt, lawContext);
+        return new PromptContext(prompt, lawContext, replyMode);
+    }
+
+    private ReplyMode determineReplyMode(List<Message> history, String latest, String combined) {
+        long userMessages = userMessageCount(history);
+        if (userMessages <= 1) {
+            return (isAcknowledgement(latest) || isEmotionalConversation(latest))
+                    ? ReplyMode.CONVERSATION
+                    : ReplyMode.ANALYSIS;
+        }
+        if (asksForStructuredAnalysis(latest)) return ReplyMode.ANALYSIS;
+        if (containsSevereNewIncident(latest)) return ReplyMode.ANALYSIS;
+        if (isPerpetratorContext(combined)) return ReplyMode.CONVERSATION;
+        if (isAcknowledgement(latest) || isEmotionalConversation(latest)) return ReplyMode.CONVERSATION;
+        if (!hasCaseFactSignal(latest)) return ReplyMode.CONVERSATION;
+        if (containsAny(latest, "사과", "삭제", "말했", "얘기했", "상담했", "알렸", "보관", "캡처했", "기록했")) {
+            return ReplyMode.CONVERSATION;
+        }
+        return ReplyMode.ANALYSIS;
+    }
+
+    private boolean asksForStructuredAnalysis(String text) {
+        return containsAny(text, "법", "법률", "신고", "117", "112", "리포트", "분석", "증거", "조치", "처벌", "어떻게 해야", "어떡해야");
+    }
+
+    private boolean containsSevereNewIncident(String text) {
+        return containsAny(text, "또 맞", "또 때", "때렸", "맞았", "출혈", "골절", "응급실", "흉기", "칼", "성추행", "성폭행", "자살", "자해", "죽고 싶", "보복", "협박");
+    }
+
+    private boolean hasCaseFactSignal(String text) {
+        return containsAny(text,
+                "학교", "같은 반", "반 친구", "친구", "선배", "후배", "학생", "담임", "선생", "학원",
+                "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
+                "sns", "카톡", "단톡", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "갈취", "스토킹",
+                "가해", "피해", "캡처", "url", "진단", "병원", "목격", "사과", "삭제", "보호자");
+    }
+
+    private boolean isPerpetratorContext(String text) {
+        String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        boolean directPhrase = containsAny(t,
+                "제가 때렸", "내가 때렸", "제가 밀쳤", "내가 밀쳤",
+                "제가 욕했", "내가 욕했", "제가 욕을 했", "내가 욕을 했",
+                "제가 올렸", "내가 올렸", "제가 사진을 올렸", "내가 사진을 올렸",
+                "제가 게시", "내가 게시", "제가 댓글", "내가 댓글",
+                "제가 괴롭혔", "내가 괴롭혔", "제가 따돌", "내가 따돌",
+                "저도 같이 욕", "같이 욕했", "장난으로 올렸",
+                "사과하고 싶", "처벌받", "제가 가해", "내가 가해", "본인이 가해");
+        boolean selfActor = containsAny(t, "제가", "내가", "저도", "본인이");
+        boolean harmfulAction = containsAny(t,
+                "때렸", "밀쳤", "욕했", "욕을 했", "욕설을 했", "올렸", "게시", "댓글을 달",
+                "괴롭혔", "따돌", "놀렸", "빼앗", "강요");
+        return directPhrase || (selfActor && harmfulAction);
+    }
+
+    private String buildConversationPrompt(ReportReadiness readiness, String allowedCitations, String lawContext, List<Message> history) {
+        String combined = history.stream()
+                .filter(message -> "user".equals(message.getRole()))
+                .map(Message::getContent)
+                .collect(Collectors.joining(" "));
+        boolean perpetratorContext = isPerpetratorContext(combined);
+        String roleInstruction = perpetratorContext
+                ? """
+                # 가해 또는 연루 관점 고정 규칙
+                - 현재 상담은 본인이 한 행동을 기준으로 정리 중입니다. 갑자기 피해자 관점으로 바꾸거나 상대를 가해자로 단정하지 마세요.
+                - 대화는 피해 회복, 추가 행동 중단, 게시물 삭제, 사과 방식, 보호자/담임 공유, 재발 방지 계획으로 돌려야 합니다.
+                - 사용자가 전혀 다른 말을 하면 잡담을 이어가지 말고, 이 내용이 같은 사안에 반영할 내용인지 또는 새 상담으로 분리할 내용인지 짧게 확인하세요.
+                """
+                : """
+                # 대화 관점 규칙
+                - 사용자가 감정 표현, 망설임, 짧은 확인, 상황 공유를 하면 먼저 대화로 받아주세요.
+                - 새로 말한 내용은 상담 기록과 리포트에 반영된다고 설명하되, 리포트가 확정됐다고 말하지 마세요.
+                """;
+
+        return """
+                당신은 학교폭력 관련 학생과 보호자를 돕는 한국 법률 정보 상담 AI입니다.
+                이번 턴은 분석 템플릿이 아니라 자연스러운 대화 응답이 우선입니다.
+
+                # 답변 규칙
+                1. '관련 법률', '증거 확보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
+                2. 2~5문장으로 답하고, 필요할 때만 짧은 목록 2개 이하를 쓰세요.
+                3. 사용자의 직전 말을 그대로 복사하지 말고, 새로 반영할 의미만 짚으세요.
+                4. 답변 끝에는 필요한 경우 자연스러운 확인 질문 1개만 하세요.
+                5. 확인 질문 UI가 따로 제공되므로 '❓ 확인 질문' 섹션은 쓰지 마세요.
+                6. 법령명과 조문은 사용자가 직접 묻지 않았으면 쓰지 마세요.
+                7. 모든 문장은 자연스러운 한국어로 쓰고, AI, SNS, URL, DM, CCTV, PDF, ID, IP 외 외국어 단어는 쓰지 마세요.
+                8. 법률상담 대체 면책 문구는 화면에 별도로 표시되므로 답변에 쓰지 마세요.
+                9. 사용자가 같은 사안과 무관한 말을 하면 잡담을 이어가지 말고 상담 범위로 되돌리세요.
+
+                """ + roleInstruction + """
+
+                # 리포트 반영 상태
+                상태: """ + readiness.status() + """
+                준비 완료: """ + readiness.ready() + """
+                이유: """ + readiness.reason() + """
+                부족한 정보: """ + String.join(", ", readiness.missingInfo()) + """
+
+                # 허용 인용 목록
+                """ + allowedCitations + """
+
+                # 참고 법령
+                """ + lawContext;
     }
 
     private ReportReadiness assessReadiness(List<Message> history) {
@@ -696,12 +913,44 @@ public class ChatService {
         return result.toString().trim();
     }
 
-    private String requireValidGeneratedReply(String reply, String lawContext) {
+    private String requireValidGeneratedReply(String reply, PromptContext promptContext) {
         String sanitized = sanitizeGeneratedReply(reply);
-        if (!isGeneratedReplyValid(sanitized, lawContext)) {
+        boolean valid = promptContext.mode() == ReplyMode.CONVERSATION
+                ? isGeneratedConversationReplyValid(sanitized, promptContext.lawContext())
+                : isGeneratedReplyValid(sanitized, promptContext.lawContext());
+        if (!valid) {
             throw new IllegalStateException("AI 응답이 언어 또는 법령 검증을 통과하지 못했습니다.");
         }
         return sanitized;
+    }
+
+    static boolean isGeneratedConversationReplyValid(String reply, String lawContext) {
+        if (reply == null || reply.isBlank() || reply.length() > 900) return false;
+        if (containsForbiddenTemplatePhrase(reply)) return false;
+        if (reply.contains("관련 법률")
+                || reply.contains("증거 확보")
+                || reply.contains("보관해야 할 증거")
+                || reply.contains("다음 단계")
+                || reply.contains("⚖️")
+                || reply.contains("🗂️")) {
+            return false;
+        }
+        if (!usesAllowedCharacters(reply)) return false;
+
+        Map<String, Set<String>> allowed = parseAllowedCitations(lawContext);
+        for (String marker : KNOWN_LAW_MARKERS) {
+            if (reply.contains(marker) && allowed.keySet().stream().noneMatch(
+                    law -> law.equals(marker) || isSupportedAlias(marker, law))) {
+                return false;
+            }
+        }
+        for (String line : reply.split("\\R")) {
+            List<String> references = extractArticleReferences(line);
+            if (references.isEmpty()) continue;
+            String law = findLawForLine(line, allowed.keySet());
+            if (law == null || !allowed.get(law).containsAll(references)) return false;
+        }
+        return true;
     }
 
     static boolean isGeneratedReplyValid(String reply, String lawContext) {
