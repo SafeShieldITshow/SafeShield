@@ -56,6 +56,24 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void avoidsRepetitiveEvidenceItemsForGroupChatCyberCase() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var result = analysisService.analyze(
+                "같은 반 친구들이 단톡방에서 계속 괴롭히고 욕설과 비방을 여러 번 했습니다. 캡처가 있고 불안해서 담임에게 신고하고 싶습니다.",
+                readiness
+        );
+
+        long captureCount = result.evidenceGuide().stream()
+                .filter(item -> item.contains("캡처"))
+                .count();
+
+        assertTrue(result.evidenceGuide().contains("대화방 전체 캡처"));
+        assertTrue(result.evidenceGuide().contains("참여자·계정 정보 정리"));
+        assertTrue(captureCount <= 1, "캡처류 증거가 여러 개 반복되지 않아야 합니다.");
+    }
+
+    @Test
     void differentiatesRiskWithinCyberViolenceCases() {
         ReportReadiness readiness = readySchoolViolence();
 

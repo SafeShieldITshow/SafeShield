@@ -1041,11 +1041,12 @@ public class ChatService {
                 1. 첫 문장은 사용자의 감정이나 부담을 먼저 받아주세요.
                 2. 사용자가 말한 내용을 복사하지 말고, 핵심만 1문장으로 부드럽게 정리하세요.
                 3. 지금 바로 할 수 있는 작은 행동 1~2개를 알려주세요.
-                4. 마지막에는 가장 필요한 확인 질문 1개만 자연스럽게 물어보세요.
-                5. '관련 법률', '증거 정보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
-                6. 리포트는 충분히 확인한 뒤 만들겠다고 설명하고, 준비 완료라고 말하지 마세요.
-                7. 모든 문장은 자연스러운 한국어로 쓰고, 딱딱한 조사표나 설문지처럼 보이지 않게 하세요.
-                8. 전체 답변은 4~7문장 안에서 끝내세요.
+                4. 답변 본문에서 자체 확인 질문을 만들지 마세요. 필요한 질문은 화면의 선택·주관식 UI가 따로 제공합니다.
+                5. 선생님이나 어른이 채팅방에 있는지 묻지 마세요. 단체 채팅방 사안에서 필요한 관계 확인은 '같은 학교/같은 반/선배·후배/학원 관계인지'입니다.
+                6. '관련 법률', '증거 정보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
+                7. 리포트는 충분히 확인한 뒤 만들겠다고 설명하고, 준비 완료라고 말하지 마세요.
+                8. 모든 문장은 자연스러운 한국어로 쓰고, 딱딱한 조사표나 설문지처럼 보이지 않게 하세요.
+                9. 전체 답변은 3~6문장 안에서 끝내세요.
 
                 """ + roleInstruction + """
 
@@ -1053,6 +1054,9 @@ public class ChatService {
                 상태: """ + readiness.status() + """
                 이유: """ + readiness.reason() + """
                 아직 더 필요한 정보: """ + String.join(", ", readiness.missingInfo()) + """
+
+                # 화면에 별도로 제공될 확인 질문
+                """ + nextConfirmationQuestionPreview(readiness) + """
 
                 # 인용 가능한 법령 목록
                 """ + allowedCitations + """
@@ -1212,7 +1216,11 @@ public class ChatService {
                 || reply.contains("# 답변 형식")
                 || reply.contains("이번에 새로 반영한 점")
                 || reply.contains("확인된 유형: 학교폭력, 사이버폭력")
-                || reply.contains("확인된 유형: 학교폭력");
+                || reply.contains("확인된 유형: 학교폭력")
+                || reply.contains("선생님이나 어른이 계신가요")
+                || reply.contains("채팅방에 참여하고 있는 친구들 중에 선생님")
+                || (reply.contains("채팅방") && (reply.contains("어른") || reply.contains("선생님"))
+                && (reply.contains("있") || reply.contains("계신")));
     }
 
     private static String sanitizeGeneratedReply(String reply) {
@@ -1367,6 +1375,13 @@ public class ChatService {
     private static String firstEvidenceAction(List<String> evidenceGuide) {
         if (evidenceGuide == null || evidenceGuide.isEmpty()) return "남아 있는 증거를 원본 형태로 먼저 보관하세요.";
         return evidenceGuide.get(0) + "부터 먼저 보관하세요.";
+    }
+
+    private static String nextConfirmationQuestionPreview(ReportReadiness readiness) {
+        if (readiness == null || readiness.missingInfo() == null || readiness.missingInfo().isEmpty()) {
+            return "없음";
+        }
+        return toConfirmationQuestion(readiness.missingInfo().get(0));
     }
 
     private static String toConfirmationQuestion(String missingInfo) {

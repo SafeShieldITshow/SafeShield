@@ -143,4 +143,15 @@ class ChatServiceTest {
 
         assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
     }
+
+    @Test
+    void rejectsIrrelevantTeacherAdultQuestionForGroupChat() {
+        String reply = """
+                단체 채팅방에서 계속 괴롭힘을 겪고 있다면 혼자 견디기 어려운 상황입니다.
+                방금 말한 내용은 채팅방 안에서 반복되는 괴롭힘으로 보입니다.
+                혹시 그 채팅방에 참여하고 있는 친구들 중에 선생님이나 어른이 계신가요?
+                """;
+
+        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
 }

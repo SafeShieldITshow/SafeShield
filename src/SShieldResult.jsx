@@ -18,6 +18,8 @@ const EVIDENCE_MAP = {
     '원본 이미지·댓글 백업': { icon: '원본', desc: '사진 원본, 댓글 흐름, 알림 화면을 삭제 전 별도 폴더에 보관하세요.' },
     '계정 프로필 캡처': { icon: '계정', desc: '상대 계정의 아이디, 닉네임, 프로필 사진, 소개글이 보이게 캡처하세요.' },
     '대화방 전체 캡처': { icon: '대화', desc: '앞뒤 맥락, 참여자 목록, 보낸 시간까지 보이도록 길게 저장하세요.' },
+    '참여자·계정 정보 정리': { icon: '계정', desc: '참여자 이름, 닉네임, 계정 ID, 학교 관계를 한 줄씩 정리하세요.' },
+    '원본 파일 백업': { icon: '원본', desc: '사진, 영상, 알림, 대화 내역은 삭제 전 원본 파일이나 내보내기 형태로 따로 보관하세요.' },
     '상처 사진 촬영': { icon: '사진', desc: '멍이나 상처를 가까이와 전체 위치 두 방식으로 찍고 촬영 날짜를 남기세요.' },
     '진단서·진료 기록': { icon: '진단', desc: '진단서, 진료비 영수증, 처방전, 치료 날짜를 함께 보관하세요.' },
     '목격자 이름과 연락처': { icon: '목격', desc: '본 사람의 이름, 반, 연락 가능 여부, 들은 말의 요지를 정리하세요.' },
@@ -52,6 +54,56 @@ const EVIDENCE_MAP = {
 const DEFAULT_EVIDENCE_KEYS = ['음성 녹음', '메시지 캡처', '일지 작성', '목격자 진술'];
 const MEASURES = ['서면사과', '접촉금지', '학교봉사', '사회봉사', '특별교육', '출석정지', '학급교체', '전학', '퇴학'];
 
+const EVIDENCE_GROUPS = {
+    '메시지 캡처': 'capture',
+    '게시물 스크린샷': 'capture',
+    '게시물 전체 화면 캡처': 'capture',
+    '대화방 전체 캡처': 'capture',
+    '대화 캡처': 'capture',
+    '대화방·초대 제외 화면': 'capture',
+    '요구 메시지 캡처': 'capture',
+    '계정 프로필 캡처': 'account',
+    '참여자·계정 정보 정리': 'account',
+    '원본 이미지·댓글 백업': 'original',
+    '원본 파일 백업': 'original',
+    '대화·사진 원본 보관': 'original',
+    '대화·녹음 원본': 'original',
+    '일지 작성': 'timeline',
+    '사건 일지': 'timeline',
+    '반복 상황 일지': 'timeline',
+    '발언 직후 사건 메모': 'timeline',
+    '피해 직후 사건 메모': 'timeline',
+    '본인 행동 타임라인': 'timeline',
+    '발언 경위 메모': 'timeline',
+    '목격자 진술': 'witness',
+    '목격자 이름과 연락처': 'witness',
+    '병원 진단서': 'medical',
+    '진단서·진료 기록': 'medical',
+    '진단서·상담 기록': 'medical',
+    '담임 공유 기록': 'school-share',
+    '보호자·담임 상담 기록': 'school-share',
+};
+
+const compactEvidenceKeys = (keys = []) => {
+    const seenKeys = new Set();
+    const seenGroups = new Set();
+
+    return keys
+        .filter(Boolean)
+        .reduce((items, key) => {
+            if (seenKeys.has(key)) return items;
+            seenKeys.add(key);
+
+            const group = EVIDENCE_GROUPS[key];
+            if (group && seenGroups.has(group)) return items;
+            if (group) seenGroups.add(group);
+
+            items.push(key);
+            return items;
+        }, [])
+        .slice(0, 6);
+};
+
 const isPerpetratorStatus = (status = '') => status.includes('가해') || status.includes('연루');
 
 const evidenceFallbackDesc = (status = '') => (
@@ -84,7 +136,8 @@ const SShieldResult = () => {
         request
             .then((data) => {
                 setReport(data);
-                const keys = data.evidence_guide?.length ? data.evidence_guide : DEFAULT_EVIDENCE_KEYS;
+                const rawKeys = data.evidence_guide?.length ? data.evidence_guide : DEFAULT_EVIDENCE_KEYS;
+                const keys = compactEvidenceKeys(rawKeys);
                 const fallbackDesc = evidenceFallbackDesc(data.assessment_status);
                 setEvidenceItems(keys.map((key, index) => ({
                     id: `e${index}`,

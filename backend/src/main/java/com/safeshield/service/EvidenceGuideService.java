@@ -53,17 +53,20 @@ public class EvidenceGuideService {
             evidence.add("사과·피해 회복 기록");
             evidence.add("보호자·담임 상담 기록");
             evidence.add("재발 방지 계획");
-            return new ArrayList<>(evidence).stream().limit(6).toList();
+            return compactEvidence(evidence);
         }
 
         if (types.contains("사이버 폭력")) {
-            if (containsAny(text, "게시", "댓글", "sns", "인스타", "온라인")) {
-                evidence.add("게시물 전체 화면 캡처");
-                evidence.add("URL·작성자·게시시간 기록");
+            boolean chatBased = containsAny(text, "dm", "디엠", "카톡", "메시지", "단톡", "대화", "채팅방", "단체 채팅");
+            boolean postBased = containsAny(text, "게시", "댓글", "sns", "인스타", "온라인");
+            if (chatBased) {
+                evidence.add("대화방 전체 캡처");
+                evidence.add("참여자·계정 정보 정리");
             }
-            if (containsAny(text, "사진", "이미지", "영상")) evidence.add("원본 이미지·댓글 백업");
-            if (containsAny(text, "dm", "디엠", "카톡", "메시지", "단톡", "대화")) evidence.add("대화방 전체 캡처");
-            evidence.add("계정 프로필 캡처");
+            if (postBased && !chatBased) evidence.add("게시물 전체 화면 캡처");
+            if (postBased) evidence.add("URL·작성자·게시시간 기록");
+            if (containsAny(text, "사진", "이미지", "영상")) evidence.add("원본 파일 백업");
+            if (!chatBased && !postBased) evidence.add("계정 프로필 캡처");
         }
 
         if (types.contains("신체 폭력")) {
@@ -111,7 +114,34 @@ public class EvidenceGuideService {
             evidence.addAll(List.of("사건 일지", "대화 캡처", "목격자 이름과 연락처", "담임 공유 기록"));
         }
         evidence.add("사건 일지");
-        return new ArrayList<>(evidence).stream().limit(6).toList();
+        return compactEvidence(evidence);
+    }
+
+    private List<String> compactEvidence(Set<String> evidence) {
+        List<String> compacted = new ArrayList<>();
+        Set<String> categories = new LinkedHashSet<>();
+
+        for (String item : evidence) {
+            String category = evidenceCategory(item);
+            if (categories.add(category)) {
+                compacted.add(item);
+            }
+        }
+        return compacted.stream().limit(6).toList();
+    }
+
+    private String evidenceCategory(String item) {
+        if (item.contains("캡처") || item.contains("스크린샷") || item.contains("화면")) return "capture";
+        if (item.contains("URL") || item.contains("게시시간")) return "link";
+        if (item.contains("계정") || item.contains("프로필") || item.contains("참여자")) return "account";
+        if (item.contains("원본") || item.contains("백업")) return "original";
+        if (item.contains("일지") || item.contains("메모") || item.contains("타임라인")) return "timeline";
+        if (item.contains("목격자") || item.contains("진술")) return "witness";
+        if (item.contains("진단서") || item.contains("진료") || item.contains("상담 기록")) return "medical";
+        if (item.contains("담임") || item.contains("보호자")) return "school-share";
+        if (item.contains("사과") || item.contains("회복") || item.contains("반환") || item.contains("변상")) return "recovery";
+        if (item.contains("재발")) return "prevention";
+        return item;
     }
 
     private boolean isPerpetratorPerspective(String text) {
