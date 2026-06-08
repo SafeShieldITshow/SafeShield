@@ -97,9 +97,19 @@ public class ChatService {
     @Value("${ai.backup-key:}")
     private String backupApiKey;
 
+    @Value("${deepseek.api-key:}")
+    private String deepSeekApiKey;
+
+    @Value("${deepseek.model:deepseek-v4-flash}")
+    private String deepSeekModel;
+
+    @Value("${deepseek.max-tokens:900}")
+    private int deepSeekMaxTokens;
+
     private final RestTemplate aiClient;
     private volatile long groqDisabledUntil = 0;
     private volatile long geminiDisabledUntil = 0;
+    private volatile long deepSeekDisabledUntil = 0;
     private volatile String lastProvider = "none";
 
     public ChatService(SessionRepository sessionRepository, MessageRepository messageRepository,
@@ -390,7 +400,22 @@ public class ChatService {
             }
         }
 
-        if (backupApiKey != null && !backupApiKey.isBlank()) {
+        if (!effectiveDeepSeekApiKey().isBlank() && System.currentTimeMillis() > deepSeekDisabledUntil) {
+            try {
+                String reply = requireValidGeneratedReply(
+                        callDeepSeekApi(history, promptContext.prompt()),
+                        promptContext
+                );
+                lastProvider = "deepseek";
+                return reply;
+            } catch (Exception e) {
+                lastError = e;
+                deepSeekDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
+                logProviderFailure("DeepSeek", e);
+            }
+        }
+
+        if (isClaudeBackupAvailable()) {
             try {
                 String reply = requireValidGeneratedReply(
                         callClaudeApi(history, promptContext.prompt()),
@@ -637,6 +662,41 @@ public class ChatService {
         return extractOpenAiStyleResponse(res.getBody());
     }
 
+    private String callDeepSeekApi(List<Message> history, String systemPrompt) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(effectiveDeepSeekApiKey());
+
+        List<Map<String, String>> messages = new ArrayList<>();
+        messages.add(Map.of("role", "system", "content", systemPrompt));
+        for (Message message : recentHistory(history, 10)) {
+            messages.add(Map.of(
+                    "role", "assistant".equals(message.getRole()) ? "assistant" : "user",
+                    "content", message.getContent()
+            ));
+        }
+
+        String model = deepSeekModel == null || deepSeekModel.isBlank()
+                ? "deepseek-v4-flash"
+                : deepSeekModel.trim();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", model);
+        body.put("messages", messages);
+        body.put("max_tokens", Math.max(400, Math.min(deepSeekMaxTokens, 1200)));
+        body.put("temperature", 0.1);
+        if (model.startsWith("deepseek-v4")) {
+            body.put("thinking", Map.of("type", "disabled"));
+        }
+
+        ResponseEntity<Map> res = aiClient.exchange(
+                "https://api.deepseek.com/chat/completions",
+                HttpMethod.POST,
+                new HttpEntity<>(body, headers),
+                Map.class
+        );
+        return extractOpenAiStyleResponse(res.getBody());
+    }
+
     private String callGeminiApi(List<Message> history, String systemPrompt) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -702,6 +762,23 @@ public class ChatService {
         List content = (List) responseBody.get("content");
         if (content == null || content.isEmpty()) throw new IllegalStateException("Claude content가 없습니다.");
         return String.valueOf(((Map) content.get(0)).get("text"));
+    }
+
+    private String effectiveDeepSeekApiKey() {
+        if (deepSeekApiKey != null && !deepSeekApiKey.isBlank()) {
+            return deepSeekApiKey.trim();
+        }
+        if (backupApiKey == null || backupApiKey.isBlank()) {
+            return "";
+        }
+        String key = backupApiKey.trim();
+        return key.startsWith("sk-ant-") ? "" : key;
+    }
+
+    private boolean isClaudeBackupAvailable() {
+        return backupApiKey != null
+                && !backupApiKey.isBlank()
+                && backupApiKey.trim().startsWith("sk-ant-");
     }
 
     private PromptContext buildPromptContext(List<Message> history) {
@@ -1283,7 +1360,8 @@ public class ChatService {
         return Map.of(
                 "groq", groqApiKey != null && !groqApiKey.isBlank(),
                 "gemini", geminiApiKey != null && !geminiApiKey.isBlank(),
-                "claude", backupApiKey != null && !backupApiKey.isBlank(),
+                "deepseek", !effectiveDeepSeekApiKey().isBlank(),
+                "claude", isClaudeBackupAvailable(),
                 "last_provider", lastProvider
         );
     }

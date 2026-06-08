@@ -53,14 +53,18 @@ GROQ_API_KEY=...
 GROQ_MODEL=llama-3.1-8b-instant
 GROQ_MAX_COMPLETION_TOKENS=900
 GEMINI_API_KEY=...
+DEEPSEEK_API_KEY=...
+DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_MAX_TOKENS=900
 BACKUP_AI_KEY=...
 LAW_API_OC=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 ```
 
-`BACKUP_AI_KEY`는 선택 사항이며, 나머지 연동을 실제로 사용할 경우 해당 키가 필요합니다.
+`DEEPSEEK_API_KEY`는 선택 사항입니다. `DEEPSEEK_API_KEY`가 비어 있고 `BACKUP_AI_KEY`가 Anthropic 형식(`sk-ant-...`)이 아니면 `BACKUP_AI_KEY`를 DeepSeek 키로 사용합니다.
 `GROQ_MODEL`은 기본값 `llama-3.1-8b-instant`를 권장합니다. `llama-3.3-70b-versatile`는 답변 품질은 더 낫지만 무료 플랜에서 토큰 소모가 커서 상담 응답이 끊길 가능성이 높습니다.
+`DEEPSEEK_MODEL`은 공식 문서 기준 `deepseek-v4-flash`를 기본값으로 사용합니다.
 
 Google Cloud Console의 승인된 리디렉션 URI에는 다음 주소가 등록되어야 합니다.
 
@@ -107,6 +111,9 @@ GROQ_API_KEY
 GROQ_MODEL
 GROQ_MAX_COMPLETION_TOKENS
 GEMINI_API_KEY
+DEEPSEEK_API_KEY
+DEEPSEEK_MODEL
+DEEPSEEK_MAX_TOKENS
 BACKUP_AI_KEY
 LAW_API_OC
 GOOGLE_CLIENT_ID
