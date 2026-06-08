@@ -135,10 +135,22 @@ public class ReportService {
     private String buildSummary(AnalysisResult analysis) {
         String riskLabel = analysis.riskScore() >= 7 ? "높음" : analysis.riskScore() >= 4 ? "중간" : "낮음";
         String types = analysis.violenceTypes().isEmpty() ? "명확한 학교폭력 유형 없음" : String.join(", ", analysis.violenceTypes());
-        String actions = analysis.recommendedActions().stream().limit(2).reduce((a, b) -> a + " " + b).orElse("상담 내용을 보완하세요.");
-        return analysis.assessmentStatus() + "으로 정리됩니다. "
-                + "확인된 유형은 " + types + "이며 위험도는 " + analysis.riskScore() + "/10 (" + riskLabel + ")입니다. "
-                + actions;
+        String relationship = findDetail(analysis, "관계 판단:");
+        String pattern = findDetail(analysis, "발생 양상:");
+        String confidence = findDetail(analysis, "판단 신뢰도:");
+        String actions = analysis.recommendedActions().stream().findFirst().orElse("상담 내용을 보완하세요.");
+        return analysis.assessmentStatus() + "입니다. "
+                + "유형은 " + types + ", 위험도는 " + analysis.riskScore() + "/10 (" + riskLabel + ")로 산정했습니다. "
+                + relationship + " " + pattern + " " + confidence + " "
+                + "우선 조치: " + actions;
+    }
+
+    private String findDetail(AnalysisResult analysis, String prefix) {
+        return analysis.keyFindings().stream()
+                .filter(item -> item.startsWith(prefix))
+                .findFirst()
+                .map(item -> item.substring(prefix.length()).trim())
+                .orElse("");
     }
 
     private void requireOwner(User user, Session session) {

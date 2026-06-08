@@ -11,6 +11,15 @@ import java.util.Locale;
 @Service
 public class AnalysisService {
 
+    private record CaseFacts(
+            String role,
+            String relationship,
+            String incidentPattern,
+            String evidenceLevel,
+            String confidenceLevel,
+            String confidenceReason
+    ) {}
+
     private final LawDataService lawDataService;
     private final EvidenceGuideService evidenceGuideService;
 
@@ -66,28 +75,28 @@ public class AnalysisService {
         boolean relevantInput = isRelevantConsultationInput(t);
 
         boolean hasConcreteIncident = containsAny(t, "때렸", "맞았", "욕", "모욕", "비방", "사진", "게시", "댓글", "협박",
-                "따돌", "돈", "갈취", "성희롱", "성추행", "괴롭", "놀림", "밀쳤", "사과", "제가", "내가");
-        boolean hasActorContext = containsAny(t, "같은 반", "친구", "선배", "후배", "학생", "반 친구", "동급생", "가해자",
-                "피해자", "담임", "선생", "학교", "학원");
+                "따돌", "돈", "갈취", "성희롱", "성추행", "괴롭", "놀림", "밀쳤", "사과",
+                "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는");
+        boolean hasRelationshipAnswer = hasDefiniteSchoolRelationship(t) || hasConfirmedNonSchoolRelationship(t);
         boolean hasTimeOrRepeat = containsAny(t, "오늘", "어제", "며칠", "몇 번", "계속", "반복", "매일", "한 번", "지난",
-                "방금", "언제", "개월", "주일");
+                "방금", "언제", "개월", "주일", "현재까지는 한 번", "여러 번", "지금도 계속", "정확한 시점");
         boolean hasEvidenceOrChannel = containsAny(t, "캡처", "녹음", "사진", "진단", "병원", "목격", "sns", "카톡", "단톡",
-                "댓글", "게시", "메시지", "증거");
+                "댓글", "게시", "메시지", "증거", "아직 확보한 증거는 없습니다", "증거는 없습니다");
 
         if (!hasConcreteIncident) missing.add("무슨 일이 있었는지");
-        if (!hasActorContext) missing.add("상대가 학교 관계자인지");
+        if (!hasRelationshipAnswer) missing.add("상대가 학교 관계자인지");
         if (!hasTimeOrRepeat) missing.add("언제부터 몇 번 있었는지");
         if (!hasEvidenceOrChannel) missing.add("남아 있는 증거가 무엇인지");
 
         if (hasConcreteIncident) facts.add("구체적인 사건 내용 확인");
-        if (hasActorContext) facts.add("상대방 또는 학교 관계 단서 확인");
+        if (hasRelationshipAnswer) facts.add("상대방과 학교 관계 확인");
         if (hasTimeOrRepeat) facts.add("시점 또는 반복성 단서 확인");
         if (hasEvidenceOrChannel) facts.add("증거 또는 발생 경로 단서 확인");
 
         String role = detectRole(t);
         boolean schoolContext = hasSchoolContext(t);
         boolean hasViolenceType = !detectViolenceTypes(t).isEmpty();
-        boolean ready = relevantInput && userMessageCount >= 2 && missing.size() <= 1;
+        boolean ready = relevantInput && userMessageCount >= 2 && missing.isEmpty();
         boolean lowSchoolViolence = ready && (!schoolContext || !hasViolenceType);
 
         String status;
@@ -97,7 +106,7 @@ public class AnalysisService {
             reason = "학교폭력 상담과 직접 관련된 사건 내용이 아직 확인되지 않았습니다.";
         } else if (!ready) {
             status = "추가 확인 필요";
-            reason = "리포트 생성 전에 핵심 정보 " + Math.min(2, missing.size()) + "가지를 더 확인해야 합니다.";
+            reason = "리포트 생성 전에 사안 구조를 확정할 핵심 정보 " + Math.min(2, missing.size()) + "가지를 더 확인해야 합니다.";
         } else if (lowSchoolViolence) {
             status = "학교폭력 해당성 낮음";
             reason = "현재 정보만으로는 학교 관계 또는 학교폭력 유형과의 연결이 약합니다.";
@@ -251,15 +260,30 @@ public class AnalysisService {
     }
 
     private boolean hasSchoolContext(String text) {
-        return containsAny(text, "학교", "같은 반", "반 친구", "친구", "선배", "후배", "동급생", "학생", "담임", "선생", "학원");
+        return hasDefiniteSchoolRelationship(text);
+    }
+
+    private boolean hasDefiniteSchoolRelationship(String text) {
+        return containsAny(text,
+                "같은 반", "반 친구", "같은 학교", "학교 친구", "동급생", "선배", "후배", "학생",
+                "담임", "선생", "학원", "상대는 같은 반", "상대는 같은 학교");
+    }
+
+    private boolean hasConfirmedNonSchoolRelationship(String text) {
+        return containsAny(text, "학교 밖", "학교 관계자가 아닙", "학교 관계자는 아닙", "학교 관계 없음");
     }
 
     private List<String> buildKeyFindings(String text, List<String> types, ReportReadiness readiness) {
+        CaseFacts facts = analyzeCaseFacts(text, types, readiness);
         List<String> findings = new ArrayList<>();
         findings.add("판단 상태: " + readiness.status());
-        findings.add(types.isEmpty() ? "명확한 학교폭력 유형은 아직 확인되지 않았습니다." : "확인된 유형: " + String.join(", ", types));
-        findings.addAll(readiness.keyFacts());
-        return findings.stream().distinct().limit(5).toList();
+        findings.add("사안 역할: " + facts.role());
+        findings.add("관계 판단: " + facts.relationship());
+        findings.add(types.isEmpty() ? "행위 유형: 명확한 학교폭력 유형은 아직 확인되지 않았습니다." : "행위 유형: " + String.join(", ", types));
+        findings.add("발생 양상: " + facts.incidentPattern());
+        findings.add("증거 수준: " + facts.evidenceLevel());
+        findings.add("판단 신뢰도: " + facts.confidenceLevel() + " - " + facts.confidenceReason());
+        return findings.stream().distinct().limit(7).toList();
     }
 
     private List<String> buildRecommendedActions(ReportReadiness readiness, List<String> types) {
@@ -272,7 +296,78 @@ public class AnalysisService {
         if (readiness.status().contains("가해")) {
             return List.of("피해 회복을 위해 게시물 삭제, 사과, 재발 방지 의사를 정리하세요.", "보호자나 담임에게 먼저 알리고 사실관계를 숨기지 말고 설명하세요.");
         }
-        return List.of("증거를 원본 형태로 보관하고 117 또는 학교 담당자에게 상담을 요청하세요.", "위험이 계속되면 보호자와 담임에게 즉시 공유하세요.");
+        List<String> actions = new ArrayList<>();
+        if (types.contains("신체 폭력")) {
+            actions.add("상처 사진과 진료 기록을 먼저 확보하고, 통증이나 상해가 있으면 보호자와 병원 기록을 남기세요.");
+        }
+        if (types.contains("사이버 폭력")) {
+            actions.add("게시물·댓글·계정·URL·게시 시간을 삭제 전 한 화면에 보이게 저장하세요.");
+        }
+        if (types.contains("갈취")) {
+            actions.add("돈이나 물건 요구 메시지와 송금·결제 내역을 금액, 날짜, 상대 계정과 함께 정리하세요.");
+        }
+        if (types.contains("성폭력")) {
+            actions.add("혼자 대응하지 말고 보호자, 학교 전담교사, 전문 상담기관과 즉시 공유하세요.");
+        }
+        actions.add("사안 구조와 증거를 정리한 뒤 담임 또는 학교폭력 담당자에게 상담을 요청하세요.");
+        actions.add("반복되거나 보복 우려가 있으면 117 상담으로 보호 조치 절차를 확인하세요.");
+        return actions.stream().distinct().limit(4).toList();
+    }
+
+    private CaseFacts analyzeCaseFacts(String text, List<String> types, ReportReadiness readiness) {
+        String t = normalize(text);
+        String role = detectRole(t);
+
+        String relationship;
+        if (hasDefiniteSchoolRelationship(t)) {
+            relationship = "학교 또는 학원 관계가 확인되어 학교폭력 절차와 연결해 검토할 수 있습니다.";
+        } else if (hasConfirmedNonSchoolRelationship(t)) {
+            relationship = "상대가 학교 관계자가 아닌 것으로 확인되어 학교폭력 해당성은 낮게 봅니다.";
+        } else {
+            relationship = "상대와 학교 관계가 아직 불명확해 학교폭력 해당성 판단에 한계가 있습니다.";
+        }
+
+        String pattern;
+        if (containsAny(t, "지금도 계속", "아직도", "계속", "반복", "매일", "여러 번", "몇 번")) {
+            pattern = "반복 또는 지속 가능성이 확인되어 단발 사안보다 위험도를 높게 봅니다.";
+        } else if (containsAny(t, "한 번", "현재까지는 한 번", "1번", "처음")) {
+            pattern = "현재 정보상 1회성 사안으로 보며, 추가 반복 여부 확인이 중요합니다.";
+        } else {
+            pattern = "발생 시점과 반복성이 제한적으로만 확인되어 추가 진술이 있으면 판단이 달라질 수 있습니다.";
+        }
+
+        String evidence;
+        if (containsAny(t, "진단", "병원", "치료", "진단서")) {
+            evidence = "진단·치료 기록이 있어 신체 피해 입증력이 비교적 높습니다.";
+        } else if (containsAny(t, "캡처", "url", "녹음", "사진", "메시지", "목격")) {
+            evidence = "캡처·사진·메시지·목격 등 직접 증거 단서가 확인됩니다.";
+        } else if (containsAny(t, "아직 확보한 증거는 없습니다", "증거는 없습니다", "아직 없음")) {
+            evidence = "증거가 없다고 확인되어 사실관계 입증력은 낮습니다.";
+        } else {
+            evidence = "증거 상태가 약하거나 불명확해 리포트 신뢰도가 제한됩니다.";
+        }
+
+        int confirmed = 0;
+        if (!types.isEmpty()) confirmed++;
+        if (hasDefiniteSchoolRelationship(t) || hasConfirmedNonSchoolRelationship(t)) confirmed++;
+        if (containsAny(t, "한 번", "여러 번", "계속", "반복", "오늘", "어제", "지난", "방금", "개월", "주일")) confirmed++;
+        if (containsAny(t, "캡처", "url", "녹음", "사진", "진단", "병원", "목격", "증거", "아직 확보한 증거는 없습니다")) confirmed++;
+        if (readiness.ready()) confirmed++;
+
+        String confidenceLevel;
+        String confidenceReason;
+        if (confirmed >= 5 && readiness.schoolViolenceLikely()) {
+            confidenceLevel = "높음";
+            confidenceReason = "행위, 관계, 시점, 증거 상태가 함께 확인됐습니다.";
+        } else if (confirmed >= 4) {
+            confidenceLevel = "중간";
+            confidenceReason = "핵심 사실은 확인됐지만 학교폭력 해당성 또는 증거 강도에 제한이 있습니다.";
+        } else {
+            confidenceLevel = "낮음";
+            confidenceReason = "사안 구조가 충분히 확정되지 않아 결론을 제한적으로 봐야 합니다.";
+        }
+
+        return new CaseFacts(role, relationship, pattern, evidence, confidenceLevel, confidenceReason);
     }
 
     private int estimateUserMessageCount(String text) {

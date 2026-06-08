@@ -102,6 +102,33 @@ class AnalysisServiceTest {
         assertTrue(result.riskScore() <= 4.5, "무관 입력은 위험도를 낮게 제한해야 합니다.");
     }
 
+    @Test
+    void requiresDefiniteSchoolRelationshipBeforeReportReady() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "친구가 계속 욕을 했고 캡처가 있습니다. 여러 번 반복됐습니다.",
+                2
+        );
+
+        assertFalse(readiness.ready(), "친구라는 표현만으로 학교 관계를 확정하고 리포트를 열면 안 됩니다.");
+        assertTrue(readiness.missingInfo().contains("상대가 학교 관계자인지"));
+    }
+
+    @Test
+    void becomesReadyWhenCaseStructureIsConfirmed() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. 캡처와 URL이 있습니다.",
+                2
+        );
+        var result = analysisService.analyze(
+                "같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. 캡처와 URL이 있습니다.",
+                readiness
+        );
+
+        assertTrue(readiness.ready(), "행위, 관계, 시점, 증거가 모두 확인되면 리포트 생성이 가능해야 합니다.");
+        assertTrue(result.keyFindings().stream().anyMatch(item -> item.startsWith("관계 판단:")));
+        assertTrue(result.keyFindings().stream().anyMatch(item -> item.startsWith("판단 신뢰도:")));
+    }
+
     private ReportReadiness readySchoolViolence() {
         return new ReportReadiness(
                 true,
