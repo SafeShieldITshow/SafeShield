@@ -44,7 +44,7 @@ public class SecurityConfig {
             .httpBasic(basic -> basic.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/health", "/auth/signup", "/auth/login", "/h2-console/**", "/login/oauth2/**", "/oauth2/**").permitAll()
+                .requestMatchers("/", "/health", "/auth/signup", "/auth/login", "/chat/guest-message", "/h2-console/**", "/login/oauth2/**", "/oauth2/**").permitAll()
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2

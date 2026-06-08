@@ -53,4 +53,9 @@ public class ChatController {
                                             @AuthenticationPrincipal User user) {
         return chatService.sendMessage(user, req.sessionId(), req.content());
     }
+
+    @PostMapping("/guest-message")
+    public Map<String, Object> sendGuestMessage(@RequestBody MessageRequest req) {
+        return chatService.sendGuestMessage(req.content(), req.history());
+    }
 }

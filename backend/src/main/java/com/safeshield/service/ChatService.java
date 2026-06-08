@@ -4,6 +4,7 @@ import com.safeshield.model.Message;
 import com.safeshield.model.Session;
 import com.safeshield.model.User;
 import com.safeshield.dto.AnalysisResult;
+import com.safeshield.dto.MessageRequest.HistoryMessage;
 import com.safeshield.dto.ReportReadiness;
 import com.safeshield.repository.MessageRepository;
 import com.safeshield.repository.SessionRepository;
@@ -176,6 +177,33 @@ public class ChatService {
         );
     }
 
+    public Map<String, Object> sendGuestMessage(String content, List<HistoryMessage> clientHistory) {
+        String normalized = content == null ? "" : content.trim();
+        if (normalized.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "상담 내용을 입력해 주세요.");
+        }
+        if (normalized.length() > 2000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "상담 내용은 2000자 이하로 입력해 주세요.");
+        }
+
+        List<Message> history = guestHistory(clientHistory, normalized);
+        String reply = getAiReply(history);
+        ReportReadiness readiness = assessReadiness(history);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("session_id", null);
+        response.put("reply", reply);
+        response.put("user_message_count", userMessageCount(history));
+        response.put("new_session_started", false);
+        response.put("report_ready", readiness.ready());
+        response.put("report_status", readiness.status());
+        response.put("report_reason", readiness.reason());
+        response.put("missing_info", readiness.missingInfo());
+        response.put("confirmation_prompts", confirmationPrompts(readiness));
+        response.put("temporary", true);
+        return response;
+    }
+
     public List<Map<String, Object>> getMessages(Long sessionId, User user) {
         Session session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "상담 세션을 찾을 수 없습니다."));
@@ -340,6 +368,44 @@ public class ChatService {
             return preview.substring(0, 44) + "...";
         }
         return preview;
+    }
+
+    private List<Message> guestHistory(List<HistoryMessage> clientHistory, String latestUserMessage) {
+        List<Message> items = new ArrayList<>();
+        if (clientHistory != null) {
+            for (HistoryMessage item : clientHistory) {
+                if (item == null) continue;
+                String role = normalizeGuestRole(item.role());
+                String content = item.content() == null ? "" : item.content().trim();
+                if (role == null || content.isBlank()) continue;
+                items.add(transientMessage(role, trimForGuestHistory(content)));
+            }
+        }
+
+        int from = Math.max(0, items.size() - 12);
+        List<Message> recent = new ArrayList<>(items.subList(from, items.size()));
+        recent.add(transientMessage("user", latestUserMessage));
+        return recent;
+    }
+
+    private String normalizeGuestRole(String role) {
+        if (role == null) return null;
+        return switch (role.trim().toLowerCase(Locale.ROOT)) {
+            case "user" -> "user";
+            case "assistant", "ai" -> "assistant";
+            default -> null;
+        };
+    }
+
+    private String trimForGuestHistory(String content) {
+        return content.length() > 2000 ? content.substring(0, 2000) : content;
+    }
+
+    private Message transientMessage(String role, String content) {
+        Message message = new Message();
+        message.setRole(role);
+        message.setContent(content);
+        return message;
     }
 
     private Session resolveSession(User user, Long sessionId) {

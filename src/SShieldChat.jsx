@@ -250,6 +250,16 @@ const toUiMessage = (message) => ({
         : now(),
 });
 
+const toGuestHistoryPayload = (items) => items
+    .filter((message) => message.id !== 'welcome')
+    .filter((message) => message.type === 'user' || message.type === 'ai')
+    .map((message) => ({
+        role: message.type === 'ai' ? 'assistant' : 'user',
+        content: String(message.text || '').trim(),
+    }))
+    .filter((message) => message.content)
+    .slice(-12);
+
 const SShieldChat = () => {
     const initialSessionIdRef = useRef(null);
     const initialConversationKey = `draft:${Date.now()}`;
@@ -268,6 +278,7 @@ const SShieldChat = () => {
     const [generatingReport, setGeneratingReport] = useState(false);
     const [isSessionLoading, setIsSessionLoading] = useState(false);
     const [isSessionsLoading, setIsSessionsLoading] = useState(false);
+    const [isGuestMode, setIsGuestMode] = useState(() => !hasToken());
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
     const typingTimerRef = useRef(null);
@@ -279,14 +290,14 @@ const SShieldChat = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const requestedSessionParam = searchParams.get('session');
+    const isGuest = isGuestMode;
     const isCurrentLoading = pendingKeys.has(conversationKey);
     const isChatBusy = isCurrentLoading || isSessionLoading;
 
-    const redirectToHomeForLogin = useCallback(() => {
-        clearSession();
-        alert('로그인이 필요합니다.');
-        navigate('/', { replace: true });
-    }, [navigate]);
+    const requireLoginForSavedFeature = () => {
+        alert('상담 기록과 리포트는 로그인 후 이용할 수 있습니다.');
+        navigate('/login');
+    };
 
     const activateConversation = useCallback((id, key = `session:${id}`) => {
         sessionIdRef.current = id;
@@ -297,6 +308,11 @@ const SShieldChat = () => {
     }, []);
 
     const loadSessions = useCallback(async () => {
+        if (isGuestMode || !hasToken()) {
+            setSessions([]);
+            setIsSessionsLoading(false);
+            return [];
+        }
         setIsSessionsLoading(true);
         try {
             const items = await api.get('/chat/sessions');
@@ -308,9 +324,17 @@ const SShieldChat = () => {
         } finally {
             setIsSessionsLoading(false);
         }
-    }, []);
+    }, [isGuestMode]);
 
     const loadMessagesForSession = useCallback(async (id) => {
+        if (isGuestMode || !hasToken()) {
+            const draftKey = `draft:${Date.now()}`;
+            localStorage.removeItem('ss_session');
+            activateConversation(null, draftKey);
+            setMessages([initialMessage()]);
+            setShowReport(false);
+            return;
+        }
         const loadSequence = ++messageLoadSequenceRef.current;
         activateConversation(id);
         setIsSessionLoading(true);
@@ -341,7 +365,28 @@ const SShieldChat = () => {
                 setIsSessionLoading(false);
             }
         }
-    }, [activateConversation]);
+    }, [activateConversation, isGuestMode]);
+
+    useEffect(() => {
+        if (!hasToken()) {
+            setIsGuestMode(true);
+            return;
+        }
+
+        let alive = true;
+        api.get('/auth/me')
+            .then(() => {
+                if (alive) setIsGuestMode(false);
+            })
+            .catch(() => {
+                clearSession();
+                if (alive) setIsGuestMode(true);
+            });
+
+        return () => {
+            alive = false;
+        };
+    }, []);
 
     useEffect(() => {
         loadSessions();
@@ -410,8 +455,7 @@ const SShieldChat = () => {
             .filter((message) => message.type === 'user')
             .map((message) => message.text || '');
 
-        return Boolean(sessionIdRef.current)
-            && previousUserMessages.length > 0
+        return previousUserMessages.length > 0
             && (
                 hasExplicitTopicShiftHint(content)
                 || hasMeaningfulTopicShift(content, previousUserMessages)
@@ -421,10 +465,6 @@ const SShieldChat = () => {
     const sendOrAskTopic = (text) => {
         const content = (text || input).trim();
         if (!content || isChatBusy) return;
-        if (!hasToken()) {
-            redirectToHomeForLogin();
-            return;
-        }
 
         if (shouldConfirmTopic(content)) {
             setTopicPrompt(content);
@@ -439,11 +479,9 @@ const SShieldChat = () => {
         const content = (text || input).trim();
         const targetKey = options.forceNewSession ? `draft:${Date.now()}` : conversationKeyRef.current;
         if (!content || isSessionLoading || pendingKeysRef.current.has(targetKey)) return;
-        if (!hasToken()) {
-            redirectToHomeForLogin();
-            return;
-        }
-        const targetSessionId = options.forceNewSession ? null : sessionIdRef.current;
+        const guestSend = isGuestMode || !hasToken();
+        const targetSessionId = guestSend || options.forceNewSession ? null : sessionIdRef.current;
+        const guestHistory = guestSend ? toGuestHistoryPayload(messages) : [];
 
         setInput('');
         setConfirmationDrafts({});
@@ -467,20 +505,20 @@ const SShieldChat = () => {
         });
 
         try {
-            const data = await api.post('/chat/message', { sessionId: targetSessionId, content });
+            const data = await api.post(
+                guestSend ? '/chat/guest-message' : '/chat/message',
+                guestSend ? { content, history: guestHistory } : { sessionId: targetSessionId, content }
+            );
             if (conversationKeyRef.current === targetKey) {
-                if (targetSessionId === null) {
+                if (!guestSend && targetSessionId === null) {
                     activateConversation(data.session_id);
                 }
-                setShowReport(Boolean(data.report_ready));
+                setShowReport(!guestSend && Boolean(data.report_ready));
                 appendTypingReply(data.reply, data.confirmation_prompts);
             }
-            loadSessions();
+            if (!guestSend) loadSessions();
         } catch (e) {
-            if (e.message?.includes('로그인이 필요')) {
-                redirectToHomeForLogin();
-                return;
-            }
+            if (e.message?.includes('로그인이 필요')) clearSession();
             if (conversationKeyRef.current === targetKey) {
                 setMessages((prev) => [...prev, {
                     id: `e-${Date.now()}`,
@@ -603,11 +641,11 @@ const SShieldChat = () => {
                     )}
                     <div className={`ss-menu-content ${isMenuOpen ? 'visible' : ''}`}>
                         <nav className="ss-nav-list">
-                            <div className="ss-nav-item" onClick={() => navigate('/result')}>
+                            <div className="ss-nav-item" onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/result'))}>
                                 <span className="ss-emoji-icon">R</span>
                                 <span className="ss-nav-text">분석 결과</span>
                             </div>
-                            <div className="ss-nav-item" onClick={() => navigate('/mypage')}>
+                            <div className="ss-nav-item" onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/mypage'))}>
                                 <span className="ss-emoji-icon">M</span>
                                 <span className="ss-nav-text">마이페이지</span>
                             </div>
@@ -617,17 +655,29 @@ const SShieldChat = () => {
                             </div>
                         </nav>
 
-                        <SessionHistory
-                            sessions={sessions}
-                            activeSessionId={sessionId}
-                            onSelect={loadMessagesForSession}
-                            loading={isSessionsLoading}
-                        />
+                        {isGuest ? (
+                            <section className="guest-history-notice">
+                                <strong>임시 상담 중</strong>
+                                <span>로그인하지 않아 상담 기록은 저장되지 않습니다.</span>
+                                <button type="button" onClick={() => navigate('/login')}>로그인하고 저장하기</button>
+                            </section>
+                        ) : (
+                            <SessionHistory
+                                sessions={sessions}
+                                activeSessionId={sessionId}
+                                onSelect={loadMessagesForSession}
+                                loading={isSessionsLoading}
+                            />
+                        )}
 
                         <div className="ss-logout-section">
                             <div className="ss-divider"></div>
                             <button className="ss-side-action-btn" onClick={handleNewChat}>새 상담</button>
-                            <button className="ss-logout-btn" onClick={() => setShowConfirm(true)}>로그아웃</button>
+                            {isGuest ? (
+                                <button className="ss-logout-btn" onClick={() => navigate('/login')}>로그인</button>
+                            ) : (
+                                <button className="ss-logout-btn" onClick={() => setShowConfirm(true)}>로그아웃</button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -638,9 +688,9 @@ const SShieldChat = () => {
                     <div className="ss-chat-logo">S-<span className="logo-accent">Shield</span></div>
                     <nav className="ss-mobile-nav" aria-label="모바일 메뉴">
                         <button className="active">상담</button>
-                        <button onClick={() => navigate('/result')}>결과</button>
-                        <button onClick={() => navigate('/mypage')}>마이</button>
-                        <button onClick={() => navigate('/mypage#session-history')}>기록</button>
+                        <button onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/result'))}>결과</button>
+                        <button onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/mypage'))}>마이</button>
+                        <button onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/mypage#session-history'))}>기록</button>
                         <button onClick={handleNewChat}>새 상담</button>
                     </nav>
                     <div className="ss-header-line"></div>
@@ -777,6 +827,11 @@ const SShieldChat = () => {
                             보내기
                         </button>
                     </div>
+                    {isGuest && (
+                        <p className="ss-guest-notice">
+                            임시 상담입니다. 로그인하지 않으면 상담 기록과 리포트는 저장되지 않습니다.
+                        </p>
+                    )}
                     <p className="ss-legal-notice">
                         이 정보는 일반적인 법률 정보이며 전문 법률상담을 대체하지 않습니다.
                     </p>

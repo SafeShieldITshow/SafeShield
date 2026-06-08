@@ -102,7 +102,7 @@ function MainHome() {
                 </p>
 
                 <div className="anim-7">
-                    <button className="start-btn" onClick={() => navigate(hasToken() ? '/chat' : '/login')}>
+                    <button className="start-btn" onClick={() => navigate('/chat')}>
                         시작하기
                     </button>
                     <p className="info-note">* 상담 기록과 리포트 저장을 위해 로그인이 필요합니다.</p>
@@ -125,7 +125,7 @@ function App() {
             <Route path="/" element={<MainHome />} />
             <Route path="/login" element={<SShieldLogin />} />
             <Route path="/oauth2/callback" element={<OAuth2Callback />} />
-            <Route path="/chat" element={<ProtectedRoute><SShieldChat /></ProtectedRoute>} />
+            <Route path="/chat" element={<SShieldChat />} />
             <Route path="/result" element={<ProtectedRoute><SShieldResult /></ProtectedRoute>} />
             <Route path="/mypage" element={<ProtectedRoute><SShieldMypage /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
