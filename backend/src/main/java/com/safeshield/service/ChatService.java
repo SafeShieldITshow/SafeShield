@@ -167,13 +167,22 @@ public class ChatService {
         requireOwner(user, session);
 
         return messageRepository.findBySessionOrderByCreatedAtAsc(session).stream()
-                .map(m -> Map.<String, Object>of(
-                        "id", m.getId(),
-                        "role", m.getRole(),
-                        "content", m.getContent(),
-                        "created_at", m.getCreatedAt().toString()
-                ))
+                .map(ChatService::messageToMap)
                 .toList();
+    }
+
+    public Map<String, Object> getSessionDetail(Long sessionId, User user) {
+        Session session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "상담 세션을 찾을 수 없습니다."));
+        requireOwner(user, session);
+
+        List<Message> messages = messageRepository.findBySessionOrderByCreatedAtAsc(session);
+        ReportReadiness readiness = assessReadiness(messages);
+        return Map.of(
+                "session_id", session.getId(),
+                "messages", messages.stream().map(ChatService::messageToMap).toList(),
+                "readiness", readinessToMap(readiness)
+        );
     }
 
     public Map<String, Object> getReadiness(Long sessionId, User user) {
@@ -182,6 +191,19 @@ public class ChatService {
         requireOwner(user, session);
 
         ReportReadiness readiness = assessReadiness(messageRepository.findBySessionOrderByCreatedAtAsc(session));
+        return readinessToMap(readiness);
+    }
+
+    private static Map<String, Object> messageToMap(Message message) {
+        return Map.of(
+                "id", message.getId(),
+                "role", message.getRole(),
+                "content", message.getContent(),
+                "created_at", message.getCreatedAt().toString()
+        );
+    }
+
+    private Map<String, Object> readinessToMap(ReportReadiness readiness) {
         return Map.of(
                 "ready", readiness.ready(),
                 "status", readiness.status(),
@@ -260,28 +282,36 @@ public class ChatService {
     }
 
     public List<Map<String, Object>> getSessions(User user) {
+        Map<Long, Long> messageCounts = messageRepository.countUserMessagesByUser(user).stream()
+                .collect(Collectors.toMap(
+                        MessageRepository.SessionMessageCount::getSessionId,
+                        MessageRepository.SessionMessageCount::getMessageCount
+                ));
+        Map<Long, String> previews = messageRepository.findLatestUserMessagesByUser(user).stream()
+                .collect(Collectors.toMap(
+                        message -> message.getSession().getId(),
+                        message -> truncatePreview(message.getContent()),
+                        (first, second) -> second
+                ));
+
         return sessionRepository.findByUserOrderByCreatedAtDesc(user).stream()
                 .map(session -> {
-                    List<Message> messages = messageRepository.findBySessionOrderByCreatedAtAsc(session);
-                    String preview = messages.stream()
-                            .filter(m -> "user".equals(m.getRole()))
-                            .reduce((first, second) -> second)
-                            .map(Message::getContent)
-                            .orElse("새 상담");
-                    if (preview.length() > 44) {
-                        preview = preview.substring(0, 44) + "...";
-                    }
-                    long userMessageCount = messages.stream()
-                            .filter(m -> "user".equals(m.getRole()))
-                            .count();
                     return Map.<String, Object>of(
                             "session_id", session.getId(),
-                            "preview", preview,
-                            "message_count", userMessageCount,
+                            "preview", previews.getOrDefault(session.getId(), "새 상담"),
+                            "message_count", messageCounts.getOrDefault(session.getId(), 0L),
                             "created_at", session.getCreatedAt().toString()
                     );
                 })
                 .toList();
+    }
+
+    private static String truncatePreview(String content) {
+        String preview = content == null || content.isBlank() ? "새 상담" : content.trim();
+        if (preview.length() > 44) {
+            return preview.substring(0, 44) + "...";
+        }
+        return preview;
     }
 
     private Session resolveSession(User user, Long sessionId) {

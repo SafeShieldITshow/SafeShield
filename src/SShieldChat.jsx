@@ -302,10 +302,10 @@ const SShieldChat = () => {
         const loadSequence = ++messageLoadSequenceRef.current;
         activateConversation(id);
         try {
-            const items = await api.get(`/chat/sessions/${id}/messages`);
+            const detail = await api.get(`/chat/sessions/${id}`);
             if (loadSequence !== messageLoadSequenceRef.current) return;
-            const readiness = await api.get(`/chat/sessions/${id}/readiness`);
-            if (loadSequence !== messageLoadSequenceRef.current) return;
+            const items = Array.isArray(detail.messages) ? detail.messages : [];
+            const readiness = detail.readiness || {};
             const uiMessages = items.length ? items.map(toUiMessage) : [initialMessage()];
             setMessages(attachPromptsToLatestAiMessage(uiMessages, readiness.confirmation_prompts));
             setShowReport(Boolean(readiness.ready));

@@ -4,7 +4,10 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "messages")
+@Table(name = "messages", indexes = {
+        @Index(name = "idx_messages_session_created", columnList = "session_id, created_at"),
+        @Index(name = "idx_messages_session_role_id", columnList = "session_id, role, id")
+})
 public class Message {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -18,6 +21,7 @@ public class Message {
     @Column(columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public Long getId() { return id; }

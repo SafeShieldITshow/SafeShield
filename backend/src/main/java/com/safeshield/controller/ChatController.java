@@ -36,6 +36,12 @@ public class ChatController {
         return chatService.getMessages(id, user);
     }
 
+    @GetMapping("/sessions/{id}")
+    public Map<String, Object> getSessionDetail(@PathVariable Long id,
+                                                @AuthenticationPrincipal User user) {
+        return chatService.getSessionDetail(id, user);
+    }
+
     @GetMapping("/sessions/{id}/readiness")
     public Map<String, Object> getReadiness(@PathVariable Long id,
                                             @AuthenticationPrincipal User user) {

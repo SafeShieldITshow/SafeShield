@@ -4,7 +4,9 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "sessions")
+@Table(name = "sessions", indexes = {
+        @Index(name = "idx_sessions_user_created", columnList = "user_id, created_at")
+})
 public class Session {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -13,6 +15,7 @@ public class Session {
     @JoinColumn(name = "user_id")
     private User user;
 
+    @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
     public Long getId() { return id; }
