@@ -7,5 +7,6 @@ import java.util.List;
 
 public interface SessionRepository extends JpaRepository<Session, Long> {
     List<Session> findByUserOrderByCreatedAtDesc(User user);
+    List<Session> findTop80ByUserOrderByCreatedAtDesc(User user);
     long countByUser(User user);
 }

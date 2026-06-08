@@ -39,4 +39,26 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
               )
             """)
     List<Message> findLatestUserMessagesByUser(@Param("user") User user);
+
+    @Query("""
+            select m.session.id as sessionId, count(m.id) as messageCount
+            from Message m
+            where m.session.id in :sessionIds and m.role = 'user'
+            group by m.session.id
+            """)
+    List<SessionMessageCount> countUserMessagesBySessionIds(@Param("sessionIds") List<Long> sessionIds);
+
+    @Query("""
+            select m
+            from Message m
+            where m.session.id in :sessionIds
+              and m.role = 'user'
+              and m.id in (
+                  select max(m2.id)
+                  from Message m2
+                  where m2.session.id in :sessionIds and m2.role = 'user'
+                  group by m2.session.id
+              )
+            """)
+    List<Message> findLatestUserMessagesBySessionIds(@Param("sessionIds") List<Long> sessionIds);
 }

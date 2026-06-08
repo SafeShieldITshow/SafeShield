@@ -282,19 +282,25 @@ public class ChatService {
     }
 
     public List<Map<String, Object>> getSessions(User user) {
-        Map<Long, Long> messageCounts = messageRepository.countUserMessagesByUser(user).stream()
+        List<Session> sessions = sessionRepository.findTop80ByUserOrderByCreatedAtDesc(user);
+        List<Long> sessionIds = sessions.stream()
+                .map(Session::getId)
+                .toList();
+        if (sessionIds.isEmpty()) return List.of();
+
+        Map<Long, Long> messageCounts = messageRepository.countUserMessagesBySessionIds(sessionIds).stream()
                 .collect(Collectors.toMap(
                         MessageRepository.SessionMessageCount::getSessionId,
                         MessageRepository.SessionMessageCount::getMessageCount
                 ));
-        Map<Long, String> previews = messageRepository.findLatestUserMessagesByUser(user).stream()
+        Map<Long, String> previews = messageRepository.findLatestUserMessagesBySessionIds(sessionIds).stream()
                 .collect(Collectors.toMap(
                         message -> message.getSession().getId(),
                         message -> truncatePreview(message.getContent()),
                         (first, second) -> second
                 ));
 
-        return sessionRepository.findByUserOrderByCreatedAtDesc(user).stream()
+        return sessions.stream()
                 .map(session -> {
                     return Map.<String, Object>of(
                             "session_id", session.getId(),
