@@ -7,6 +7,17 @@ import SShieldResult from './SShieldResult.jsx';
 import SShieldMypage from './SShieldMypage.jsx';
 import { api, clearSession, hasToken, setToken } from './api.js';
 
+function LoginRequiredRedirect() {
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        alert('로그인이 필요합니다.');
+        navigate('/', { replace: true });
+    }, [navigate]);
+
+    return <div style={{ color: '#fff', textAlign: 'center', marginTop: 80 }}>메인으로 이동 중...</div>;
+}
+
 function ProtectedRoute({ children }) {
     const [status, setStatus] = useState(() => hasToken() ? 'checking' : 'guest');
 
@@ -37,7 +48,7 @@ function ProtectedRoute({ children }) {
         return <div style={{ color: '#fff', textAlign: 'center', marginTop: 80 }}>로그인 상태 확인 중...</div>;
     }
 
-    return status === 'authed' ? children : <Navigate to="/login" replace />;
+    return status === 'authed' ? children : <LoginRequiredRedirect />;
 }
 
 function OAuth2Callback() {

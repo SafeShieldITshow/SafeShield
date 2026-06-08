@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import './SShieldChat.css';
-import { api, clearSession, setSession } from './api.js';
+import { api, clearSession, hasToken, setSession } from './api.js';
 import SessionHistory from './SessionHistory.jsx';
 
 const EXAMPLE_QUESTIONS = [
@@ -282,6 +282,12 @@ const SShieldChat = () => {
     const isCurrentLoading = pendingKeys.has(conversationKey);
     const isChatBusy = isCurrentLoading || isSessionLoading;
 
+    const redirectToHomeForLogin = useCallback(() => {
+        clearSession();
+        alert('로그인이 필요합니다.');
+        navigate('/', { replace: true });
+    }, [navigate]);
+
     const activateConversation = useCallback((id, key = `session:${id}`) => {
         sessionIdRef.current = id;
         conversationKeyRef.current = key;
@@ -415,6 +421,10 @@ const SShieldChat = () => {
     const sendOrAskTopic = (text) => {
         const content = (text || input).trim();
         if (!content || isChatBusy) return;
+        if (!hasToken()) {
+            redirectToHomeForLogin();
+            return;
+        }
 
         if (shouldConfirmTopic(content)) {
             setTopicPrompt(content);
@@ -429,6 +439,10 @@ const SShieldChat = () => {
         const content = (text || input).trim();
         const targetKey = options.forceNewSession ? `draft:${Date.now()}` : conversationKeyRef.current;
         if (!content || isSessionLoading || pendingKeysRef.current.has(targetKey)) return;
+        if (!hasToken()) {
+            redirectToHomeForLogin();
+            return;
+        }
         const targetSessionId = options.forceNewSession ? null : sessionIdRef.current;
 
         setInput('');
@@ -463,6 +477,10 @@ const SShieldChat = () => {
             }
             loadSessions();
         } catch (e) {
+            if (e.message?.includes('로그인이 필요')) {
+                redirectToHomeForLogin();
+                return;
+            }
             if (conversationKeyRef.current === targetKey) {
                 setMessages((prev) => [...prev, {
                     id: `e-${Date.now()}`,
