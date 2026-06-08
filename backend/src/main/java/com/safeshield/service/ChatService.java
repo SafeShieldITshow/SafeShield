@@ -260,7 +260,7 @@ public class ChatService {
     private List<Map<String, Object>> confirmationPrompts(ReportReadiness readiness) {
         if (readiness.ready() || readiness.missingInfo().isEmpty()) return List.of();
         return readiness.missingInfo().stream()
-                .limit(3)
+                .limit(1)
                 .map(this::confirmationPrompt)
                 .toList();
     }
@@ -274,7 +274,6 @@ public class ChatService {
     }
 
     private String confirmationId(String missingInfo) {
-        if (missingInfo.contains("입장")) return "role";
         if (missingInfo.contains("무슨 일")) return "incident";
         if (missingInfo.contains("학교 관계")) return "relationship";
         if (missingInfo.contains("언제")) return "timeline";
@@ -287,15 +286,6 @@ public class ChatService {
     }
 
     private List<Map<String, String>> confirmationOptions(String missingInfo) {
-        if (missingInfo.contains("입장")) {
-            return List.of(
-                    option("피해를 당함", "확인 답변: 저는 피해를 당한 입장입니다."),
-                    option("가해·연루됨", "확인 답변: 저는 가해 또는 연루된 입장입니다."),
-                    option("목격자", "확인 답변: 저는 상황을 본 목격자입니다."),
-                    option("보호자", "확인 답변: 저는 보호자 입장에서 상담하고 있습니다."),
-                    option("직접 입력", "확인 답변: ")
-            );
-        }
         if (missingInfo.contains("무슨 일")) {
             return List.of(
                     option("욕설·비방", "확인 답변: 상대가 욕설이나 비방을 했습니다."),
@@ -1380,7 +1370,6 @@ public class ChatService {
     }
 
     private static String toConfirmationQuestion(String missingInfo) {
-        if (missingInfo.contains("입장")) return "지금 상담은 어떤 입장에서 도와드리면 좋을까요?";
         if (missingInfo.contains("무슨 일")) return "괜찮은 만큼만, 실제로 어떤 행동이 있었는지 조금 더 말해줄 수 있나요?";
         if (missingInfo.contains("학교 관계")) return "상대가 같은 학교, 같은 반, 선배·후배, 학원 관계 중 어디에 해당하나요?";
         if (missingInfo.contains("언제")) return "언제부터 몇 번 있었고, 지금도 계속되고 있나요?";

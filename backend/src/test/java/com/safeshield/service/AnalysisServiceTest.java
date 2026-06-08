@@ -208,6 +208,17 @@ class AnalysisServiceTest {
         assertTrue(readiness.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
     }
 
+    @Test
+    void doesNotAskUserToSelfLabelVictimOrPerpetrator() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "같은 반 친구한테 맞아서 신고하려고 찾아봤습니다. 오늘 한 번 있었고 멍 사진이 있습니다. 너무 불안해서 어떻게 해야 할지 알고 싶습니다.",
+                1
+        );
+
+        assertFalse(readiness.missingInfo().stream().anyMatch(item -> item.contains("입장")),
+                "피해·가해 여부를 사용자가 직접 고르라고 묻지 않아야 합니다.");
+    }
+
     private ReportReadiness readySchoolViolence() {
         return new ReportReadiness(
                 true,

@@ -93,12 +93,10 @@ public class AnalysisService {
                 "방금", "언제", "개월", "주일", "현재까지는 한 번", "여러 번", "지금도 계속", "정확한 시점");
         boolean hasEvidenceOrChannel = containsAny(t, "캡처", "녹음", "사진", "진단", "병원", "목격", "sns", "카톡", "단톡",
                 "댓글", "게시", "메시지", "증거", "아직 확보한 증거는 없습니다", "증거는 없습니다");
-        boolean hasRolePerspective = hasRolePerspective(t);
         boolean hasImpactOrRecovery = hasImpactOrRecovery(t);
         boolean hasUserGoal = hasUserGoal(t);
         boolean hasFinalConfirmation = hasFinalConfirmation(t);
 
-        if (!hasRolePerspective) missing.add("상담자의 입장이 피해자, 가해·연루자, 목격자, 보호자 중 어디인지");
         if (!hasConcreteIncident) missing.add("무슨 일이 있었는지");
         if (!hasRelationshipAnswer) missing.add("상대가 학교 관계자인지");
         if (!hasTimeOrRepeat) missing.add("언제부터 몇 번 있었는지");
@@ -106,7 +104,6 @@ public class AnalysisService {
         if (!hasImpactOrRecovery) missing.add("피해 영향이나 피해 회복을 위해 이미 한 일이 있는지");
         if (!hasUserGoal) missing.add("원하는 도움이 무엇인지");
 
-        if (hasRolePerspective) facts.add("상담자 입장 확인");
         if (hasConcreteIncident) facts.add("구체적인 사건 내용 확인");
         if (hasRelationshipAnswer) facts.add("상대방과 학교 관계 확인");
         if (hasTimeOrRepeat) facts.add("시점 또는 반복성 단서 확인");
@@ -120,7 +117,6 @@ public class AnalysisService {
         boolean hasViolenceType = !detectViolenceTypes(t).isEmpty();
         boolean enoughConversation = userMessageCount >= 4;
         boolean coreFactsReady = relevantInput
-                && hasRolePerspective
                 && hasConcreteIncident
                 && hasRelationshipAnswer
                 && hasTimeOrRepeat
@@ -159,14 +155,6 @@ public class AnalysisService {
         }
 
         return new ReportReadiness(ready, status, reason, missing.stream().distinct().toList(), facts, relevantInput && !lowSchoolViolence);
-    }
-
-    private boolean hasRolePerspective(String text) {
-        return isPerpetratorPerspective(text)
-                || containsAny(text,
-                "제가 당", "저한테", "저에게", "나한테", "나에게", "욕을 먹", "맞았", "피해", "괴롭힘을 당",
-                "목격", "봤어요", "보호자", "부모", "우리 아이", "친구가 당", "동생이 당",
-                "제가 했", "제가 올렸", "제가 욕", "제가 때렸", "제가 괴롭", "가해", "연루");
     }
 
     private boolean hasImpactOrRecovery(String text) {
