@@ -166,8 +166,66 @@
   transform: translateY(-1px);
 }
 
+.confirmation-options button.selected {
+  background: #7e74f0;
+  border-color: rgba(255, 255, 255, 0.42);
+  color: #ffffff;
+}
+
 .confirmation-options button:disabled {
   opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.confirmation-custom-input {
+  width: 100%;
+  margin-top: 9px;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  outline: none;
+}
+
+.confirmation-custom-input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.confirmation-submit-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.confirmation-submit-row span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.confirmation-submit-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 13px;
+  background: var(--accent);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--ease), transform var(--ease), opacity var(--ease);
+}
+
+.confirmation-submit-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.confirmation-submit-btn:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 

@@ -54,6 +54,14 @@ const attachPromptsToLatestAiMessage = (items, prompts) => {
     return next;
 };
 
+const confirmationPromptKey = (messageId, prompt, promptIndex) => (
+    `${messageId}:${prompt.id || prompt.question || 'prompt'}:${promptIndex}`
+);
+
+const isDirectConfirmationOption = (option) => (
+    option.label === '직접 입력' || String(option.message || '').trim().endsWith(':')
+);
+
 function now() {
     return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
 }
@@ -255,6 +263,7 @@ const SShieldChat = () => {
     const [sessionId, setSessionId] = useState(initialSessionIdRef.current);
     const [conversationKey, setConversationKey] = useState(initialConversationKey);
     const [pendingKeys, setPendingKeys] = useState(() => new Set());
+    const [confirmationDrafts, setConfirmationDrafts] = useState({});
     const [showReport, setShowReport] = useState(false);
     const [generatingReport, setGeneratingReport] = useState(false);
     const scrollRef = useRef(null);
@@ -405,6 +414,7 @@ const SShieldChat = () => {
         const targetSessionId = options.forceNewSession ? null : sessionIdRef.current;
 
         setInput('');
+        setConfirmationDrafts({});
         shouldAutoScrollRef.current = true;
         if (options.forceNewSession) {
             messageLoadSequenceRef.current += 1;
@@ -465,18 +475,57 @@ const SShieldChat = () => {
         }
     };
 
-    const handleConfirmationOption = (option) => {
+    const handleConfirmationOption = (messageId, prompt, promptIndex, option) => {
         if (isCurrentLoading) return;
         const message = String(option?.message || '').trim();
         if (!message) return;
 
-        if (option.label === '직접 입력' || message.endsWith(':')) {
-            setInput(message.endsWith(':') ? `${message} ` : message);
-            setTimeout(() => inputRef.current?.focus(), 0);
-            return;
-        }
+        const key = confirmationPromptKey(messageId, prompt, promptIndex);
+        const direct = isDirectConfirmationOption(option);
+        setConfirmationDrafts((prev) => ({
+            ...prev,
+            [key]: {
+                label: option.label,
+                message,
+                direct,
+                customText: direct ? prev[key]?.customText || '' : '',
+            },
+        }));
+    };
 
-        handleSend(message);
+    const handleConfirmationCustomChange = (messageId, prompt, promptIndex, value) => {
+        const key = confirmationPromptKey(messageId, prompt, promptIndex);
+        setConfirmationDrafts((prev) => ({
+            ...prev,
+            [key]: {
+                label: prev[key]?.label || '직접 입력',
+                message: prev[key]?.message || '확인 답변:',
+                direct: true,
+                customText: value,
+            },
+        }));
+    };
+
+    const confirmationAnswersForMessage = (message) => (message.confirmationPrompts || [])
+        .map((prompt, promptIndex) => {
+            const key = confirmationPromptKey(message.id, prompt, promptIndex);
+            const draft = confirmationDrafts[key];
+            if (!draft) return null;
+            if (draft.direct) {
+                const customText = String(draft.customText || '').trim();
+                if (!customText) return null;
+                const prefix = String(draft.message || '확인 답변:').trim();
+                return prefix.endsWith(':') ? `${prefix} ${customText}` : `${prefix} ${customText}`;
+            }
+            return draft.message;
+        })
+        .filter(Boolean);
+
+    const handleSendConfirmation = (message) => {
+        if (isCurrentLoading) return;
+        const answers = confirmationAnswersForMessage(message);
+        if (!answers.length) return;
+        handleSend(answers.join('\n'));
     };
 
     const handleNewChat = () => {
@@ -576,23 +625,55 @@ const SShieldChat = () => {
                                 </div>
                                 {msg.type === 'ai' && msg.confirmationPrompts?.length > 0 && (
                                     <div className="confirmation-prompts">
-                                        {msg.confirmationPrompts.map((prompt) => (
-                                            <div className="confirmation-prompt" key={prompt.id || prompt.question}>
+                                        {msg.confirmationPrompts.map((prompt, promptIndex) => {
+                                            const promptKey = confirmationPromptKey(msg.id, prompt, promptIndex);
+                                            const draft = confirmationDrafts[promptKey];
+                                            const selectedLabel = draft?.label;
+                                            return (
+                                            <div className="confirmation-prompt" key={promptKey}>
                                                 <p>{prompt.question}</p>
                                                 <div className="confirmation-options">
                                                     {prompt.options.map((option) => (
                                                         <button
                                                             key={`${prompt.id}-${option.label}`}
+                                                            className={selectedLabel === option.label ? 'selected' : ''}
                                                             type="button"
-                                                            onClick={() => handleConfirmationOption(option)}
+                                                            onClick={() => handleConfirmationOption(msg.id, prompt, promptIndex, option)}
                                                             disabled={isCurrentLoading}
                                                         >
                                                             {option.label}
                                                         </button>
                                                     ))}
                                                 </div>
+                                                {draft?.direct && (
+                                                    <input
+                                                        className="confirmation-custom-input"
+                                                        type="text"
+                                                        value={draft.customText || ''}
+                                                        placeholder="직접 답변을 입력하세요"
+                                                        onChange={(e) => handleConfirmationCustomChange(msg.id, prompt, promptIndex, e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' && confirmationAnswersForMessage(msg).length) {
+                                                                handleSendConfirmation(msg);
+                                                            }
+                                                        }}
+                                                        disabled={isCurrentLoading}
+                                                    />
+                                                )}
                                             </div>
-                                        ))}
+                                            );
+                                        })}
+                                        <div className="confirmation-submit-row">
+                                            <button
+                                                type="button"
+                                                className="confirmation-submit-btn"
+                                                onClick={() => handleSendConfirmation(msg)}
+                                                disabled={isCurrentLoading || !confirmationAnswersForMessage(msg).length}
+                                            >
+                                                확인 답변 보내기
+                                            </button>
+                                            <span>선택한 답변을 모아서 상담에 추가합니다.</span>
+                                        </div>
                                     </div>
                                 )}
                                 <span className="msg-time">{msg.time}</span>
