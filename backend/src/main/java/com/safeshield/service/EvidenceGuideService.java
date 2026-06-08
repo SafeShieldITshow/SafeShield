@@ -34,6 +34,28 @@ public class EvidenceGuideService {
         List<String> types = violenceTypes == null ? List.of() : violenceTypes;
         Set<String> evidence = new LinkedHashSet<>();
 
+        if (isPerpetratorPerspective(text)) {
+            evidence.add("본인 행동 타임라인");
+            if (types.contains("사이버 폭력")) {
+                evidence.add("게시물·댓글 원본과 URL");
+                evidence.add("삭제·수정 내역 기록");
+            }
+            if (types.contains("언어 폭력")) {
+                evidence.add("발언 경위 메모");
+                evidence.add("대화·녹음 원본");
+            }
+            if (types.contains("신체 폭력") || types.contains("성폭력")) {
+                evidence.add("상대방 피해 확인 자료");
+            }
+            if (types.contains("갈취")) {
+                evidence.add("반환·변상 기록");
+            }
+            evidence.add("사과·피해 회복 기록");
+            evidence.add("보호자·담임 상담 기록");
+            evidence.add("재발 방지 계획");
+            return new ArrayList<>(evidence).stream().limit(6).toList();
+        }
+
         if (types.contains("사이버 폭력")) {
             if (containsAny(text, "게시", "댓글", "sns", "인스타", "온라인")) {
                 evidence.add("게시물 전체 화면 캡처");
@@ -90,6 +112,22 @@ public class EvidenceGuideService {
         }
         evidence.add("사건 일지");
         return new ArrayList<>(evidence).stream().limit(6).toList();
+    }
+
+    private boolean isPerpetratorPerspective(String text) {
+        boolean directPhrase = containsAny(text,
+                "제가 때렸", "내가 때렸", "제가 밀쳤", "내가 밀쳤",
+                "제가 욕했", "내가 욕했", "제가 욕을 했", "내가 욕을 했",
+                "제가 올렸", "내가 올렸", "제가 사진을 올렸", "내가 사진을 올렸",
+                "제가 게시", "내가 게시", "제가 댓글", "내가 댓글",
+                "제가 괴롭혔", "내가 괴롭혔", "제가 따돌", "내가 따돌",
+                "저도 같이 욕", "같이 욕했", "장난으로 올렸",
+                "사과하고 싶", "처벌받", "제가 가해", "내가 가해", "본인이 가해");
+        boolean selfActor = containsAny(text, "제가", "내가", "저도", "본인이");
+        boolean harmfulAction = containsAny(text,
+                "때렸", "밀쳤", "욕했", "욕을 했", "욕설을 했", "올렸", "게시", "댓글을 달",
+                "괴롭혔", "따돌", "놀렸", "빼앗", "강요");
+        return directPhrase || (selfActor && harmfulAction);
     }
 
     private boolean containsAny(String text, String... words) {

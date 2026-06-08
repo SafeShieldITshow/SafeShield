@@ -20,6 +20,17 @@ public class AnalysisService {
             String confidenceReason
     ) {}
 
+    private record MeasureFactors(
+            int seriousness,
+            int persistence,
+            int intent,
+            int mitigation,
+            int aggravation,
+            int total,
+            boolean transferCandidate,
+            boolean expelCandidate
+    ) {}
+
     private final LawDataService lawDataService;
     private final EvidenceGuideService evidenceGuideService;
 
@@ -50,7 +61,7 @@ public class AnalysisService {
             matchedLaws = new ArrayList<>(matchedLaws.subList(0, 5));
             lawScores = new ArrayList<>(lawScores.subList(0, 5));
         }
-        List<Integer> measureRange = detectMeasureRange(riskScore);
+        List<Integer> measureRange = detectMeasureRange(violenceTypes, text, readiness);
         List<String> evidenceGuide = evidenceGuideService.getEvidenceGuide(violenceTypes, text);
         List<String> findings = buildKeyFindings(text, violenceTypes, readiness);
         List<String> actions = buildRecommendedActions(readiness, violenceTypes);
@@ -169,13 +180,13 @@ public class AnalysisService {
         String t = text.toLowerCase(Locale.ROOT);
         double score = 1.2;
 
-        if (violenceTypes.contains("언어 폭력")) score += 0.7;
-        if (violenceTypes.contains("사이버 폭력")) score += 0.8;
-        if (violenceTypes.contains("따돌림")) score += 0.9;
-        if (violenceTypes.contains("갈취")) score += 1.4;
-        if (violenceTypes.contains("스토킹")) score += 1.6;
-        if (violenceTypes.contains("신체 폭력")) score += 1.8;
-        if (violenceTypes.contains("성폭력")) score += 2.5;
+        if (violenceTypes.contains("언어 폭력")) score += 0.5;
+        if (violenceTypes.contains("사이버 폭력")) score += 0.6;
+        if (violenceTypes.contains("따돌림")) score += 0.8;
+        if (violenceTypes.contains("갈취")) score += 1.0;
+        if (violenceTypes.contains("스토킹")) score += 1.2;
+        if (violenceTypes.contains("신체 폭력")) score += 1.3;
+        if (violenceTypes.contains("성폭력")) score += 2.0;
 
         if (violenceTypes.size() > 1) score += Math.min(1.0, (violenceTypes.size() - 1) * 0.35);
 
@@ -191,29 +202,40 @@ public class AnalysisService {
         boolean weaponOrGroup = containsAny(t, "흉기", "칼", "위험한 물건", "여러 명", "단체로", "무리", "선배");
         boolean resolved = containsAny(t, "삭제", "사과", "멈췄", "그만뒀", "해결");
 
-        if (repeated) score += 0.8;
-        if (longTerm) score += 0.5;
-        if (ongoing) score += 0.4;
-        if (oneOff && !repeated && !ongoing) score -= 0.2;
-        if (publicSpread) score += 0.5;
-        if (identityExposure) score += 0.5;
-        if (directThreat) score += 0.9;
+        if (repeated) score += 0.6;
+        if (longTerm) score += 0.4;
+        if (ongoing) score += 0.3;
+        if (oneOff && !repeated && !ongoing) score -= 0.3;
+        if (publicSpread) score += 0.4;
+        if (identityExposure) score += 0.35;
+        if (directThreat) score += 0.8;
         if (weaponOrGroup) score += 0.5;
-        if (distress) score += 0.7;
-        if (severeDistress) score += 0.9;
+        if (distress) score += 0.45;
+        if (severeDistress) score += 0.8;
         if (resolved && !ongoing && !repeated) score -= 0.4;
 
         double injuryScore = 0.0;
-        if (containsAny(t, "멍", "상처", "다쳤")) injuryScore = Math.max(injuryScore, 0.7);
-        if (containsAny(t, "진단", "치료", "병원", "상해")) injuryScore = Math.max(injuryScore, 1.1);
-        if (containsAny(t, "출혈", "골절", "응급실", "수술", "기절")) injuryScore = Math.max(injuryScore, 1.5);
+        if (containsAny(t, "멍", "상처", "다쳤")) injuryScore = Math.max(injuryScore, 0.5);
+        if (containsAny(t, "진단", "치료", "병원", "상해")) injuryScore = Math.max(injuryScore, 0.9);
+        if (containsAny(t, "출혈", "골절", "응급실", "수술", "기절")) injuryScore = Math.max(injuryScore, 1.3);
         score += injuryScore;
 
         if (violenceTypes.contains("성폭력") && containsAny(t, "사진", "영상", "촬영", "유포", "온라인", "dm", "디엠")) {
-            score += 1.0;
+            score += 0.8;
         }
         if (violenceTypes.contains("갈취") && containsAny(t, "돈", "송금", "계좌", "만원", "물건")) {
-            score += 0.5;
+            score += 0.4;
+        }
+
+        if (!violenceTypes.isEmpty()) {
+            MeasureFactors factors = assessMeasureFactors(violenceTypes, text);
+            double factorBasedScore = 1.6
+                    + factors.seriousness() * 1.2
+                    + factors.persistence() * 0.65
+                    + factors.intent() * 0.5
+                    + factors.aggravation() * 0.55
+                    - factors.mitigation() * 0.35;
+            score = Math.max(score, factorBasedScore);
         }
 
         boolean severeSignal = severeDistress || injuryScore >= 1.1 || directThreat || weaponOrGroup
@@ -226,22 +248,130 @@ public class AnalysisService {
 
         double cap = 10.0;
         if (verbalOrCyberOnly && !repeated && !severeSignal) {
-            cap = publicSpread || identityExposure ? 5.8 : 4.8;
+            cap = publicSpread || identityExposure ? 5.0 : 4.2;
         } else if (verbalOrCyberOnly && !severeSignal) {
-            cap = 6.8;
+            cap = 5.8;
+        } else if (violenceTypes.contains("신체 폭력") && oneOff && injuryScore <= 0.5 && !directThreat && !weaponOrGroup) {
+            cap = 5.3;
         } else if (!severeSignal) {
-            cap = 6.5;
+            cap = 5.8;
         }
 
         return Math.round(Math.max(1.0, Math.min(cap, score)) * 10.0) / 10.0;
     }
 
-    private List<Integer> detectMeasureRange(double risk) {
-        if (risk >= 8.5) return List.of(6, 9);
-        if (risk >= 7) return List.of(4, 7);
-        if (risk >= 5) return List.of(2, 5);
-        if (risk >= 3) return List.of(1, 3);
-        return List.of(0, 2);
+    private List<Integer> detectMeasureRange(List<String> types, String text, ReportReadiness readiness) {
+        if (!readiness.schoolViolenceLikely()) {
+            return List.of(0, 2);
+        }
+        MeasureFactors factors = assessMeasureFactors(types, text);
+        int total = factors.total();
+
+        int start;
+        int end;
+        if (total <= 3) {
+            start = 0;
+            end = 2;
+        } else if (total <= 5) {
+            start = 0;
+            end = 3;
+        } else if (total <= 7) {
+            start = 1;
+            end = 4;
+        } else if (total <= 9) {
+            start = 2;
+            end = 5;
+        } else if (total <= 11) {
+            start = 3;
+            end = 6;
+        } else if (total <= 13) {
+            start = 4;
+            end = 7;
+        } else {
+            start = 5;
+            end = 8;
+        }
+
+        String t = normalize(text);
+        boolean verbalOrCyberOnly = !types.isEmpty()
+                && types.stream().allMatch(type -> type.equals("언어 폭력") || type.equals("사이버 폭력"));
+        boolean oneOff = containsAny(t, "한 번", "1번", "처음", "처음으로")
+                && !containsAny(t, "계속", "반복", "여러 번", "매일", "몇 달", "몇 개월");
+
+        if (!factors.expelCandidate()) {
+            end = Math.min(end, 7);
+        }
+        if (!factors.transferCandidate()) {
+            end = Math.min(end, 6);
+        }
+        if (verbalOrCyberOnly && oneOff) {
+            end = Math.min(end, 4);
+        }
+        if (oneOff && factors.seriousness() <= 2 && factors.aggravation() == 0) {
+            start = Math.min(start, 1);
+            end = Math.min(end, 3);
+        }
+        return List.of(start, Math.max(start, end));
+    }
+
+    private MeasureFactors assessMeasureFactors(List<String> types, String text) {
+        String t = normalize(text);
+        int seriousness = 0;
+
+        if (types.contains("언어 폭력")) seriousness = Math.max(seriousness, 1);
+        if (types.contains("사이버 폭력")) {
+            seriousness = Math.max(seriousness, containsAny(t, "사진", "영상", "신상", "얼굴", "유포", "공개", "게시") ? 2 : 1);
+        }
+        if (types.contains("따돌림")) seriousness = Math.max(seriousness, 2);
+        if (types.contains("갈취")) seriousness = Math.max(seriousness, containsAny(t, "만원", "송금", "계좌", "여러 번") ? 3 : 2);
+        if (types.contains("스토킹")) seriousness = Math.max(seriousness, 3);
+        if (types.contains("신체 폭력")) {
+            seriousness = Math.max(seriousness, 2);
+            if (containsAny(t, "진단", "치료", "병원", "상해", "출혈")) seriousness = Math.max(seriousness, 3);
+            if (containsAny(t, "골절", "응급실", "수술", "기절", "흉기", "칼")) seriousness = Math.max(seriousness, 4);
+        }
+        if (types.contains("성폭력")) seriousness = Math.max(seriousness, 4);
+        if (containsAny(t, "자살", "자해", "죽고 싶", "극단")) seriousness = Math.min(4, seriousness + 1);
+
+        int persistence = 0;
+        if (containsAny(t, "한 번", "1번", "처음", "처음으로")) persistence = 0;
+        if (containsAny(t, "몇 번", "여러 번", "반복", "매일", "또")) persistence = Math.max(persistence, 2);
+        if (containsAny(t, "계속", "몇 주", "몇 달", "몇 개월", "학기", "작년부터", "지금도", "아직도")) persistence = Math.max(persistence, 3);
+        if (containsAny(t, "몇 달 동안 계속", "몇 개월 동안 계속", "매일 계속")) persistence = 4;
+
+        int intent = 1;
+        if (!types.isEmpty()) intent = 2;
+        if (containsAny(t, "협박", "죽이", "찾아가", "유포", "게시", "단톡", "단체", "여러 명", "돈", "강요")) {
+            intent = Math.max(intent, 3);
+        }
+        if (containsAny(t, "보복", "신고하면", "흉기", "칼", "강제로", "촬영", "퍼뜨")) {
+            intent = 4;
+        }
+        if (containsAny(t, "장난", "실수", "몰랐")) {
+            intent = Math.max(1, intent - 1);
+        }
+
+        int mitigation = 0;
+        if (containsAny(t, "삭제", "사과", "멈췄", "그만뒀", "반성", "돌려줬", "변상")) mitigation += 1;
+        if (containsAny(t, "화해", "합의", "피해 회복", "상담받", "담임에게 말", "보호자에게 말")) mitigation += 1;
+        mitigation = Math.min(2, mitigation);
+
+        int aggravation = 0;
+        if (containsAny(t, "보복", "신고하면", "협박", "때리겠", "찾아가", "장애", "특수학급", "여러 명", "단체로", "무리")) aggravation += 1;
+        if (containsAny(t, "흉기", "칼", "촬영", "유포", "골절", "응급실", "수술")) aggravation += 1;
+        if (containsAny(t, "반성 안", "사과 안", "계속하겠", "삭제 안")) aggravation += 1;
+        aggravation = Math.min(3, aggravation);
+
+        boolean transferCandidate = seriousness >= 4
+                || aggravation >= 2
+                || (seriousness >= 3 && persistence >= 3)
+                || (containsAny(t, "보복", "신고하면") && persistence >= 2);
+        boolean expelCandidate = containsAny(t, "흉기", "칼", "골절", "응급실", "수술", "강제추행", "성폭행")
+                || (types.contains("성폭력") && containsAny(t, "촬영", "유포", "영상"))
+                || (containsAny(t, "보복", "신고하면") && seriousness >= 4);
+
+        int total = Math.max(0, seriousness + persistence + intent + aggravation - mitigation);
+        return new MeasureFactors(seriousness, persistence, intent, mitigation, aggravation, total, transferCandidate, expelCandidate);
     }
 
     private boolean containsAny(String text, String... words) {
@@ -252,14 +382,29 @@ public class AnalysisService {
     }
 
     private String detectRole(String text) {
-        if (containsAny(text, "제가 때렸", "내가 때렸", "제가 욕", "내가 욕", "제가 올렸", "내가 올렸",
-                "제가 한", "내가 한", "가해", "사과하고", "처벌받")) {
+        if (isPerpetratorPerspective(text)) {
             return "가해 또는 연루";
         }
         if (containsAny(text, "봤", "목격", "친구가 당", "자녀", "아이", "부모", "보호자")) {
             return "목격자 또는 보호자";
         }
         return "피해 또는 상담";
+    }
+
+    private boolean isPerpetratorPerspective(String text) {
+        boolean directPhrase = containsAny(text,
+                "제가 때렸", "내가 때렸", "제가 밀쳤", "내가 밀쳤",
+                "제가 욕했", "내가 욕했", "제가 욕을 했", "내가 욕을 했",
+                "제가 올렸", "내가 올렸", "제가 사진을 올렸", "내가 사진을 올렸",
+                "제가 게시", "내가 게시", "제가 댓글", "내가 댓글",
+                "제가 괴롭혔", "내가 괴롭혔", "제가 따돌", "내가 따돌",
+                "저도 같이 욕", "같이 욕했", "장난으로 올렸",
+                "사과하고 싶", "처벌받", "제가 가해", "내가 가해", "본인이 가해");
+        boolean selfActor = containsAny(text, "제가", "내가", "저도", "본인이");
+        boolean harmfulAction = containsAny(text,
+                "때렸", "밀쳤", "욕했", "욕을 했", "욕설을 했", "올렸", "게시", "댓글을 달",
+                "괴롭혔", "따돌", "놀렸", "빼앗", "강요");
+        return directPhrase || (selfActor && harmfulAction);
     }
 
     private boolean hasSchoolContext(String text) {
@@ -286,7 +431,21 @@ public class AnalysisService {
         findings.add("발생 양상: " + facts.incidentPattern());
         findings.add("증거 수준: " + facts.evidenceLevel());
         findings.add("판단 신뢰도: " + facts.confidenceLevel() + " - " + facts.confidenceReason());
-        return findings.stream().distinct().limit(7).toList();
+        findings.add("예상 조치 근거: " + buildMeasureBasis(text, types, readiness));
+        return findings.stream().distinct().limit(8).toList();
+    }
+
+    private String buildMeasureBasis(String text, List<String> types, ReportReadiness readiness) {
+        if (!readiness.schoolViolenceLikely()) {
+            return "학교폭력 해당성이 낮아 1~3호 수준의 낮은 범위로 제한해 참고합니다.";
+        }
+        MeasureFactors factors = assessMeasureFactors(types, text);
+        return "심각성 " + factors.seriousness()
+                + ", 지속성 " + factors.persistence()
+                + ", 고의성 " + factors.intent()
+                + ", 감경 단서 " + factors.mitigation()
+                + ", 가중 단서 " + factors.aggravation()
+                + "를 함께 반영했습니다.";
     }
 
     private List<String> buildRecommendedActions(ReportReadiness readiness, List<String> types) {
@@ -297,7 +456,17 @@ public class AnalysisService {
             return List.of("학교폭력 절차보다 일반 상담 또는 플랫폼 신고 가능성을 먼저 검토하세요.", "학교 관계가 추가로 확인되면 상담 내용을 보완하세요.");
         }
         if (readiness.status().contains("가해")) {
-            return List.of("피해 회복을 위해 게시물 삭제, 사과, 재발 방지 의사를 정리하세요.", "보호자나 담임에게 먼저 알리고 사실관계를 숨기지 말고 설명하세요.");
+            List<String> actions = new ArrayList<>();
+            actions.add("추가 연락, 댓글, 게시, 주변 공유를 즉시 중단하고 보복이나 압박으로 보일 행동을 피하세요.");
+            if (types.contains("사이버 폭력")) {
+                actions.add("게시물·댓글·대화 원본과 삭제·수정 내역을 보관한 뒤, 학교나 보호자와 삭제 및 피해 회복 절차를 진행하세요.");
+            }
+            if (types.contains("신체 폭력")) {
+                actions.add("상대방의 상해 여부와 치료 필요성을 확인하고, 보호자·담임에게 사실관계를 숨기지 말고 설명하세요.");
+            }
+            actions.add("사과는 직접 압박하지 말고 보호자나 학교를 통해 전달하고, 피해 회복 의사를 구체적으로 정리하세요.");
+            actions.add("발생 경위, 본인이 한 행동, 중단한 조치, 재발 방지 계획을 시간순으로 작성하세요.");
+            return actions.stream().distinct().limit(4).toList();
         }
         List<String> actions = new ArrayList<>();
         if (types.contains("신체 폭력")) {
@@ -340,7 +509,13 @@ public class AnalysisService {
         }
 
         String evidence;
-        if (containsAny(t, "진단", "병원", "치료", "진단서")) {
+        if (readiness.status().contains("가해")) {
+            if (containsAny(t, "캡처", "url", "게시", "댓글", "메시지", "녹음", "삭제", "사과", "담임", "보호자")) {
+                evidence = "본인이 한 행동, 중단·삭제 여부, 사과·상담 경과를 확인할 자료가 일부 있습니다.";
+            } else {
+                evidence = "본인이 한 행동과 피해 회복 조치를 시간순으로 정리할 자료가 아직 부족합니다.";
+            }
+        } else if (containsAny(t, "진단", "병원", "치료", "진단서")) {
             evidence = "진단·치료 기록이 있어 신체 피해 입증력이 비교적 높습니다.";
         } else if (containsAny(t, "캡처", "url", "녹음", "사진", "메시지", "목격")) {
             evidence = "캡처·사진·메시지·목격 등 직접 증거 단서가 확인됩니다.";

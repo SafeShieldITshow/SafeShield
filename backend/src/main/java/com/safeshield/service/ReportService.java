@@ -139,6 +139,12 @@ public class ReportService {
         String pattern = findDetail(analysis, "발생 양상:");
         String confidence = findDetail(analysis, "판단 신뢰도:");
         String actions = analysis.recommendedActions().stream().findFirst().orElse("상담 내용을 보완하세요.");
+        if (analysis.assessmentStatus().contains("가해")) {
+            return analysis.assessmentStatus() + " 리포트입니다. "
+                    + "유형은 " + types + ", 사안 중대도는 " + analysis.riskScore() + "/10 (" + riskLabel + ")로 산정했습니다. "
+                    + relationship + " " + pattern + " " + confidence + " "
+                    + "우선 조치: " + actions;
+        }
         return analysis.assessmentStatus() + "입니다. "
                 + "유형은 " + types + ", 위험도는 " + analysis.riskScore() + "/10 (" + riskLabel + ")로 산정했습니다. "
                 + relationship + " " + pattern + " " + confidence + " "

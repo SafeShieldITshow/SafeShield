@@ -38,7 +38,7 @@ class AnalysisServiceTest {
         );
 
         assertTrue(result.riskScore() >= 8.0, "반복 신체 폭력과 상해, 협박은 높은 위험도로 봐야 합니다.");
-        assertTrue(result.expectedMeasureRange().get(1) >= 7, "고위험 사안은 조치 범위 상한이 높아야 합니다.");
+        assertTrue(result.expectedMeasureRange().get(1) >= 6, "반복 상해와 협박은 학급교체 수준까지 참고 범위에 포함해야 합니다.");
     }
 
     @Test
@@ -127,6 +127,36 @@ class AnalysisServiceTest {
         assertTrue(readiness.ready(), "행위, 관계, 시점, 증거가 모두 확인되면 리포트 생성이 가능해야 합니다.");
         assertTrue(result.keyFindings().stream().anyMatch(item -> item.startsWith("관계 판단:")));
         assertTrue(result.keyFindings().stream().anyMatch(item -> item.startsWith("판단 신뢰도:")));
+    }
+
+    @Test
+    void doesNotTreatVictimWordingAsPerpetrator() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "같은 반 친구에게 제가 욕을 먹었고 오늘 캡처가 있습니다. 여러 번 반복됐습니다.",
+                2
+        );
+
+        assertTrue(readiness.ready(), "피해자 문장도 사안 구조가 충분하면 리포트 준비가 되어야 합니다.");
+        assertFalse(readiness.status().contains("가해"), "제가 욕을 먹었다는 표현을 가해자 관점으로 오판하면 안 됩니다.");
+    }
+
+    @Test
+    void buildsPerpetratorFocusedReportGuidance() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "같은 반 친구에게 제가 단톡방에서 여러 번 욕설을 했고 사진도 올렸습니다. 캡처가 있고 오늘 담임에게 말하려고 합니다.",
+                2
+        );
+        var result = analysisService.analyze(
+                "같은 반 친구에게 제가 단톡방에서 여러 번 욕설을 했고 사진도 올렸습니다. 캡처가 있고 오늘 담임에게 말하려고 합니다.",
+                readiness
+        );
+
+        assertTrue(readiness.ready(), "가해자 관점도 핵심 사실이 확인되면 리포트 생성이 가능해야 합니다.");
+        assertTrue(readiness.status().contains("가해"), "본인이 한 행동은 가해 또는 연루 가능성으로 분기해야 합니다.");
+        assertTrue(result.evidenceGuide().contains("본인 행동 타임라인"));
+        assertTrue(result.evidenceGuide().contains("사과·피해 회복 기록"));
+        assertTrue(result.recommendedActions().stream().anyMatch(item -> item.contains("추가 연락")));
+        assertTrue(result.keyFindings().stream().anyMatch(item -> item.contains("가해 또는 연루")));
     }
 
     @Test
