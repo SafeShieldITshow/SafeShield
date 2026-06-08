@@ -500,7 +500,7 @@ const SShieldChat = () => {
             [key]: {
                 label: prev[key]?.label || '직접 입력',
                 message: prev[key]?.message || '확인 답변:',
-                direct: true,
+                direct: prev[key]?.direct ?? true,
                 customText: value,
             },
         }));
@@ -517,7 +517,8 @@ const SShieldChat = () => {
                 const prefix = String(draft.message || '확인 답변:').trim();
                 return prefix.endsWith(':') ? `${prefix} ${customText}` : `${prefix} ${customText}`;
             }
-            return draft.message;
+            const customText = String(draft.customText || '').trim();
+            return customText ? `${draft.message} 추가 설명: ${customText}` : draft.message;
         })
         .filter(Boolean);
 
@@ -645,21 +646,19 @@ const SShieldChat = () => {
                                                         </button>
                                                     ))}
                                                 </div>
-                                                {draft?.direct && (
-                                                    <input
-                                                        className="confirmation-custom-input"
-                                                        type="text"
-                                                        value={draft.customText || ''}
-                                                        placeholder="직접 답변을 입력하세요"
-                                                        onChange={(e) => handleConfirmationCustomChange(msg.id, prompt, promptIndex, e.target.value)}
-                                                        onKeyDown={(e) => {
-                                                            if (e.key === 'Enter' && confirmationAnswersForMessage(msg).length) {
-                                                                handleSendConfirmation(msg);
-                                                            }
-                                                        }}
-                                                        disabled={isCurrentLoading}
-                                                    />
-                                                )}
+                                                <input
+                                                    className="confirmation-custom-input"
+                                                    type="text"
+                                                    value={draft?.customText || ''}
+                                                    placeholder="선택 없이 직접 답변하거나, 선택 후 설명을 덧붙일 수 있습니다"
+                                                    onChange={(e) => handleConfirmationCustomChange(msg.id, prompt, promptIndex, e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && confirmationAnswersForMessage(msg).length) {
+                                                            handleSendConfirmation(msg);
+                                                        }
+                                                    }}
+                                                    disabled={isCurrentLoading}
+                                                />
                                             </div>
                                             );
                                         })}

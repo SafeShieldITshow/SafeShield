@@ -405,10 +405,7 @@ public class ChatService {
         }
 
         if (!readiness.ready() && !readiness.missingInfo().isEmpty()) {
-            reply.append("\n❓ 확인 질문\n");
-            readiness.missingInfo().stream().limit(2)
-                    .map(ChatService::toConfirmationQuestion)
-                    .forEach(question -> reply.append("• ").append(question).append("\n"));
+            reply.append("\n아래 확인 답변을 선택하거나 직접 입력하면 리포트 판단이 갱신됩니다.\n");
         } else {
             reply.append("\n리포트를 생성할 수 있습니다. 새 사안이 추가되면 별도 상담으로 나누는 것이 좋습니다.\n");
         }
@@ -580,7 +577,7 @@ public class ChatService {
                 목표는 뻔한 위로가 아니라, 사용자가 "내 상황이 어떤 유형이고 지금 무엇을 해야 하는지" 바로 판단하도록 돕는 것입니다.
 
                 # 반드시 지킬 규칙
-                1. 파악된 사실을 먼저 정리하고, 부족한 정보는 추측하지 말고 질문하세요.
+                1. 파악된 사실을 먼저 정리하고, 부족한 정보는 추측하지 말고 확인이 필요하다고만 안내하세요.
                 2. 사용자 문장을 그대로 복사하거나 길게 다시 쓰지 말고, 사건 유형·관계·증거·확인 필요점으로 재구성하세요.
                 3. 이전 답변과 같은 문장을 반복하지 말고, 이번 입력이 판단을 바꾼 점이나 새로 확인한 단서를 먼저 말하세요.
                 4. 모든 문장은 자연스러운 한국어로 작성하세요. AI, SNS, URL, DM, CCTV, PDF, ID, IP 외 외국어 단어를 쓰지 마세요.
@@ -593,8 +590,8 @@ public class ChatService {
                 10. 증거는 현재 상황에 맞는 항목 3~4개를 구체적으로 안내하세요.
                 11. 생명·신체에 즉각적인 위험이 있을 때만 112를, 일반 학교폭력 상담에는 '117에 상담을 요청하세요'라고 안내하세요.
                 12. 법률상담 대체 여부에 관한 면책 문구는 화면에 별도로 표시되므로 답변에 쓰지 마세요.
-                13. 아래 내부 리포트 상태가 '추가 확인 필요'일 때만 확인 질문을 최대 2개 넣으세요.
-                14. 내부 리포트 상태가 '추가 확인 필요'가 아니면 확인 질문을 넣지 말고, "리포트를 생성할 수 있습니다"라고만 짧게 안내하세요.
+                13. 확인 질문은 화면의 선택·주관식 입력 UI로 별도 제공됩니다. 답변 본문에는 '❓ 확인 질문' 섹션이나 질문 문장을 쓰지 마세요.
+                14. 내부 리포트 상태가 '추가 확인 필요'가 아니면 "리포트를 생성할 수 있습니다"라고만 짧게 안내하세요.
                 15. '리포트 준비 상태', '추가 확인 필요가 아니므로', '추가 확인 질문 없이' 같은 내부 판단 문구를 답변에 그대로 쓰지 마세요.
                 16. 사용자가 본인이 한 행동을 말하면 비난하지 말고, 피해 회복·게시물 삭제·사과·보호자/담임 공유 중심으로 안내하세요.
                 17. 학교폭력 해당성이 낮으면 억지로 학폭으로 단정하지 말고, 해당성이 낮은 이유와 다른 대응 경로를 말하세요.
@@ -621,9 +618,6 @@ public class ChatService {
 
                 💬 다음 단계
                 오늘 할 일 2개를 순서대로 안내
-
-                ❓ 확인 질문
-                추가 확인 필요일 때만 작성. 준비가 끝났으면 이 섹션을 생략.
 
                 # 리포트 준비 상태
                 상태: """ + readiness.status() + """
@@ -714,7 +708,7 @@ public class ChatService {
 
     private static String sanitizeGeneratedReply(String reply) {
         if (reply == null) return "";
-        return reply.lines()
+        return stripConfirmationQuestionSection(reply).lines()
                 .filter(line -> !(line.contains("일반적인 법률 정보") && line.contains("대체하지")))
                 .filter(line -> !(line.contains("리포트 준비 상태") && line.contains("추가 확인 필요")))
                 .filter(line -> !line.contains("추가 확인 질문 없이"))
@@ -726,6 +720,18 @@ public class ChatService {
                         .replace("당신은 ", ""))
                 .collect(Collectors.joining("\n"))
                 .trim();
+    }
+
+    private static String stripConfirmationQuestionSection(String reply) {
+        StringBuilder result = new StringBuilder();
+        for (String line : reply.split("\\R")) {
+            String trimmed = line.trim();
+            if (trimmed.contains("확인 질문") || trimmed.startsWith("❓")) {
+                break;
+            }
+            result.append(line).append("\n");
+        }
+        return result.toString().trim();
     }
 
     private static Map<String, Set<String>> parseAllowedCitations(String lawContext) {
