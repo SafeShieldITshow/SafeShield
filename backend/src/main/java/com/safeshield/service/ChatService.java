@@ -235,6 +235,7 @@ public class ChatService {
         if (missingInfo.contains("학교 관계")) return "relationship";
         if (missingInfo.contains("언제")) return "timeline";
         if (missingInfo.contains("증거")) return "evidence";
+        if (missingInfo.contains("최종 확인")) return "final_check";
         return "detail";
     }
 
@@ -269,6 +270,12 @@ public class ChatService {
                     option("사진·진단서 있음", "확인 답변: 사진, 진단서, 병원 기록 중 일부가 있습니다."),
                     option("목격자 있음", "확인 답변: 상황을 본 목격자가 있습니다."),
                     option("아직 없음", "확인 답변: 아직 확보한 증거는 없습니다.")
+            );
+        }
+        if (missingInfo.contains("최종 확인")) {
+            return List.of(
+                    option("이 내용으로 분석", "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다."),
+                    option("추가 설명 필요", "확인 답변: ")
             );
         }
         return List.of(
@@ -901,6 +908,7 @@ public class ChatService {
         if (missingInfo.contains("학교 관계")) return "상대가 같은 학교, 같은 반, 선배·후배, 학원 관계 중 어디에 해당하나요?";
         if (missingInfo.contains("언제")) return "언제부터 몇 번 있었고, 지금도 계속되고 있나요?";
         if (missingInfo.contains("증거")) return "캡처, URL, 사진, 진단서, 목격자 중 남아 있는 증거가 있나요?";
+        if (missingInfo.contains("최종 확인")) return "위 내용이 하나의 같은 사안이고, 이 내용으로 리포트를 생성해도 되나요?";
         return missingInfo + " 알려주세요.";
     }
 

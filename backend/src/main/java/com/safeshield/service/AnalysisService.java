@@ -87,6 +87,9 @@ public class AnalysisService {
         if (!hasRelationshipAnswer) missing.add("상대가 학교 관계자인지");
         if (!hasTimeOrRepeat) missing.add("언제부터 몇 번 있었는지");
         if (!hasEvidenceOrChannel) missing.add("남아 있는 증거가 무엇인지");
+        if (relevantInput && userMessageCount < 2 && missing.isEmpty()) {
+            missing.add("사안 내용 최종 확인");
+        }
 
         if (hasConcreteIncident) facts.add("구체적인 사건 내용 확인");
         if (hasRelationshipAnswer) facts.add("상대방과 학교 관계 확인");

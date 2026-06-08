@@ -129,6 +129,23 @@ class AnalysisServiceTest {
         assertTrue(result.keyFindings().stream().anyMatch(item -> item.startsWith("판단 신뢰도:")));
     }
 
+    @Test
+    void asksFinalConfirmationWhenFirstMessageAlreadyHasAllFacts() {
+        ReportReadiness first = analysisService.assessReportReadiness(
+                "같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. 캡처와 URL이 있습니다.",
+                1
+        );
+        ReportReadiness confirmed = analysisService.assessReportReadiness(
+                "같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. 캡처와 URL이 있습니다. " +
+                        "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
+                2
+        );
+
+        assertFalse(first.ready(), "첫 메시지에 정보가 충분해도 최종 확인 없이 바로 리포트를 열지 않습니다.");
+        assertTrue(first.missingInfo().contains("사안 내용 최종 확인"));
+        assertTrue(confirmed.ready(), "최종 확인 답변 후에는 리포트 생성이 가능해야 합니다.");
+    }
+
     private ReportReadiness readySchoolViolence() {
         return new ReportReadiness(
                 true,
