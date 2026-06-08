@@ -28,6 +28,10 @@
   padding: 12px 0;
 }
 
+.ss-session-loading {
+  opacity: 0.85;
+}
+
 .ss-session-item {
   width: 100%;
   display: grid;

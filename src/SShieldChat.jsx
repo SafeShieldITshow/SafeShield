@@ -266,6 +266,8 @@ const SShieldChat = () => {
     const [confirmationDrafts, setConfirmationDrafts] = useState({});
     const [showReport, setShowReport] = useState(false);
     const [generatingReport, setGeneratingReport] = useState(false);
+    const [isSessionLoading, setIsSessionLoading] = useState(false);
+    const [isSessionsLoading, setIsSessionsLoading] = useState(false);
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
     const typingTimerRef = useRef(null);
@@ -278,6 +280,7 @@ const SShieldChat = () => {
     const [searchParams] = useSearchParams();
     const requestedSessionParam = searchParams.get('session');
     const isCurrentLoading = pendingKeys.has(conversationKey);
+    const isChatBusy = isCurrentLoading || isSessionLoading;
 
     const activateConversation = useCallback((id, key = `session:${id}`) => {
         sessionIdRef.current = id;
@@ -288,6 +291,7 @@ const SShieldChat = () => {
     }, []);
 
     const loadSessions = useCallback(async () => {
+        setIsSessionsLoading(true);
         try {
             const items = await api.get('/chat/sessions');
             setSessions(items);
@@ -295,12 +299,22 @@ const SShieldChat = () => {
         } catch {
             setSessions([]);
             return [];
+        } finally {
+            setIsSessionsLoading(false);
         }
     }, []);
 
     const loadMessagesForSession = useCallback(async (id) => {
         const loadSequence = ++messageLoadSequenceRef.current;
         activateConversation(id);
+        setIsSessionLoading(true);
+        setConfirmationDrafts({});
+        setShowReport(false);
+        shouldAutoScrollRef.current = true;
+        if (typingTimerRef.current) {
+            clearInterval(typingTimerRef.current);
+            typingTimerRef.current = null;
+        }
         try {
             const detail = await api.get(`/chat/sessions/${id}`);
             if (loadSequence !== messageLoadSequenceRef.current) return;
@@ -316,6 +330,10 @@ const SShieldChat = () => {
             activateConversation(null, draftKey);
             setMessages([initialMessage()]);
             setShowReport(false);
+        } finally {
+            if (loadSequence === messageLoadSequenceRef.current) {
+                setIsSessionLoading(false);
+            }
         }
     }, [activateConversation]);
 
@@ -348,7 +366,7 @@ const SShieldChat = () => {
     };
 
     const disableAutoScrollWhileReading = () => {
-        if (isCurrentLoading) {
+        if (isChatBusy) {
             shouldAutoScrollRef.current = false;
         }
     };
@@ -396,7 +414,7 @@ const SShieldChat = () => {
 
     const sendOrAskTopic = (text) => {
         const content = (text || input).trim();
-        if (!content || isCurrentLoading) return;
+        if (!content || isChatBusy) return;
 
         if (shouldConfirmTopic(content)) {
             setTopicPrompt(content);
@@ -410,7 +428,7 @@ const SShieldChat = () => {
     const handleSend = async (text, options = {}) => {
         const content = (text || input).trim();
         const targetKey = options.forceNewSession ? `draft:${Date.now()}` : conversationKeyRef.current;
-        if (!content || pendingKeysRef.current.has(targetKey)) return;
+        if (!content || isSessionLoading || pendingKeysRef.current.has(targetKey)) return;
         const targetSessionId = options.forceNewSession ? null : sessionIdRef.current;
 
         setInput('');
@@ -420,6 +438,7 @@ const SShieldChat = () => {
             messageLoadSequenceRef.current += 1;
             localStorage.removeItem('ss_session');
             activateConversation(null, targetKey);
+            setIsSessionLoading(false);
             setShowReport(false);
         }
         setMessages((prev) => [
@@ -463,7 +482,7 @@ const SShieldChat = () => {
     };
 
     const handleGenerateReport = async () => {
-        if (!sessionId) return;
+        if (!sessionId || isChatBusy) return;
         setGeneratingReport(true);
         try {
             const report = await api.post('/reports/generate', { sessionId, title: '' });
@@ -476,7 +495,7 @@ const SShieldChat = () => {
     };
 
     const handleConfirmationOption = (messageId, prompt, promptIndex, option) => {
-        if (isCurrentLoading) return;
+        if (isChatBusy) return;
         const message = String(option?.message || '').trim();
         if (!message) return;
 
@@ -523,7 +542,7 @@ const SShieldChat = () => {
         .filter(Boolean);
 
     const handleSendConfirmation = (message) => {
-        if (isCurrentLoading) return;
+        if (isChatBusy) return;
         const answers = confirmationAnswersForMessage(message);
         if (!answers.length) return;
         handleSend(answers.join('\n'));
@@ -533,6 +552,8 @@ const SShieldChat = () => {
         messageLoadSequenceRef.current += 1;
         localStorage.removeItem('ss_session');
         activateConversation(null, `draft:${Date.now()}`);
+        setIsSessionLoading(false);
+        setConfirmationDrafts({});
         shouldAutoScrollRef.current = true;
         setShowReport(false);
         setMessages([initialMessage()]);
@@ -582,6 +603,7 @@ const SShieldChat = () => {
                             sessions={sessions}
                             activeSessionId={sessionId}
                             onSelect={loadMessagesForSession}
+                            loading={isSessionsLoading}
                         />
 
                         <div className="ss-logout-section">
@@ -607,95 +629,108 @@ const SShieldChat = () => {
                 </header>
 
                 <div
-                    className="ss-chat-content"
+                    className={`ss-chat-content ${isSessionLoading ? 'loading' : ''}`}
                     ref={scrollRef}
                     onScroll={handleScroll}
                     onWheel={disableAutoScrollWhileReading}
                     onTouchStart={disableAutoScrollWhileReading}
                     onPointerDown={disableAutoScrollWhileReading}
                 >
-                    {messages.map((msg) => (
-                        <div key={msg.id} className={`ss-msg-row ${msg.type}`}>
-                            <div className="ss-msg-col">
-                                <div className="ss-msg-bubble">
-                                    {msg.type === 'ai'
-                                        ? <MarkdownMessage text={msg.text} />
-                                        : (msg.text || '').split('\n').map((line, i, arr) => (
-                                            <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
-                                        ))}
-                                </div>
-                                {msg.type === 'ai' && msg.confirmationPrompts?.length > 0 && (
-                                    <div className="confirmation-prompts">
-                                        {msg.confirmationPrompts.map((prompt, promptIndex) => {
-                                            const promptKey = confirmationPromptKey(msg.id, prompt, promptIndex);
-                                            const draft = confirmationDrafts[promptKey];
-                                            const selectedLabel = draft?.label;
-                                            return (
-                                            <div className="confirmation-prompt" key={promptKey}>
-                                                <p>{prompt.question}</p>
-                                                <div className="confirmation-options">
-                                                    {prompt.options.map((option) => (
-                                                        <button
-                                                            key={`${prompt.id}-${option.label}`}
-                                                            className={selectedLabel === option.label ? 'selected' : ''}
-                                                            type="button"
-                                                            onClick={() => handleConfirmationOption(msg.id, prompt, promptIndex, option)}
-                                                            disabled={isCurrentLoading}
-                                                        >
-                                                            {option.label}
-                                                        </button>
-                                                    ))}
+                    {isSessionLoading ? (
+                        <div className="ss-chat-loading" role="status" aria-live="polite">
+                            <div className="typing-indicator" aria-label="상담 기록 불러오는 중">
+                                <span className="typing-dot"></span>
+                                <span className="typing-dot"></span>
+                                <span className="typing-dot"></span>
+                            </div>
+                            <p>상담 기록을 불러오는 중...</p>
+                        </div>
+                    ) : (
+                        <>
+                            {messages.map((msg) => (
+                                <div key={msg.id} className={`ss-msg-row ${msg.type}`}>
+                                    <div className="ss-msg-col">
+                                        <div className="ss-msg-bubble">
+                                            {msg.type === 'ai'
+                                                ? <MarkdownMessage text={msg.text} />
+                                                : (msg.text || '').split('\n').map((line, i, arr) => (
+                                                    <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
+                                                ))}
+                                        </div>
+                                        {msg.type === 'ai' && msg.confirmationPrompts?.length > 0 && (
+                                            <div className="confirmation-prompts">
+                                                {msg.confirmationPrompts.map((prompt, promptIndex) => {
+                                                    const promptKey = confirmationPromptKey(msg.id, prompt, promptIndex);
+                                                    const draft = confirmationDrafts[promptKey];
+                                                    const selectedLabel = draft?.label;
+                                                    return (
+                                                    <div className="confirmation-prompt" key={promptKey}>
+                                                        <p>{prompt.question}</p>
+                                                        <div className="confirmation-options">
+                                                            {prompt.options.map((option) => (
+                                                                <button
+                                                                    key={`${prompt.id}-${option.label}`}
+                                                                    className={selectedLabel === option.label ? 'selected' : ''}
+                                                                    type="button"
+                                                                    onClick={() => handleConfirmationOption(msg.id, prompt, promptIndex, option)}
+                                                                    disabled={isChatBusy}
+                                                                >
+                                                                    {option.label}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <input
+                                                            className="confirmation-custom-input"
+                                                            type="text"
+                                                            value={draft?.customText || ''}
+                                                            placeholder="선택 없이 직접 답변하거나, 선택 후 설명을 덧붙일 수 있습니다"
+                                                            onChange={(e) => handleConfirmationCustomChange(msg.id, prompt, promptIndex, e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter' && confirmationAnswersForMessage(msg).length) {
+                                                                    handleSendConfirmation(msg);
+                                                                }
+                                                            }}
+                                                            disabled={isChatBusy}
+                                                        />
+                                                    </div>
+                                                    );
+                                                })}
+                                                <div className="confirmation-submit-row">
+                                                    <button
+                                                        type="button"
+                                                        className="confirmation-submit-btn"
+                                                        onClick={() => handleSendConfirmation(msg)}
+                                                        disabled={isChatBusy || !confirmationAnswersForMessage(msg).length}
+                                                    >
+                                                        확인 답변 보내기
+                                                    </button>
+                                                    <span>선택한 답변을 모아서 상담에 추가합니다.</span>
                                                 </div>
-                                                <input
-                                                    className="confirmation-custom-input"
-                                                    type="text"
-                                                    value={draft?.customText || ''}
-                                                    placeholder="선택 없이 직접 답변하거나, 선택 후 설명을 덧붙일 수 있습니다"
-                                                    onChange={(e) => handleConfirmationCustomChange(msg.id, prompt, promptIndex, e.target.value)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter' && confirmationAnswersForMessage(msg).length) {
-                                                            handleSendConfirmation(msg);
-                                                        }
-                                                    }}
-                                                    disabled={isCurrentLoading}
-                                                />
                                             </div>
-                                            );
-                                        })}
-                                        <div className="confirmation-submit-row">
-                                            <button
-                                                type="button"
-                                                className="confirmation-submit-btn"
-                                                onClick={() => handleSendConfirmation(msg)}
-                                                disabled={isCurrentLoading || !confirmationAnswersForMessage(msg).length}
-                                            >
-                                                확인 답변 보내기
-                                            </button>
-                                            <span>선택한 답변을 모아서 상담에 추가합니다.</span>
+                                        )}
+                                        <span className="msg-time">{msg.time}</span>
+                                    </div>
+                                </div>
+                            ))}
+                            {isCurrentLoading && (
+                                <div className="ss-msg-row ai">
+                                    <div className="ss-msg-col">
+                                        <div className="typing-indicator" aria-label="답변 생성 중">
+                                            <span className="typing-dot"></span>
+                                            <span className="typing-dot"></span>
+                                            <span className="typing-dot"></span>
                                         </div>
                                     </div>
-                                )}
-                                <span className="msg-time">{msg.time}</span>
-                            </div>
-                        </div>
-                    ))}
-                    {isCurrentLoading && (
-                        <div className="ss-msg-row ai">
-                            <div className="ss-msg-col">
-                                <div className="typing-indicator" aria-label="답변 생성 중">
-                                    <span className="typing-dot"></span>
-                                    <span className="typing-dot"></span>
-                                    <span className="typing-dot"></span>
                                 </div>
-                            </div>
-                        </div>
+                            )}
+                        </>
                     )}
                 </div>
 
                 <footer className="ss-chat-footer">
                     <div className="example-chips">
                         {EXAMPLE_QUESTIONS.map((q) => (
-                            <button key={q} className="example-chip" onClick={() => sendOrAskTopic(q)} disabled={isCurrentLoading}>
+                            <button key={q} className="example-chip" onClick={() => sendOrAskTopic(q)} disabled={isChatBusy}>
                                 {q}
                             </button>
                         ))}
@@ -704,7 +739,7 @@ const SShieldChat = () => {
                     {showReport && (
                         <div className="chat-cta">
                             <p>핵심 정보가 확인되었습니다. 분석 리포트를 생성해 확인해 보세요.</p>
-                            <button className="chat-cta-btn" onClick={handleGenerateReport} disabled={generatingReport}>
+                            <button className="chat-cta-btn" onClick={handleGenerateReport} disabled={generatingReport || isChatBusy}>
                                 {generatingReport ? '생성 중...' : '리포트 보기'}
                             </button>
                         </div>
@@ -718,8 +753,9 @@ const SShieldChat = () => {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && sendOrAskTopic()}
+                            disabled={isChatBusy}
                         />
-                        <button className="ss-send-btn" onClick={() => sendOrAskTopic()} disabled={isCurrentLoading}>
+                        <button className="ss-send-btn" onClick={() => sendOrAskTopic()} disabled={isChatBusy}>
                             보내기
                         </button>
                     </div>

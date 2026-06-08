@@ -9,16 +9,20 @@ const formatSessionDate = (iso) => {
     return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 };
 
-const SessionHistory = ({ sessions: providedSessions, activeSessionId, onSelect, variant = 'sidebar' }) => {
+const SessionHistory = ({ sessions: providedSessions, activeSessionId, onSelect, variant = 'sidebar', loading = false }) => {
     const [loadedSessions, setLoadedSessions] = useState([]);
+    const [isInternalLoading, setIsInternalLoading] = useState(providedSessions === undefined);
     const navigate = useNavigate();
     const sessions = providedSessions ?? loadedSessions;
+    const isLoading = loading || isInternalLoading;
 
     useEffect(() => {
         if (providedSessions !== undefined) return;
+        setIsInternalLoading(true);
         api.get('/chat/sessions')
             .then(setLoadedSessions)
-            .catch(() => setLoadedSessions([]));
+            .catch(() => setLoadedSessions([]))
+            .finally(() => setIsInternalLoading(false));
     }, [providedSessions]);
 
     const openSession = (id) => {
@@ -33,7 +37,9 @@ const SessionHistory = ({ sessions: providedSessions, activeSessionId, onSelect,
     return (
         <section className={`ss-session-history ${variant === 'page' ? 'page-variant' : ''}`}>
             <div className="ss-session-title">상담 기록</div>
-            {sessions.length === 0 ? (
+            {isLoading && sessions.length === 0 ? (
+                <p className="ss-session-empty ss-session-loading">불러오는 중...</p>
+            ) : sessions.length === 0 ? (
                 <p className="ss-session-empty">아직 기록이 없습니다.</p>
             ) : sessions.map((session) => (
                 <button
