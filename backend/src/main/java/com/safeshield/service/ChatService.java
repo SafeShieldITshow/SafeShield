@@ -46,6 +46,7 @@ public class ChatService {
     }
 
     private record PromptContext(String prompt, String lawContext, ReplyMode mode) {}
+    private record ConfirmationCandidate(String id, String question, List<Map<String, String>> options) {}
 
     private static final Pattern LAW_HEADER_PATTERN =
             Pattern.compile("^===\\s*(.+?)\\s*===$");
@@ -173,7 +174,7 @@ public class ChatService {
                 "report_status", readiness.status(),
                 "report_reason", readiness.reason(),
                 "missing_info", readiness.missingInfo(),
-                "confirmation_prompts", confirmationPrompts(readiness)
+                "confirmation_prompts", confirmationPrompts(readiness, history)
         );
     }
 
@@ -199,7 +200,7 @@ public class ChatService {
         response.put("report_status", readiness.status());
         response.put("report_reason", readiness.reason());
         response.put("missing_info", readiness.missingInfo());
-        response.put("confirmation_prompts", confirmationPrompts(readiness));
+        response.put("confirmation_prompts", confirmationPrompts(readiness, history));
         response.put("temporary", true);
         return response;
     }
@@ -224,7 +225,7 @@ public class ChatService {
         return Map.of(
                 "session_id", session.getId(),
                 "messages", messages.stream().map(ChatService::messageToMap).toList(),
-                "readiness", readinessToMap(readiness)
+                "readiness", readinessToMap(readiness, messages)
         );
     }
 
@@ -233,8 +234,9 @@ public class ChatService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "상담 세션을 찾을 수 없습니다."));
         requireOwner(user, session);
 
-        ReportReadiness readiness = assessReadiness(messageRepository.findBySessionOrderByCreatedAtAsc(session));
-        return readinessToMap(readiness);
+        List<Message> messages = messageRepository.findBySessionOrderByCreatedAtAsc(session);
+        ReportReadiness readiness = assessReadiness(messages);
+        return readinessToMap(readiness, messages);
     }
 
     private static Map<String, Object> messageToMap(Message message) {
@@ -246,115 +248,291 @@ public class ChatService {
         );
     }
 
-    private Map<String, Object> readinessToMap(ReportReadiness readiness) {
+    private Map<String, Object> readinessToMap(ReportReadiness readiness, List<Message> history) {
         return Map.of(
                 "ready", readiness.ready(),
                 "status", readiness.status(),
                 "reason", readiness.reason(),
                 "missing_info", readiness.missingInfo(),
-                "confirmation_prompts", confirmationPrompts(readiness),
+                "confirmation_prompts", confirmationPrompts(readiness, history),
                 "school_violence_likely", readiness.schoolViolenceLikely()
         );
     }
 
-    private List<Map<String, Object>> confirmationPrompts(ReportReadiness readiness) {
+    private List<Map<String, Object>> confirmationPrompts(ReportReadiness readiness, List<Message> history) {
         if (readiness.ready() || readiness.missingInfo().isEmpty()) return List.of();
-        return readiness.missingInfo().stream()
+        String combined = combinedUserText(history);
+        return confirmationCandidates(readiness, combined, userMessageCount(history)).stream()
                 .limit(1)
-                .map(this::confirmationPrompt)
+                .map(ChatService::confirmationPrompt)
                 .toList();
     }
 
-    private Map<String, Object> confirmationPrompt(String missingInfo) {
+    private static Map<String, Object> confirmationPrompt(ConfirmationCandidate candidate) {
         Map<String, Object> prompt = new LinkedHashMap<>();
-        prompt.put("id", confirmationId(missingInfo));
-        prompt.put("question", toConfirmationQuestion(missingInfo));
-        prompt.put("options", confirmationOptions(missingInfo));
+        prompt.put("id", candidate.id());
+        prompt.put("question", candidate.question());
+        prompt.put("options", candidate.options());
         return prompt;
     }
 
-    private String confirmationId(String missingInfo) {
-        if (missingInfo.contains("무슨 일")) return "incident";
-        if (missingInfo.contains("학교 관계")) return "relationship";
-        if (missingInfo.contains("언제")) return "timeline";
-        if (missingInfo.contains("증거")) return "evidence";
-        if (missingInfo.contains("피해 영향") || missingInfo.contains("회복")) return "impact";
-        if (missingInfo.contains("원하는 도움")) return "goal";
-        if (missingInfo.contains("최종 확인")) return "final_check";
-        if (missingInfo.contains("조금 더")) return "more_context";
-        return "detail";
+    static List<String> previewConfirmationQuestions(ReportReadiness readiness, String combinedText, long userMessageCount) {
+        return confirmationCandidates(readiness, combinedText, userMessageCount).stream()
+                .map(ConfirmationCandidate::question)
+                .toList();
     }
 
-    private List<Map<String, String>> confirmationOptions(String missingInfo) {
-        if (missingInfo.contains("무슨 일")) {
-            return List.of(
-                    option("욕설·비방", "확인 답변: 상대가 욕설이나 비방을 했습니다."),
-                    option("사진·게시물", "확인 답변: 사진이나 게시물이 올라왔습니다."),
-                    option("신체 폭력", "확인 답변: 때리거나 밀치는 신체 폭력이 있었습니다."),
-                    option("직접 입력", "확인 답변: ")
-            );
+    private static List<ConfirmationCandidate> confirmationCandidates(ReportReadiness readiness, String combinedText, long userMessageCount) {
+        if (readiness == null || readiness.ready()) return List.of();
+        String text = combinedText == null ? "" : combinedText;
+        List<ConfirmationCandidate> candidates = new ArrayList<>();
+
+        for (String missingInfo : readiness.missingInfo()) {
+            if (missingInfo.contains("무슨 일")) candidates.add(incidentQuestion(text));
+            else if (missingInfo.contains("학교 관계")) candidates.add(relationshipQuestion(text));
+            else if (missingInfo.contains("언제")) candidates.add(timelineQuestion(text));
+            else if (missingInfo.contains("증거")) candidates.add(evidenceQuestion(text));
+            else if (missingInfo.contains("피해 영향") || missingInfo.contains("회복")) candidates.add(impactQuestion(text));
+            else if (missingInfo.contains("원하는 도움")) candidates.add(goalQuestion(text));
+            else if (missingInfo.contains("최종 확인")) candidates.add(finalCheckQuestion());
+            else if (missingInfo.contains("조금 더")) candidates.addAll(deepDiveQuestions(text, userMessageCount));
         }
-        if (missingInfo.contains("학교 관계")) {
-            return List.of(
-                    option("같은 반", "확인 답변: 상대는 같은 반 학생입니다."),
-                    option("같은 학교", "확인 답변: 상대는 같은 학교 학생입니다."),
-                    option("학교 밖", "확인 답변: 상대는 학교 관계자가 아닙니다."),
-                    option("모르겠음", "확인 답변: 상대가 학교 관계자인지는 아직 모르겠습니다.")
-            );
+
+        if (candidates.isEmpty()) {
+            candidates.add(genericDetailQuestion(text));
         }
-        if (missingInfo.contains("언제")) {
-            return List.of(
+        return candidates.stream().distinct().toList();
+    }
+
+    private static ConfirmationCandidate incidentQuestion(String text) {
+        if (hasAny(text, "sns", "인스타", "게시", "댓글", "사진", "영상")) {
+            return candidate("incident_post", "온라인에 올라온 내용이 정확히 무엇인가요? 사진, 글, 댓글, 공유 중 해당하는 것을 골라주세요.",
+                    option("사진·영상", "확인 답변: 사진이나 영상이 올라왔습니다."),
+                    option("비방 글", "확인 답변: 비방 글이 올라왔습니다."),
+                    option("댓글 조롱", "확인 답변: 댓글로 조롱이나 비방이 있었습니다."),
+                    option("공유·유포", "확인 답변: 다른 사람에게 공유되거나 퍼졌습니다."),
+                    option("직접 입력", "확인 답변: "));
+        }
+        if (hasAny(text, "멍", "상처", "맞", "때", "밀")) {
+            return candidate("incident_physical", "몸에 어떤 일이 있었나요? 맞음, 밀침, 넘어짐, 상처 중 가까운 것을 골라주세요.",
+                    option("맞음", "확인 답변: 맞거나 가격당한 일이 있었습니다."),
+                    option("밀침", "확인 답변: 밀치거나 넘어뜨리는 행동이 있었습니다."),
+                    option("상처·멍", "확인 답변: 멍이나 상처가 생겼습니다."),
+                    option("위협 동반", "확인 답변: 신체 행동과 함께 위협이 있었습니다."),
+                    option("직접 입력", "확인 답변: "));
+        }
+        return candidate("incident", "실제로 있었던 행동을 조금 더 구체적으로 알려주세요. 말, 게시물, 신체 접촉, 따돌림 중 어디에 가까운가요?",
+                option("욕설·비방", "확인 답변: 상대가 욕설이나 비방을 했습니다."),
+                option("사진·게시물", "확인 답변: 사진이나 게시물이 올라왔습니다."),
+                option("신체 폭력", "확인 답변: 때리거나 밀치는 신체 폭력이 있었습니다."),
+                option("따돌림", "확인 답변: 따돌림이나 배제가 있었습니다."),
+                option("직접 입력", "확인 답변: "));
+    }
+
+    private static ConfirmationCandidate relationshipQuestion(String text) {
+        return candidate("relationship", "상대와의 관계를 학교폭력 절차 기준으로 확인해야 합니다. 같은 반, 같은 학교, 선후배·학원, 학교 밖 중 어디에 가깝나요?",
+                option("같은 반", "확인 답변: 상대는 같은 반 학생입니다."),
+                option("같은 학교", "확인 답변: 상대는 같은 학교 학생입니다."),
+                option("선후배·학원", "확인 답변: 상대는 선후배 또는 학원 관계입니다."),
+                option("학교 밖", "확인 답변: 상대는 학교 관계자가 아닙니다."),
+                option("아직 모름", "확인 답변: 상대가 학교 관계자인지는 아직 모르겠습니다."));
+    }
+
+    private static ConfirmationCandidate timelineQuestion(String text) {
+        if (hasAny(text, "단톡", "단체 채팅", "채팅방", "카톡", "메시지", "sns", "게시", "댓글")) {
+            return candidate("timeline_cyber", "온라인 괴롭힘이 언제부터 어떤 빈도로 이어졌나요? 한 번인지, 며칠 이상 반복인지, 지금도 이어지는지 알려주세요.",
                     option("한 번", "확인 답변: 현재까지는 한 번 발생했습니다."),
-                    option("여러 번", "확인 답변: 비슷한 일이 여러 번 반복됐습니다."),
+                    option("며칠 반복", "확인 답변: 며칠 동안 반복됐습니다."),
+                    option("오래 반복", "확인 답변: 몇 주 이상 반복됐습니다."),
                     option("지금도 계속", "확인 답변: 지금도 계속되고 있습니다."),
-                    option("기억 안 남", "확인 답변: 정확한 시점이나 횟수는 아직 기억나지 않습니다.")
-            );
+                    option("직접 입력", "확인 답변: "));
         }
-        if (missingInfo.contains("증거")) {
-            return List.of(
-                    option("캡처 있음", "확인 답변: 캡처나 URL을 가지고 있습니다."),
-                    option("사진·진단서 있음", "확인 답변: 사진, 진단서, 병원 기록 중 일부가 있습니다."),
-                    option("목격자 있음", "확인 답변: 상황을 본 목격자가 있습니다."),
-                    option("아직 없음", "확인 답변: 아직 확보한 증거는 없습니다.")
-            );
-        }
-        if (missingInfo.contains("피해 영향") || missingInfo.contains("회복")) {
-            return List.of(
-                    option("불안·두려움", "확인 답변: 불안하거나 두려운 영향이 있습니다."),
-                    option("등교 어려움", "확인 답변: 학교에 가기 어렵거나 생활에 영향이 있습니다."),
-                    option("이미 알림", "확인 답변: 보호자나 담임에게 일부 알렸습니다."),
-                    option("사과·중단 시도", "확인 답변: 사과, 삭제, 중단 등 회복을 위한 행동이 있었습니다."),
-                    option("직접 입력", "확인 답변: ")
-            );
-        }
-        if (missingInfo.contains("원하는 도움")) {
-            return List.of(
-                    option("증거 정리", "확인 답변: 증거를 어떻게 정리할지 알고 싶습니다."),
-                    option("신고·상담", "확인 답변: 신고나 학교 상담 절차를 알고 싶습니다."),
-                    option("안전 확보", "확인 답변: 보복이나 반복을 막고 안전하게 보호받고 싶습니다."),
-                    option("사과·회복", "확인 답변: 사과나 피해 회복 방법을 알고 싶습니다."),
-                    option("직접 입력", "확인 답변: ")
-            );
-        }
-        if (missingInfo.contains("최종 확인")) {
-            return List.of(
-                    option("이 내용으로 분석", "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다."),
-                    option("추가 설명 필요", "확인 답변: ")
-            );
-        }
-        if (missingInfo.contains("조금 더")) {
-            return List.of(
-                    option("계속 이야기", "확인 답변: 리포트 전에 상황을 조금 더 이야기하겠습니다."),
-                    option("직접 입력", "확인 답변: ")
-            );
-        }
-        return List.of(
-                option("확인됨", "확인 답변: 해당 정보를 확인했습니다."),
-                option("모르겠음", "확인 답변: 해당 정보는 아직 모르겠습니다.")
-        );
+        return candidate("timeline", "언제부터 몇 번 있었고, 지금도 계속되고 있나요?",
+                option("오늘 한 번", "확인 답변: 오늘 현재까지는 한 번 발생했습니다."),
+                option("최근 여러 번", "확인 답변: 최근 비슷한 일이 여러 번 반복됐습니다."),
+                option("오래 지속", "확인 답변: 몇 주 이상 지속됐습니다."),
+                option("지금도 계속", "확인 답변: 지금도 계속되고 있습니다."),
+                option("기억 안 남", "확인 답변: 정확한 시점이나 횟수는 아직 기억나지 않습니다."));
     }
 
-    private Map<String, String> option(String label, String message) {
+    private static ConfirmationCandidate evidenceQuestion(String text) {
+        if (hasAny(text, "단톡", "단체 채팅", "채팅방", "카톡", "메시지")) {
+            return candidate("evidence_chat", "대화 증거에는 무엇이 남아 있나요? 리포트에는 참여자, 시간, 앞뒤 맥락이 중요합니다.",
+                    option("참여자+시간", "확인 답변: 참여자 목록과 보낸 시간이 보이는 캡처가 있습니다."),
+                    option("앞뒤 맥락", "확인 답변: 앞뒤 대화 맥락이 보이는 캡처가 있습니다."),
+                    option("일부 캡처만", "확인 답변: 일부 캡처만 있고 전체 맥락은 부족합니다."),
+                    option("아직 없음", "확인 답변: 아직 확보한 증거는 없습니다."),
+                    option("직접 입력", "확인 답변: "));
+        }
+        if (hasAny(text, "멍", "상처", "맞", "때", "밀", "병원", "진단")) {
+            return candidate("evidence_physical", "신체 피해를 확인할 자료가 무엇인가요? 사진, 진료 기록, 목격자 중 해당하는 것을 골라주세요.",
+                    option("상처 사진", "확인 답변: 멍이나 상처 사진이 있습니다."),
+                    option("진료 기록", "확인 답변: 병원 진단서나 진료 기록이 있습니다."),
+                    option("목격자", "확인 답변: 상황을 본 목격자가 있습니다."),
+                    option("아직 없음", "확인 답변: 아직 확보한 증거는 없습니다."),
+                    option("직접 입력", "확인 답변: "));
+        }
+        if (hasAny(text, "제가", "내가", "사과", "가해", "올렸", "욕했")) {
+            return candidate("evidence_actor", "본인이 한 행동을 확인할 자료가 있나요? 원본, 삭제 기록, 사과·상담 기록 중 무엇이 있나요?",
+                    option("대화·게시 원본", "확인 답변: 대화나 게시물 원본이 있습니다."),
+                    option("삭제 기록", "확인 답변: 삭제나 수정한 내역이 있습니다."),
+                    option("상담 기록", "확인 답변: 보호자나 담임에게 말한 기록이 있습니다."),
+                    option("아직 없음", "확인 답변: 아직 정리한 자료는 없습니다."),
+                    option("직접 입력", "확인 답변: "));
+        }
+        return candidate("evidence", "지금 남아 있는 증거는 무엇인가요? 캡처, URL, 사진, 진단서, 목격자 중 골라주세요.",
+                option("캡처·URL", "확인 답변: 캡처나 URL을 가지고 있습니다."),
+                option("사진·진단서", "확인 답변: 사진, 진단서, 병원 기록 중 일부가 있습니다."),
+                option("목격자", "확인 답변: 상황을 본 목격자가 있습니다."),
+                option("아직 없음", "확인 답변: 아직 확보한 증거는 없습니다."),
+                option("직접 입력", "확인 답변: "));
+    }
+
+    private static ConfirmationCandidate impactQuestion(String text) {
+        if (hasAny(text, "제가", "내가", "사과", "가해", "올렸", "욕했")) {
+            return candidate("impact_actor", "지금 피해 회복을 위해 이미 한 일이 있나요? 중단, 삭제, 보호자·담임 공유, 사과 시도 중 골라주세요.",
+                    option("중단함", "확인 답변: 문제 행동을 중단했습니다."),
+                    option("삭제함", "확인 답변: 게시물이나 댓글을 삭제했습니다."),
+                    option("어른에게 알림", "확인 답변: 보호자나 담임에게 알렸습니다."),
+                    option("아직 못 함", "확인 답변: 아직 피해 회복 조치를 하지 못했습니다."),
+                    option("직접 입력", "확인 답변: "));
+        }
+        return candidate("impact", "이 일 때문에 지금 가장 크게 영향을 받은 부분은 무엇인가요?",
+                option("불안·두려움", "확인 답변: 불안하거나 두려운 영향이 있습니다."),
+                option("등교 어려움", "확인 답변: 학교에 가기 어렵거나 생활에 영향이 있습니다."),
+                option("보복 걱정", "확인 답변: 보복이나 반복이 걱정됩니다."),
+                option("이미 알림", "확인 답변: 보호자나 담임에게 일부 알렸습니다."),
+                option("직접 입력", "확인 답변: "));
+    }
+
+    private static ConfirmationCandidate goalQuestion(String text) {
+        if (hasAny(text, "제가", "내가", "사과", "가해", "올렸", "욕했")) {
+            return candidate("goal_actor", "가장 필요한 도움은 무엇인가요? 사과 방식, 삭제·중단, 학교 절차, 재발 방지 중 골라주세요.",
+                    option("사과 방식", "확인 답변: 사과나 피해 회복 방법을 알고 싶습니다."),
+                    option("삭제·중단", "확인 답변: 게시물 삭제와 추가 행동 중단 방법이 필요합니다."),
+                    option("학교 절차", "확인 답변: 학교에 어떻게 설명할지 알고 싶습니다."),
+                    option("재발 방지", "확인 답변: 다시 하지 않기 위한 계획이 필요합니다."),
+                    option("직접 입력", "확인 답변: "));
+        }
+        return candidate("goal", "이 상담에서 가장 필요한 도움은 무엇인가요?",
+                option("증거 정리", "확인 답변: 증거를 어떻게 정리할지 알고 싶습니다."),
+                option("신고·상담", "확인 답변: 신고나 학교 상담 절차를 알고 싶습니다."),
+                option("안전 확보", "확인 답변: 보복이나 반복을 막고 안전하게 보호받고 싶습니다."),
+                option("관계 정리", "확인 답변: 상대와 어떻게 거리를 둬야 할지 알고 싶습니다."),
+                option("직접 입력", "확인 답변: "));
+    }
+
+    private static ConfirmationCandidate finalCheckQuestion() {
+        return candidate("final_check", "지금까지 말한 내용이 하나의 같은 사안이고, 이 내용으로 리포트를 생성해도 되나요?",
+                option("이 내용으로 분석", "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다."),
+                option("추가 설명 필요", "확인 답변: "));
+    }
+
+    private static List<ConfirmationCandidate> deepDiveQuestions(String text, long userMessageCount) {
+        List<ConfirmationCandidate> questions = new ArrayList<>();
+        boolean actor = hasAny(text, "제가", "내가", "사과", "가해", "올렸", "욕했", "때렸");
+        boolean groupChat = hasAny(text, "단톡", "단체 채팅", "채팅방");
+        boolean post = hasAny(text, "sns", "인스타", "게시", "댓글", "유포", "온라인")
+                || (hasAny(text, "사진", "영상") && hasAny(text, "올렸", "올라", "퍼졌", "공유", "단톡", "채팅방"));
+        boolean physical = hasAny(text, "멍", "상처", "맞", "때렸", "밀쳤", "밀쳐", "병원", "진단");
+
+        if (actor) {
+            if (!hasAny(text, "중단", "그만", "삭제", "수정")) {
+                questions.add(candidate("actor_stop", "지금 문제 행동은 완전히 중단됐나요? 게시물·댓글·대화가 남아 있다면 어떻게 처리했는지도 알려주세요.",
+                        option("완전히 중단", "확인 답변: 문제 행동은 완전히 중단했습니다."),
+                        option("삭제함", "확인 답변: 남아 있던 게시물이나 댓글을 삭제했습니다."),
+                        option("아직 남아 있음", "확인 답변: 아직 남아 있는 게시물이나 대화가 있습니다."),
+                        option("모르겠음", "확인 답변: 남아 있는지 아직 확인하지 못했습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            if (!hasAny(text, "사과", "피해 회복", "보호자", "담임", "상담")) {
+                questions.add(candidate("actor_recovery", "피해 회복은 어떤 방식으로 생각하고 있나요? 직접 연락보다 보호자나 학교를 통한 방식이 안전합니다.",
+                        option("학교 통해 사과", "확인 답변: 학교나 담임을 통해 사과하고 싶습니다."),
+                        option("보호자와 상의", "확인 답변: 보호자와 먼저 상의하겠습니다."),
+                        option("회복 방법 모름", "확인 답변: 어떤 방식으로 피해 회복을 해야 할지 모르겠습니다."),
+                        option("이미 상담함", "확인 답변: 보호자나 담임에게 이미 상담했습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            return questions.isEmpty() ? List.of(genericDetailQuestion(text)) : questions;
+        }
+
+        if (groupChat) {
+            if (!hasAny(text, "주도", "여러 명", "몇 명", "참여자", "강퇴", "초대 제외", "읽씹")) {
+                questions.add(candidate("chat_pattern", "단톡방에서는 괴롭힘이 어떤 방식으로 반복됐나요? 여러 명이 같이 한 건지, 한 명이 주도한 건지, 배제도 있었는지 확인해야 합니다.",
+                        option("여러 명이 같이", "확인 답변: 여러 명이 함께 조롱하거나 비방했습니다."),
+                        option("한 명이 주도", "확인 답변: 한 명이 주도하고 다른 친구들이 반응했습니다."),
+                        option("초대 제외·강퇴", "확인 답변: 초대 제외나 강퇴 같은 배제가 있었습니다."),
+                        option("읽씹·무시", "확인 답변: 단체로 무시하거나 읽씹하는 일이 있었습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            if (!hasAny(text, "담임", "선생", "보호자", "부모", "117", "신고")) {
+                questions.add(candidate("chat_support", "이 대화방 일을 지금 알고 있는 어른이나 학교 담당자가 있나요?",
+                        option("보호자에게 알림", "확인 답변: 보호자에게 알렸습니다."),
+                        option("담임에게 알림", "확인 답변: 담임이나 학교에 알렸습니다."),
+                        option("아직 말 못 함", "확인 답변: 아직 어른이나 학교에 말하지 못했습니다."),
+                        option("말하기 두려움", "확인 답변: 말하면 보복당할까 봐 두렵습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+        }
+
+        if (post) {
+            if (!hasAny(text, "공개", "비공개", "팔로워", "공유", "퍼졌", "유포", "댓글")) {
+                questions.add(candidate("post_spread", "게시물이나 사진이 어느 정도 퍼졌나요? 공개 범위와 댓글·공유 여부가 중요합니다.",
+                        option("공개 게시물", "확인 답변: 공개 게시물로 올라왔습니다."),
+                        option("친구들만", "확인 답변: 친구들이 볼 수 있는 범위로 올라왔습니다."),
+                        option("댓글 있음", "확인 답변: 댓글이나 추가 조롱이 붙었습니다."),
+                        option("공유됨", "확인 답변: 다른 사람에게 공유되거나 퍼졌습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            if (!hasAny(text, "URL", "링크", "작성자", "게시 시간", "게시글 번호", "계정")) {
+                questions.add(candidate("post_trace", "게시물의 URL, 작성자 계정, 게시 시간 중 확인 가능한 게 있나요?",
+                        option("URL 있음", "확인 답변: 게시물 URL이나 링크가 있습니다."),
+                        option("작성자 계정", "확인 답변: 작성자 계정 정보를 알고 있습니다."),
+                        option("게시 시간", "확인 답변: 게시 시간이 보이는 자료가 있습니다."),
+                        option("캡처만 있음", "확인 답변: 현재는 캡처만 있습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+        }
+
+        if (physical) {
+            if (!hasAny(text, "부위", "팔", "다리", "얼굴", "배", "머리", "통증")) {
+                questions.add(candidate("physical_injury", "멍이나 통증이 있다면 어느 부위이고 지금 상태는 어떤가요?",
+                        option("팔·다리", "확인 답변: 팔이나 다리에 멍 또는 통증이 있습니다."),
+                        option("얼굴·머리", "확인 답변: 얼굴이나 머리 쪽 피해가 있습니다."),
+                        option("몸통", "확인 답변: 배나 몸통 쪽 피해가 있습니다."),
+                        option("통증 지속", "확인 답변: 시간이 지나도 통증이 계속됩니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            if (!hasAny(text, "병원", "진단", "치료", "보건실", "목격")) {
+                questions.add(candidate("physical_support", "신체 피해를 본 사람이나 진료·보건실 기록이 있나요?",
+                        option("목격자 있음", "확인 답변: 상황을 본 목격자가 있습니다."),
+                        option("보건실 기록", "확인 답변: 보건실이나 학교에 기록이 있습니다."),
+                        option("병원 예정", "확인 답변: 병원 진료를 받을 예정입니다."),
+                        option("아직 없음", "확인 답변: 아직 진료나 목격자 확인은 없습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+        }
+
+        if (questions.isEmpty()) {
+            questions.add(genericDetailQuestion(text));
+        }
+        return questions;
+    }
+
+    private static ConfirmationCandidate genericDetailQuestion(String text) {
+        return candidate("more_context", "리포트를 더 정확하게 만들기 위해 하나만 더 확인할게요. 지금 가장 걱정되는 부분은 무엇인가요?",
+                option("보복", "확인 답변: 보복이나 반복이 가장 걱정됩니다."),
+                option("증거 부족", "확인 답변: 증거가 충분한지 걱정됩니다."),
+                option("학교에 말하기", "확인 답변: 학교나 담임에게 말하는 것이 걱정됩니다."),
+                option("관계 악화", "확인 답변: 친구 관계가 더 나빠질까 봐 걱정됩니다."),
+                option("직접 입력", "확인 답변: "));
+    }
+
+    private static ConfirmationCandidate candidate(String id, String question, Map<String, String>... options) {
+        return new ConfirmationCandidate(id, question, List.of(options));
+    }
+
+    private static Map<String, String> option(String label, String message) {
         return Map.of("label", label, "message", message);
     }
 
@@ -661,14 +839,6 @@ public class ChatService {
             if ("user".equals(message.getRole())) return message.getContent() == null ? "" : message.getContent().trim();
         }
         return "";
-    }
-
-    private String combinedUserText(List<Message> history) {
-        return history.stream()
-                .filter(message -> "user".equals(message.getRole()))
-                .map(Message::getContent)
-                .collect(Collectors.joining(" "))
-                .trim();
     }
 
     private boolean isIrrelevantInput(String text) {
@@ -1056,7 +1226,7 @@ public class ChatService {
                 아직 더 필요한 정보: """ + String.join(", ", readiness.missingInfo()) + """
 
                 # 화면에 별도로 제공될 확인 질문
-                """ + nextConfirmationQuestionPreview(readiness) + """
+                """ + nextConfirmationQuestionPreview(readiness, history) + """
 
                 # 인용 가능한 법령 목록
                 """ + allowedCitations + """
@@ -1115,11 +1285,17 @@ public class ChatService {
     }
 
     private ReportReadiness assessReadiness(List<Message> history) {
-        String combined = history.stream()
+        String combined = combinedUserText(history);
+        return analysisService.assessReportReadiness(combined, userMessageCount(history));
+    }
+
+    private static String combinedUserText(List<Message> history) {
+        if (history == null) return "";
+        return history.stream()
                 .filter(message -> "user".equals(message.getRole()))
                 .map(Message::getContent)
-                .collect(Collectors.joining(" "));
-        return analysisService.assessReportReadiness(combined, userMessageCount(history));
+                .collect(Collectors.joining(" "))
+                .trim();
     }
 
     private long userMessageCount(List<Message> history) {
@@ -1377,23 +1553,10 @@ public class ChatService {
         return evidenceGuide.get(0) + "부터 먼저 보관하세요.";
     }
 
-    private static String nextConfirmationQuestionPreview(ReportReadiness readiness) {
-        if (readiness == null || readiness.missingInfo() == null || readiness.missingInfo().isEmpty()) {
-            return "없음";
-        }
-        return toConfirmationQuestion(readiness.missingInfo().get(0));
-    }
-
-    private static String toConfirmationQuestion(String missingInfo) {
-        if (missingInfo.contains("무슨 일")) return "괜찮은 만큼만, 실제로 어떤 행동이 있었는지 조금 더 말해줄 수 있나요?";
-        if (missingInfo.contains("학교 관계")) return "상대가 같은 학교, 같은 반, 선배·후배, 학원 관계 중 어디에 해당하나요?";
-        if (missingInfo.contains("언제")) return "언제부터 몇 번 있었고, 지금도 계속되고 있나요?";
-        if (missingInfo.contains("증거")) return "지금 남아 있는 캡처, URL, 사진, 진단서, 목격자 같은 단서가 있을까요?";
-        if (missingInfo.contains("피해 영향") || missingInfo.contains("회복")) return "이 일 때문에 지금 가장 힘든 점이나 이미 해본 대처가 있을까요?";
-        if (missingInfo.contains("원하는 도움")) return "제가 어떤 방향으로 도와드리면 가장 필요할까요?";
-        if (missingInfo.contains("최종 확인")) return "위 내용이 하나의 같은 사안이고, 이 내용으로 리포트를 생성해도 되나요?";
-        if (missingInfo.contains("조금 더")) return "리포트를 정확히 만들기 위해 상황을 조금만 더 이어서 말해줄 수 있나요?";
-        return missingInfo + " 알려주세요.";
+    private static String nextConfirmationQuestionPreview(ReportReadiness readiness, List<Message> history) {
+        long userMessages = history == null ? 0 : history.stream().filter(message -> "user".equals(message.getRole())).count();
+        List<String> questions = previewConfirmationQuestions(readiness, combinedUserText(history), userMessages);
+        return questions.isEmpty() ? "없음" : questions.get(0);
     }
 
     private static boolean hasAny(String text, String... words) {

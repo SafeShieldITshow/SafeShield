@@ -1,6 +1,9 @@
 package com.safeshield.service;
 
+import com.safeshield.dto.ReportReadiness;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -153,5 +156,69 @@ class ChatServiceTest {
                 """;
 
         assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
+    void buildsContextSpecificFollowUpQuestionForGroupChat() {
+        ReportReadiness readiness = needsMoreContext();
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                readiness,
+                "같은 반 친구들이 단톡방에서 계속 욕설과 비방을 하고 있습니다. 캡처가 있고 불안해서 신고하고 싶습니다.",
+                4
+        );
+
+        assertTrue(questions.get(0).contains("단톡방에서는 괴롭힘이 어떤 방식"));
+    }
+
+    @Test
+    void changesFollowUpQuestionAfterGroupChatPatternIsAnswered() {
+        ReportReadiness readiness = needsMoreContext();
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                readiness,
+                "같은 반 친구들이 단톡방에서 계속 욕설과 비방을 하고 있습니다. " +
+                        "확인 답변: 여러 명이 함께 조롱하거나 비방했습니다. 캡처가 있고 불안합니다.",
+                5
+        );
+
+        assertTrue(questions.get(0).contains("알고 있는 어른이나 학교 담당자"));
+    }
+
+    @Test
+    void buildsPhysicalViolenceFollowUpQuestion() {
+        ReportReadiness readiness = needsMoreContext();
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                readiness,
+                "같은 반 친구가 오늘 밀쳐서 멍이 들었습니다. 멍 사진이 있고 보호자에게 말하려고 합니다.",
+                4
+        );
+
+        assertTrue(questions.get(0).contains("어느 부위"));
+    }
+
+    @Test
+    void buildsPerpetratorFollowUpQuestion() {
+        ReportReadiness readiness = needsMoreContext();
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                readiness,
+                "제가 같은 반 친구에게 단톡방에서 욕설을 했고 사진도 올렸습니다. 미안해서 어떻게 해야 할지 알고 싶습니다.",
+                4
+        );
+
+        assertTrue(questions.get(0).contains("완전히 중단"));
+    }
+
+    private ReportReadiness needsMoreContext() {
+        return new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "리포트 생성 전에 사안 구조를 더 확인해야 합니다.",
+                List.of("상담 내용을 조금 더 들은 뒤 리포트 생성"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
     }
 }

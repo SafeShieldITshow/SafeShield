@@ -114,8 +114,10 @@ public class AnalysisService {
 
         String role = detectRole(t);
         boolean schoolContext = hasSchoolContext(t);
-        boolean hasViolenceType = !detectViolenceTypes(t).isEmpty();
-        boolean enoughConversation = userMessageCount >= 4;
+        List<String> violenceTypes = detectViolenceTypes(t);
+        boolean hasViolenceType = !violenceTypes.isEmpty();
+        int requiredUserMessages = requiredUserMessageCount(t, role, violenceTypes);
+        boolean enoughConversation = userMessageCount >= requiredUserMessages;
         boolean coreFactsReady = relevantInput
                 && hasConcreteIncident
                 && hasRelationshipAnswer
@@ -212,6 +214,14 @@ public class AnalysisService {
         }
 
         return types;
+    }
+
+    private int requiredUserMessageCount(String text, String role, List<String> types) {
+        int required = 5;
+        if ("가해 또는 연루".equals(role) || types.size() >= 2) required = 6;
+        if (containsAny(text, "단톡", "단체 채팅", "여러 명", "무리", "보복", "협박", "지금도", "아직도")) required = 6;
+        if (containsAny(text, "성추행", "성희롱", "성적", "갈취", "스토킹", "흉기", "칼", "골절", "응급실")) required = 6;
+        return required;
     }
 
     private double calculateRiskScore(List<String> violenceTypes, String text) {
