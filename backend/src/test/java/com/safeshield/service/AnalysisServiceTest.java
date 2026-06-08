@@ -116,15 +116,19 @@ class AnalysisServiceTest {
     @Test
     void becomesReadyWhenCaseStructureIsConfirmed() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
-                "같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. 캡처와 URL이 있습니다.",
-                2
+                "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
+                        "캡처와 URL이 있고 불안해서 등교가 힘듭니다. 증거 정리와 신고 절차를 알고 싶습니다. " +
+                        "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
+                4
         );
         var result = analysisService.analyze(
-                "같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. 캡처와 URL이 있습니다.",
+                "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
+                        "캡처와 URL이 있고 불안해서 등교가 힘듭니다. 증거 정리와 신고 절차를 알고 싶습니다. " +
+                        "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
                 readiness
         );
 
-        assertTrue(readiness.ready(), "행위, 관계, 시점, 증거가 모두 확인되면 리포트 생성이 가능해야 합니다.");
+        assertTrue(readiness.ready(), "행위, 관계, 시점, 증거, 영향, 목표, 최종 확인이 모두 확인되면 리포트 생성이 가능해야 합니다.");
         assertTrue(result.keyFindings().stream().anyMatch(item -> item.startsWith("관계 판단:")));
         assertTrue(result.keyFindings().stream().anyMatch(item -> item.startsWith("판단 신뢰도:")));
     }
@@ -132,8 +136,10 @@ class AnalysisServiceTest {
     @Test
     void doesNotTreatVictimWordingAsPerpetrator() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
-                "같은 반 친구에게 제가 욕을 먹었고 오늘 캡처가 있습니다. 여러 번 반복됐습니다.",
-                2
+                "저는 피해를 당한 입장입니다. 같은 반 친구에게 제가 욕을 먹었고 오늘 캡처가 있습니다. " +
+                        "여러 번 반복됐고 불안해서 담임에게 상담하고 싶습니다. " +
+                        "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
+                4
         );
 
         assertTrue(readiness.ready(), "피해자 문장도 사안 구조가 충분하면 리포트 준비가 되어야 합니다.");
@@ -143,11 +149,15 @@ class AnalysisServiceTest {
     @Test
     void buildsPerpetratorFocusedReportGuidance() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
-                "같은 반 친구에게 제가 단톡방에서 여러 번 욕설을 했고 사진도 올렸습니다. 캡처가 있고 오늘 담임에게 말하려고 합니다.",
-                2
+                "저는 가해 또는 연루된 입장입니다. 같은 반 친구에게 제가 단톡방에서 여러 번 욕설을 했고 사진도 올렸습니다. " +
+                        "캡처가 있고 오늘 담임에게 말하려고 합니다. 미안하고 사과와 피해 회복 방법을 알고 싶습니다. " +
+                        "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
+                4
         );
         var result = analysisService.analyze(
-                "같은 반 친구에게 제가 단톡방에서 여러 번 욕설을 했고 사진도 올렸습니다. 캡처가 있고 오늘 담임에게 말하려고 합니다.",
+                "저는 가해 또는 연루된 입장입니다. 같은 반 친구에게 제가 단톡방에서 여러 번 욕설을 했고 사진도 올렸습니다. " +
+                        "캡처가 있고 오늘 담임에게 말하려고 합니다. 미안하고 사과와 피해 회복 방법을 알고 싶습니다. " +
+                        "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
                 readiness
         );
 
@@ -162,18 +172,40 @@ class AnalysisServiceTest {
     @Test
     void asksFinalConfirmationWhenFirstMessageAlreadyHasAllFacts() {
         ReportReadiness first = analysisService.assessReportReadiness(
-                "같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. 캡처와 URL이 있습니다.",
+                "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
+                        "캡처와 URL이 있고 불안해서 증거 정리와 신고 절차를 알고 싶습니다.",
                 1
         );
+        ReportReadiness almost = analysisService.assessReportReadiness(
+                "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
+                        "캡처와 URL이 있고 불안해서 증거 정리와 신고 절차를 알고 싶습니다.",
+                4
+        );
         ReportReadiness confirmed = analysisService.assessReportReadiness(
-                "같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. 캡처와 URL이 있습니다. " +
+                "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
+                        "캡처와 URL이 있고 불안해서 증거 정리와 신고 절차를 알고 싶습니다. " +
+                        "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
+                4
+        );
+
+        assertFalse(first.ready(), "첫 메시지에 정보가 충분해도 바로 리포트를 열지 않습니다.");
+        assertTrue(first.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
+        assertFalse(almost.ready(), "핵심 정보가 충분해도 최종 확인 전에는 리포트를 열지 않습니다.");
+        assertTrue(almost.missingInfo().contains("사안 내용 최종 확인"));
+        assertTrue(confirmed.ready(), "최종 확인 답변 후에는 리포트 생성이 가능해야 합니다.");
+    }
+
+    @Test
+    void doesNotOpenReportAfterOnlyTwoUserTurns() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
+                        "캡처와 URL이 있고 불안해서 증거 정리와 신고 절차를 알고 싶습니다. " +
                         "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
                 2
         );
 
-        assertFalse(first.ready(), "첫 메시지에 정보가 충분해도 최종 확인 없이 바로 리포트를 열지 않습니다.");
-        assertTrue(first.missingInfo().contains("사안 내용 최종 확인"));
-        assertTrue(confirmed.ready(), "최종 확인 답변 후에는 리포트 생성이 가능해야 합니다.");
+        assertFalse(readiness.ready(), "핵심 정보가 있어도 사용자 답변 2개만으로는 리포트를 열지 않습니다.");
+        assertTrue(readiness.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
     }
 
     private ReportReadiness readySchoolViolence() {

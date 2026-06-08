@@ -260,7 +260,7 @@ public class ChatService {
     private List<Map<String, Object>> confirmationPrompts(ReportReadiness readiness) {
         if (readiness.ready() || readiness.missingInfo().isEmpty()) return List.of();
         return readiness.missingInfo().stream()
-                .limit(2)
+                .limit(3)
                 .map(this::confirmationPrompt)
                 .toList();
     }
@@ -274,15 +274,28 @@ public class ChatService {
     }
 
     private String confirmationId(String missingInfo) {
+        if (missingInfo.contains("입장")) return "role";
         if (missingInfo.contains("무슨 일")) return "incident";
         if (missingInfo.contains("학교 관계")) return "relationship";
         if (missingInfo.contains("언제")) return "timeline";
         if (missingInfo.contains("증거")) return "evidence";
+        if (missingInfo.contains("피해 영향") || missingInfo.contains("회복")) return "impact";
+        if (missingInfo.contains("원하는 도움")) return "goal";
         if (missingInfo.contains("최종 확인")) return "final_check";
+        if (missingInfo.contains("조금 더")) return "more_context";
         return "detail";
     }
 
     private List<Map<String, String>> confirmationOptions(String missingInfo) {
+        if (missingInfo.contains("입장")) {
+            return List.of(
+                    option("피해를 당함", "확인 답변: 저는 피해를 당한 입장입니다."),
+                    option("가해·연루됨", "확인 답변: 저는 가해 또는 연루된 입장입니다."),
+                    option("목격자", "확인 답변: 저는 상황을 본 목격자입니다."),
+                    option("보호자", "확인 답변: 저는 보호자 입장에서 상담하고 있습니다."),
+                    option("직접 입력", "확인 답변: ")
+            );
+        }
         if (missingInfo.contains("무슨 일")) {
             return List.of(
                     option("욕설·비방", "확인 답변: 상대가 욕설이나 비방을 했습니다."),
@@ -315,10 +328,34 @@ public class ChatService {
                     option("아직 없음", "확인 답변: 아직 확보한 증거는 없습니다.")
             );
         }
+        if (missingInfo.contains("피해 영향") || missingInfo.contains("회복")) {
+            return List.of(
+                    option("불안·두려움", "확인 답변: 불안하거나 두려운 영향이 있습니다."),
+                    option("등교 어려움", "확인 답변: 학교에 가기 어렵거나 생활에 영향이 있습니다."),
+                    option("이미 알림", "확인 답변: 보호자나 담임에게 일부 알렸습니다."),
+                    option("사과·중단 시도", "확인 답변: 사과, 삭제, 중단 등 회복을 위한 행동이 있었습니다."),
+                    option("직접 입력", "확인 답변: ")
+            );
+        }
+        if (missingInfo.contains("원하는 도움")) {
+            return List.of(
+                    option("증거 정리", "확인 답변: 증거를 어떻게 정리할지 알고 싶습니다."),
+                    option("신고·상담", "확인 답변: 신고나 학교 상담 절차를 알고 싶습니다."),
+                    option("안전 확보", "확인 답변: 보복이나 반복을 막고 안전하게 보호받고 싶습니다."),
+                    option("사과·회복", "확인 답변: 사과나 피해 회복 방법을 알고 싶습니다."),
+                    option("직접 입력", "확인 답변: ")
+            );
+        }
         if (missingInfo.contains("최종 확인")) {
             return List.of(
                     option("이 내용으로 분석", "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다."),
                     option("추가 설명 필요", "확인 답변: ")
+            );
+        }
+        if (missingInfo.contains("조금 더")) {
+            return List.of(
+                    option("계속 이야기", "확인 답변: 리포트 전에 상황을 조금 더 이야기하겠습니다."),
+                    option("직접 입력", "확인 답변: ")
             );
         }
         return List.of(
@@ -867,6 +904,9 @@ public class ChatService {
         if (lawContext.length() > 2600) lawContext = lawContext.substring(0, 2600);
 
         String allowedCitations = formatAllowedCitations(lawContext);
+        if (!readiness.ready()) {
+            return new PromptContext(buildWarmIntakePrompt(readiness, allowedCitations, lawContext, history), lawContext, ReplyMode.CONVERSATION);
+        }
         if (replyMode == ReplyMode.CONVERSATION) {
             return new PromptContext(buildConversationPrompt(readiness, allowedCitations, lawContext, history), lawContext, replyMode);
         }
@@ -985,6 +1025,50 @@ public class ChatService {
                 "때렸", "밀쳤", "욕했", "욕을 했", "욕설을 했", "올렸", "게시", "댓글을 달",
                 "괴롭혔", "따돌", "놀렸", "빼앗", "강요");
         return directPhrase || (selfActor && harmfulAction);
+    }
+
+    private String buildWarmIntakePrompt(ReportReadiness readiness, String allowedCitations, String lawContext, List<Message> history) {
+        String combined = history.stream()
+                .filter(message -> "user".equals(message.getRole()))
+                .map(Message::getContent)
+                .collect(Collectors.joining(" "));
+        boolean perpetratorContext = isPerpetratorContext(combined);
+        String roleInstruction = perpetratorContext
+                ? """
+                - 사용자가 본인이 한 행동을 말하면 비난하지 말고, 중단·삭제 전 원본 보존·보호자/담임 공유·사과 방식·재발 방지 순서로 차분히 안내하세요.
+                - 피해자를 탓하거나 행동을 정당화하지 말고, 책임을 회복 가능한 행동으로 바꾸는 방향을 제시하세요.
+                """
+                : """
+                - 사용자가 피해나 두려움을 말하면 먼저 그 감정을 인정하고, 혼자 감당하지 않아도 된다는 메시지를 짧게 전하세요.
+                - 보복, 협박, 접근 위험이 보이면 안전 확보와 보호자·담임·117 연결을 우선 안내하세요.
+                """;
+
+        return """
+                당신은 학교폭력 상황을 듣는 따뜻한 상담자입니다. 지금 목표는 리포트를 빨리 만드는 것이 아니라,
+                사용자가 안전하게 말할 수 있도록 돕고 리포트에 필요한 사실을 자연스럽게 확인하는 것입니다.
+
+                # 답변 방식
+                1. 첫 문장은 사용자의 감정이나 부담을 먼저 받아주세요.
+                2. 사용자가 말한 내용을 복사하지 말고, 핵심만 1문장으로 부드럽게 정리하세요.
+                3. 지금 바로 할 수 있는 작은 행동 1~2개를 알려주세요.
+                4. 마지막에는 가장 필요한 확인 질문 1개만 자연스럽게 물어보세요.
+                5. '관련 법률', '증거 정보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
+                6. 리포트는 충분히 확인한 뒤 만들겠다고 설명하고, 준비 완료라고 말하지 마세요.
+                7. 모든 문장은 자연스러운 한국어로 쓰고, 딱딱한 조사표나 설문지처럼 보이지 않게 하세요.
+                8. 전체 답변은 4~7문장 안에서 끝내세요.
+
+                """ + roleInstruction + """
+
+                # 현재 리포트 준비 상태
+                상태: """ + readiness.status() + """
+                이유: """ + readiness.reason() + """
+                아직 더 필요한 정보: """ + String.join(", ", readiness.missingInfo()) + """
+
+                # 인용 가능한 법령 목록
+                """ + allowedCitations + """
+
+                # 참고 법령 원문
+                """ + lawContext;
     }
 
     private String buildConversationPrompt(ReportReadiness readiness, String allowedCitations, String lawContext, List<Message> history) {
@@ -1296,11 +1380,15 @@ public class ChatService {
     }
 
     private static String toConfirmationQuestion(String missingInfo) {
-        if (missingInfo.contains("무슨 일")) return "상대가 한 행동을 한 문장으로 더 구체적으로 적어주세요.";
+        if (missingInfo.contains("입장")) return "지금 상담은 어떤 입장에서 도와드리면 좋을까요?";
+        if (missingInfo.contains("무슨 일")) return "괜찮은 만큼만, 실제로 어떤 행동이 있었는지 조금 더 말해줄 수 있나요?";
         if (missingInfo.contains("학교 관계")) return "상대가 같은 학교, 같은 반, 선배·후배, 학원 관계 중 어디에 해당하나요?";
         if (missingInfo.contains("언제")) return "언제부터 몇 번 있었고, 지금도 계속되고 있나요?";
-        if (missingInfo.contains("증거")) return "캡처, URL, 사진, 진단서, 목격자 중 남아 있는 증거가 있나요?";
+        if (missingInfo.contains("증거")) return "지금 남아 있는 캡처, URL, 사진, 진단서, 목격자 같은 단서가 있을까요?";
+        if (missingInfo.contains("피해 영향") || missingInfo.contains("회복")) return "이 일 때문에 지금 가장 힘든 점이나 이미 해본 대처가 있을까요?";
+        if (missingInfo.contains("원하는 도움")) return "제가 어떤 방향으로 도와드리면 가장 필요할까요?";
         if (missingInfo.contains("최종 확인")) return "위 내용이 하나의 같은 사안이고, 이 내용으로 리포트를 생성해도 되나요?";
+        if (missingInfo.contains("조금 더")) return "리포트를 정확히 만들기 위해 상황을 조금만 더 이어서 말해줄 수 있나요?";
         return missingInfo + " 알려주세요.";
     }
 

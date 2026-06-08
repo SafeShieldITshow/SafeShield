@@ -64,7 +64,7 @@ public class AnalysisService {
         List<Integer> measureRange = detectMeasureRange(violenceTypes, text, readiness);
         List<String> evidenceGuide = evidenceGuideService.getEvidenceGuide(violenceTypes, text);
         List<String> findings = buildKeyFindings(text, violenceTypes, readiness);
-        List<String> actions = buildRecommendedActions(readiness, violenceTypes);
+        List<String> actions = buildRecommendedActions(readiness, violenceTypes, text);
 
         return new AnalysisResult(
                 violenceTypes,
@@ -93,24 +93,47 @@ public class AnalysisService {
                 "방금", "언제", "개월", "주일", "현재까지는 한 번", "여러 번", "지금도 계속", "정확한 시점");
         boolean hasEvidenceOrChannel = containsAny(t, "캡처", "녹음", "사진", "진단", "병원", "목격", "sns", "카톡", "단톡",
                 "댓글", "게시", "메시지", "증거", "아직 확보한 증거는 없습니다", "증거는 없습니다");
+        boolean hasRolePerspective = hasRolePerspective(t);
+        boolean hasImpactOrRecovery = hasImpactOrRecovery(t);
+        boolean hasUserGoal = hasUserGoal(t);
+        boolean hasFinalConfirmation = hasFinalConfirmation(t);
 
+        if (!hasRolePerspective) missing.add("상담자의 입장이 피해자, 가해·연루자, 목격자, 보호자 중 어디인지");
         if (!hasConcreteIncident) missing.add("무슨 일이 있었는지");
         if (!hasRelationshipAnswer) missing.add("상대가 학교 관계자인지");
         if (!hasTimeOrRepeat) missing.add("언제부터 몇 번 있었는지");
         if (!hasEvidenceOrChannel) missing.add("남아 있는 증거가 무엇인지");
-        if (relevantInput && userMessageCount < 2 && missing.isEmpty()) {
-            missing.add("사안 내용 최종 확인");
-        }
+        if (!hasImpactOrRecovery) missing.add("피해 영향이나 피해 회복을 위해 이미 한 일이 있는지");
+        if (!hasUserGoal) missing.add("원하는 도움이 무엇인지");
 
+        if (hasRolePerspective) facts.add("상담자 입장 확인");
         if (hasConcreteIncident) facts.add("구체적인 사건 내용 확인");
         if (hasRelationshipAnswer) facts.add("상대방과 학교 관계 확인");
         if (hasTimeOrRepeat) facts.add("시점 또는 반복성 단서 확인");
         if (hasEvidenceOrChannel) facts.add("증거 또는 발생 경로 단서 확인");
+        if (hasImpactOrRecovery) facts.add("피해 영향 또는 회복 노력 확인");
+        if (hasUserGoal) facts.add("사용자가 원하는 도움 확인");
+        if (hasFinalConfirmation) facts.add("같은 사안 여부와 리포트 생성 의사 확인");
 
         String role = detectRole(t);
         boolean schoolContext = hasSchoolContext(t);
         boolean hasViolenceType = !detectViolenceTypes(t).isEmpty();
-        boolean ready = relevantInput && userMessageCount >= 2 && missing.isEmpty();
+        boolean enoughConversation = userMessageCount >= 4;
+        boolean coreFactsReady = relevantInput
+                && hasRolePerspective
+                && hasConcreteIncident
+                && hasRelationshipAnswer
+                && hasTimeOrRepeat
+                && hasEvidenceOrChannel
+                && hasImpactOrRecovery
+                && hasUserGoal;
+        if (coreFactsReady && enoughConversation && !hasFinalConfirmation) {
+            missing.add("사안 내용 최종 확인");
+        }
+        if (relevantInput && !enoughConversation) {
+            missing.add("상담 내용을 조금 더 들은 뒤 리포트 생성");
+        }
+        boolean ready = relevantInput && enoughConversation && missing.isEmpty();
         boolean lowSchoolViolence = ready && (!schoolContext || !hasViolenceType);
 
         String status;
@@ -120,7 +143,7 @@ public class AnalysisService {
             reason = "학교폭력 상담과 직접 관련된 사건 내용이 아직 확인되지 않았습니다.";
         } else if (!ready) {
             status = "추가 확인 필요";
-            reason = "리포트 생성 전에 사안 구조를 확정할 핵심 정보 " + Math.min(2, missing.size()) + "가지를 더 확인해야 합니다.";
+            reason = "리포트 생성 전에 사안 구조와 사용자가 원하는 도움을 더 따뜻하게 확인해야 합니다.";
         } else if (lowSchoolViolence) {
             status = "학교폭력 해당성 낮음";
             reason = "현재 정보만으로는 학교 관계 또는 학교폭력 유형과의 연결이 약합니다.";
@@ -135,7 +158,34 @@ public class AnalysisService {
             reason = "학교 관계와 폭력 유형 단서가 확인되어 리포트 생성이 가능합니다.";
         }
 
-        return new ReportReadiness(ready, status, reason, missing.stream().limit(2).toList(), facts, relevantInput && !lowSchoolViolence);
+        return new ReportReadiness(ready, status, reason, missing.stream().distinct().toList(), facts, relevantInput && !lowSchoolViolence);
+    }
+
+    private boolean hasRolePerspective(String text) {
+        return isPerpetratorPerspective(text)
+                || containsAny(text,
+                "제가 당", "저한테", "저에게", "나한테", "나에게", "욕을 먹", "맞았", "피해", "괴롭힘을 당",
+                "목격", "봤어요", "보호자", "부모", "우리 아이", "친구가 당", "동생이 당",
+                "제가 했", "제가 올렸", "제가 욕", "제가 때렸", "제가 괴롭", "가해", "연루");
+    }
+
+    private boolean hasImpactOrRecovery(String text) {
+        return containsAny(text,
+                "무서", "불안", "힘들", "괴롭", "잠", "등교", "학교 가기", "상처", "멍", "병원", "치료",
+                "사과", "삭제", "멈췄", "그만", "담임", "보호자", "부모", "상담", "신고", "말했", "공유",
+                "회복", "반성", "재발", "차단", "울", "스트레스", "죄책감", "미안");
+    }
+
+    private boolean hasUserGoal(String text) {
+        return containsAny(text,
+                "어떻게", "뭘 해야", "도와", "신고", "리포트", "증거", "처벌", "조치", "멈추", "사과",
+                "화해", "보호", "상담", "알려", "대처", "해결", "피해 회복", "재발 방지", "부모님", "담임");
+    }
+
+    private boolean hasFinalConfirmation(String text) {
+        return containsAny(text,
+                "리포트를 생성해도 됩니다", "리포트 생성해도 됩니다", "이 내용으로 리포트", "이 내용으로 분석",
+                "하나의 같은 사안", "같은 사안", "최종 확인", "위 내용으로 분석", "위 내용으로 리포트");
     }
 
     private boolean isRelevantConsultationInput(String text) {
@@ -448,9 +498,16 @@ public class AnalysisService {
                 + "를 함께 반영했습니다.";
     }
 
-    private List<String> buildRecommendedActions(ReportReadiness readiness, List<String> types) {
+    private List<String> buildRecommendedActions(ReportReadiness readiness, List<String> types, String text) {
+        String t = normalize(text);
         if (!readiness.ready()) {
-            return List.of("상대방과 학교 관계, 발생 시점, 증거 유무를 먼저 보완하세요.", "확인 질문에 답한 뒤 리포트를 생성하세요.");
+            List<String> actions = new ArrayList<>();
+            actions.add("지금은 리포트를 서두르기보다, 무슨 일이 있었는지와 원하는 도움을 조금 더 확인하는 단계입니다.");
+            actions.add("말하기 어렵다면 날짜, 상대, 장소, 남아 있는 증거처럼 기억나는 조각만 먼저 적어도 됩니다.");
+            if (containsAny(t, "무서", "불안", "보복", "협박", "찾아와")) {
+                actions.add("보복이나 접근이 걱정되면 혼자 대응하지 말고 보호자, 담임, 학교전담경찰관 또는 117 상담에 먼저 연결하세요.");
+            }
+            return actions.stream().distinct().limit(4).toList();
         }
         if (!readiness.schoolViolenceLikely()) {
             return List.of("학교폭력 절차보다 일반 상담 또는 플랫폼 신고 가능성을 먼저 검토하세요.", "학교 관계가 추가로 확인되면 상담 내용을 보완하세요.");
@@ -464,11 +521,17 @@ public class AnalysisService {
             if (types.contains("신체 폭력")) {
                 actions.add("상대방의 상해 여부와 치료 필요성을 확인하고, 보호자·담임에게 사실관계를 숨기지 말고 설명하세요.");
             }
-            actions.add("사과는 직접 압박하지 말고 보호자나 학교를 통해 전달하고, 피해 회복 의사를 구체적으로 정리하세요.");
+            actions.add("사과는 직접 압박하지 말고 보호자나 학교를 통해 전달하고, 변명보다 어떤 행동을 중단했고 어떻게 회복하겠는지 적으세요.");
             actions.add("발생 경위, 본인이 한 행동, 중단한 조치, 재발 방지 계획을 시간순으로 작성하세요.");
-            return actions.stream().distinct().limit(4).toList();
+            if (containsAny(t, "미안", "죄책감", "후회", "반성")) {
+                actions.add("죄책감이 크다면 혼자 버티지 말고 담임·상담교사에게 먼저 말해 피해 회복 절차를 같이 정리하세요.");
+            }
+            return actions.stream().distinct().limit(6).toList();
         }
         List<String> actions = new ArrayList<>();
+        if (containsAny(t, "무서", "불안", "보복", "협박", "찾아와", "죽이")) {
+            actions.add("안전이 먼저입니다. 등하교 동선, 혼자 있는 시간, 온라인 연락을 줄이고 보호자·담임에게 바로 공유하세요.");
+        }
         if (types.contains("신체 폭력")) {
             actions.add("상처 사진과 진료 기록을 먼저 확보하고, 통증이나 상해가 있으면 보호자와 병원 기록을 남기세요.");
         }
@@ -481,9 +544,15 @@ public class AnalysisService {
         if (types.contains("성폭력")) {
             actions.add("혼자 대응하지 말고 보호자, 학교 전담교사, 전문 상담기관과 즉시 공유하세요.");
         }
+        if (containsAny(t, "부모", "보호자", "말 못", "말하기", "망설")) {
+            actions.add("바로 길게 설명하기 어렵다면 캡처와 함께 '혼자 해결하기 어렵다'는 한 문장으로 보호자나 담임에게 먼저 보여주세요.");
+        }
+        if (containsAny(t, "사과", "화해", "친구", "어색")) {
+            actions.add("사과나 화해를 원해도 단둘이 해결하려 하지 말고, 담임이나 보호자가 있는 자리에서 재발 방지 조건을 확인하세요.");
+        }
         actions.add("사안 구조와 증거를 정리한 뒤 담임 또는 학교폭력 담당자에게 상담을 요청하세요.");
         actions.add("반복되거나 보복 우려가 있으면 117 상담으로 보호 조치 절차를 확인하세요.");
-        return actions.stream().distinct().limit(4).toList();
+        return actions.stream().distinct().limit(6).toList();
     }
 
     private CaseFacts analyzeCaseFacts(String text, List<String> types, ReportReadiness readiness) {
