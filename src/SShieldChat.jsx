@@ -58,9 +58,24 @@ const confirmationPromptKey = (messageId, prompt, promptIndex) => (
     `${messageId}:${prompt.id || prompt.question || 'prompt'}:${promptIndex}`
 );
 
+const confirmationOptionKey = (option) => `${option.label || ''}:${option.message || ''}`;
+
 const isDirectConfirmationOption = (option) => (
     option.label === '직접 입력' || String(option.message || '').trim().endsWith(':')
 );
+
+const selectedConfirmationOptions = (draft) => {
+    if (!draft) return [];
+    if (Array.isArray(draft.selectedOptions)) return draft.selectedOptions;
+    if (draft.message) {
+        return [{
+            label: draft.label,
+            message: draft.message,
+            direct: Boolean(draft.direct),
+        }];
+    }
+    return [];
+};
 
 function now() {
     return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
@@ -557,15 +572,25 @@ const SShieldChat = () => {
 
         const key = confirmationPromptKey(messageId, prompt, promptIndex);
         const direct = isDirectConfirmationOption(option);
-        setConfirmationDrafts((prev) => ({
-            ...prev,
-            [key]: {
-                label: option.label,
-                message,
-                direct,
-                customText: direct ? prev[key]?.customText || '' : '',
-            },
-        }));
+        setConfirmationDrafts((prev) => {
+            const previousDraft = prev[key];
+            const selectedOptions = selectedConfirmationOptions(previousDraft);
+            const optionKey = confirmationOptionKey({ ...option, message });
+            const alreadySelected = selectedOptions.some((selected) => (
+                confirmationOptionKey(selected) === optionKey
+            ));
+            const nextSelectedOptions = alreadySelected
+                ? selectedOptions.filter((selected) => confirmationOptionKey(selected) !== optionKey)
+                : [...selectedOptions, { label: option.label, message, direct }];
+
+            return {
+                ...prev,
+                [key]: {
+                    selectedOptions: nextSelectedOptions,
+                    customText: previousDraft?.customText || '',
+                },
+            };
+        });
     };
 
     const handleConfirmationCustomChange = (messageId, prompt, promptIndex, value) => {
@@ -573,9 +598,7 @@ const SShieldChat = () => {
         setConfirmationDrafts((prev) => ({
             ...prev,
             [key]: {
-                label: prev[key]?.label || '직접 입력',
-                message: prev[key]?.message || '확인 답변:',
-                direct: prev[key]?.direct ?? true,
+                selectedOptions: selectedConfirmationOptions(prev[key]),
                 customText: value,
             },
         }));
@@ -586,14 +609,26 @@ const SShieldChat = () => {
             const key = confirmationPromptKey(message.id, prompt, promptIndex);
             const draft = confirmationDrafts[key];
             if (!draft) return null;
-            if (draft.direct) {
-                const customText = String(draft.customText || '').trim();
-                if (!customText) return null;
-                const prefix = String(draft.message || '확인 답변:').trim();
-                return prefix.endsWith(':') ? `${prefix} ${customText}` : `${prefix} ${customText}`;
-            }
+            const selectedOptions = selectedConfirmationOptions(draft);
             const customText = String(draft.customText || '').trim();
-            return customText ? `${draft.message} 추가 설명: ${customText}` : draft.message;
+            const selectedAnswers = selectedOptions
+                .map((option) => {
+                    const messageText = String(option.message || '').trim();
+                    if (!messageText) return null;
+                    if (option.direct) {
+                        if (!customText) return null;
+                        return messageText.endsWith(':') ? `${messageText} ${customText}` : `${messageText} ${customText}`;
+                    }
+                    return messageText;
+                })
+                .filter(Boolean);
+
+            const hasDirectSelection = selectedOptions.some((option) => option.direct);
+            if (customText && !hasDirectSelection) {
+                selectedAnswers.push(`추가 설명: ${customText}`);
+            }
+
+            return selectedAnswers.length ? selectedAnswers.join('\n') : null;
         })
         .filter(Boolean);
 
@@ -730,22 +765,30 @@ const SShieldChat = () => {
                                                 {msg.confirmationPrompts.map((prompt, promptIndex) => {
                                                     const promptKey = confirmationPromptKey(msg.id, prompt, promptIndex);
                                                     const draft = confirmationDrafts[promptKey];
-                                                    const selectedLabel = draft?.label;
+                                                    const selectedOptionKeys = new Set(
+                                                        selectedConfirmationOptions(draft).map(confirmationOptionKey)
+                                                    );
                                                     return (
                                                     <div className="confirmation-prompt" key={promptKey}>
                                                         <p>{prompt.question}</p>
+                                                        <span className="confirmation-multi-hint">여러 개 선택 가능 · 필요하면 직접 입력도 함께 작성</span>
                                                         <div className="confirmation-options">
-                                                            {prompt.options.map((option) => (
-                                                                <button
-                                                                    key={`${prompt.id}-${option.label}`}
-                                                                    className={selectedLabel === option.label ? 'selected' : ''}
-                                                                    type="button"
-                                                                    onClick={() => handleConfirmationOption(msg.id, prompt, promptIndex, option)}
-                                                                    disabled={isChatBusy}
-                                                                >
-                                                                    {option.label}
-                                                                </button>
-                                                            ))}
+                                                            {prompt.options.map((option) => {
+                                                                const optionKey = confirmationOptionKey(option);
+                                                                const selected = selectedOptionKeys.has(optionKey);
+                                                                return (
+                                                                    <button
+                                                                        key={`${prompt.id}-${option.label}`}
+                                                                        className={selected ? 'selected' : ''}
+                                                                        type="button"
+                                                                        aria-pressed={selected}
+                                                                        onClick={() => handleConfirmationOption(msg.id, prompt, promptIndex, option)}
+                                                                        disabled={isChatBusy}
+                                                                    >
+                                                                        {option.label}
+                                                                    </button>
+                                                                );
+                                                            })}
                                                         </div>
                                                         <input
                                                             className="confirmation-custom-input"
