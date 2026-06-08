@@ -16,11 +16,16 @@ const headers = (path) => ({
 });
 
 async function req(method, path, body) {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
-        method,
-        headers: headers(path),
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
+    let res;
+    try {
+        res = await fetch(`${API_BASE_URL}${path}`, {
+            method,
+            headers: headers(path),
+            ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        });
+    } catch {
+        throw new Error('서버에 연결할 수 없습니다. 새로고침 후 다시 시도해 주세요.');
+    }
 
     const data = await res.json().catch(() => ({}));
 

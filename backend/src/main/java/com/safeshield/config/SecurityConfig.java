@@ -14,6 +14,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 @Configuration
@@ -65,7 +66,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsSource() {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(parseOrigins(allowedOrigins));
+        cfg.setAllowedOriginPatterns(parseOriginPatterns(allowedOrigins));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setAllowCredentials(true);
@@ -80,6 +81,14 @@ public class SecurityConfig {
                 .filter(origin -> !origin.isBlank())
                 .map(this::stripTrailingSlash)
                 .toList();
+    }
+
+    private List<String> parseOriginPatterns(String origins) {
+        LinkedHashSet<String> patterns = new LinkedHashSet<>(parseOrigins(origins));
+        patterns.add("https://*.vercel.app");
+        patterns.add("http://localhost:*");
+        patterns.add("http://127.0.0.1:*");
+        return List.copyOf(patterns);
     }
 
     private String stripTrailingSlash(String value) {
