@@ -135,20 +135,34 @@ public class ReportService {
     private String buildSummary(AnalysisResult analysis) {
         String riskLabel = analysis.riskScore() >= 7 ? "높음" : analysis.riskScore() >= 4 ? "중간" : "낮음";
         String types = analysis.violenceTypes().isEmpty() ? "명확한 학교폭력 유형 없음" : String.join(", ", analysis.violenceTypes());
+        String snapshot = findDetail(analysis, "핵심 상황:");
         String relationship = findDetail(analysis, "관계 판단:");
         String pattern = findDetail(analysis, "발생 양상:");
+        String evidence = findDetail(analysis, "증거 수준:");
+        String personalized = findDetail(analysis, "맞춤 판단:");
         String confidence = findDetail(analysis, "판단 신뢰도:");
         String actions = analysis.recommendedActions().stream().findFirst().orElse("상담 내용을 보완하세요.");
+        String lead = snapshot.isBlank()
+                ? "유형은 " + types + "로 정리됩니다."
+                : snapshot;
         if (analysis.assessmentStatus().contains("가해")) {
             return analysis.assessmentStatus() + " 리포트입니다. "
-                    + "유형은 " + types + ", 사안 중대도는 " + analysis.riskScore() + "/10 (" + riskLabel + ")로 산정했습니다. "
-                    + relationship + " " + pattern + " " + confidence + " "
+                    + lead + " "
+                    + "사안 중대도는 " + analysis.riskScore() + "/10 (" + riskLabel + ")로 산정했습니다. "
+                    + compactSummaryParts(relationship, pattern, evidence, personalized, confidence) + " "
                     + "우선 조치: " + actions;
         }
         return analysis.assessmentStatus() + "입니다. "
-                + "유형은 " + types + ", 위험도는 " + analysis.riskScore() + "/10 (" + riskLabel + ")로 산정했습니다. "
-                + relationship + " " + pattern + " " + confidence + " "
+                + lead + " "
+                + "분류 유형은 " + types + "이고, 위험도는 " + analysis.riskScore() + "/10 (" + riskLabel + ")로 산정했습니다. "
+                + compactSummaryParts(relationship, pattern, evidence, personalized, confidence) + " "
                 + "우선 조치: " + actions;
+    }
+
+    private String compactSummaryParts(String... parts) {
+        return String.join(" ", java.util.Arrays.stream(parts)
+                .filter(part -> part != null && !part.isBlank())
+                .toList());
     }
 
     private String findDetail(AnalysisResult analysis, String prefix) {

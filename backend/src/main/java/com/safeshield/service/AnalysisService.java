@@ -463,14 +463,16 @@ public class AnalysisService {
         CaseFacts facts = analyzeCaseFacts(text, types, readiness);
         List<String> findings = new ArrayList<>();
         findings.add("판단 상태: " + readiness.status());
+        findings.add("핵심 상황: " + buildCaseSnapshot(text, types, readiness));
         findings.add("사안 역할: " + facts.role());
         findings.add("관계 판단: " + facts.relationship());
         findings.add(types.isEmpty() ? "행위 유형: 명확한 학교폭력 유형은 아직 확인되지 않았습니다." : "행위 유형: " + String.join(", ", types));
         findings.add("발생 양상: " + facts.incidentPattern());
         findings.add("증거 수준: " + facts.evidenceLevel());
+        findings.add("맞춤 판단: " + buildPersonalizedJudgment(text, types, readiness));
         findings.add("판단 신뢰도: " + facts.confidenceLevel() + " - " + facts.confidenceReason());
         findings.add("예상 조치 근거: " + buildMeasureBasis(text, types, readiness));
-        return findings.stream().distinct().limit(8).toList();
+        return findings.stream().distinct().limit(10).toList();
     }
 
     private String buildMeasureBasis(String text, List<String> types, ReportReadiness readiness) {
@@ -504,10 +506,17 @@ public class AnalysisService {
             List<String> actions = new ArrayList<>();
             actions.add("추가 연락, 댓글, 게시, 주변 공유를 즉시 중단하고 보복이나 압박으로 보일 행동을 피하세요.");
             if (types.contains("사이버 폭력")) {
-                actions.add("게시물·댓글·대화 원본과 삭제·수정 내역을 보관한 뒤, 학교나 보호자와 삭제 및 피해 회복 절차를 진행하세요.");
+                if (containsAny(t, "단톡", "단체 채팅", "채팅방", "카톡", "메시지")) {
+                    actions.add("단톡방이나 메시지에서 한 말은 삭제 전 원본과 수정·삭제 시각을 보관하고, 추가 설명은 직접 보내지 말고 학교나 보호자를 통해 전달하세요.");
+                } else {
+                    actions.add("게시물·댓글·대화 원본과 삭제·수정 내역을 보관한 뒤, 학교나 보호자와 삭제 및 피해 회복 절차를 진행하세요.");
+                }
             }
             if (types.contains("신체 폭력")) {
                 actions.add("상대방의 상해 여부와 치료 필요성을 확인하고, 보호자·담임에게 사실관계를 숨기지 말고 설명하세요.");
+            }
+            if (containsAny(t, "사진", "영상", "유포", "올렸")) {
+                actions.add("사진이나 영상이 포함됐다면 더 공유하지 말고, 삭제 요청과 피해 회복은 피해자에게 직접 압박하지 않는 방식으로 진행하세요.");
             }
             actions.add("사과는 직접 압박하지 말고 보호자나 학교를 통해 전달하고, 변명보다 어떤 행동을 중단했고 어떻게 회복하겠는지 적으세요.");
             actions.add("발생 경위, 본인이 한 행동, 중단한 조치, 재발 방지 계획을 시간순으로 작성하세요.");
@@ -521,10 +530,20 @@ public class AnalysisService {
             actions.add("안전이 먼저입니다. 등하교 동선, 혼자 있는 시간, 온라인 연락을 줄이고 보호자·담임에게 바로 공유하세요.");
         }
         if (types.contains("신체 폭력")) {
-            actions.add("상처 사진과 진료 기록을 먼저 확보하고, 통증이나 상해가 있으면 보호자와 병원 기록을 남기세요.");
+            if (containsAny(t, "멍", "상처", "출혈")) {
+                actions.add("멍이나 상처는 오늘 날짜가 남게 가까운 사진과 전체 위치 사진을 나눠 찍고, 통증이 지속되면 병원 기록을 남기세요.");
+            } else {
+                actions.add("상처 사진과 진료 기록을 먼저 확보하고, 통증이나 상해가 있으면 보호자와 병원 기록을 남기세요.");
+            }
         }
         if (types.contains("사이버 폭력")) {
-            actions.add("게시물·댓글·계정·URL·게시 시간을 삭제 전 한 화면에 보이게 저장하세요.");
+            if (containsAny(t, "단톡", "단체 채팅", "채팅방", "카톡", "메시지")) {
+                actions.add("단톡방은 앞뒤 맥락, 참여자 목록, 보낸 시간이 같이 보이게 저장하고 대화방을 바로 나가기 전에 원본을 확보하세요.");
+            } else if (containsAny(t, "사진", "영상", "sns", "인스타", "게시")) {
+                actions.add("SNS 사진·게시물은 URL, 작성자, 게시 시간, 댓글 흐름을 한 번에 남기고 원본 사진이 퍼진 경로도 따로 적어두세요.");
+            } else {
+                actions.add("게시물·댓글·계정·URL·게시 시간을 삭제 전 한 화면에 보이게 저장하세요.");
+            }
         }
         if (types.contains("갈취")) {
             actions.add("돈이나 물건 요구 메시지와 송금·결제 내역을 금액, 날짜, 상대 계정과 함께 정리하세요.");
@@ -541,6 +560,73 @@ public class AnalysisService {
         actions.add("사안 구조와 증거를 정리한 뒤 담임 또는 학교폭력 담당자에게 상담을 요청하세요.");
         actions.add("반복되거나 보복 우려가 있으면 117 상담으로 보호 조치 절차를 확인하세요.");
         return actions.stream().distinct().limit(6).toList();
+    }
+
+    private String buildCaseSnapshot(String text, List<String> types, ReportReadiness readiness) {
+        String t = normalize(text);
+        String actor = hasDefiniteSchoolRelationship(t) ? "학교 또는 학원 관계의 상대" : "상대";
+        String channel = detectChannel(t);
+        String conduct = detectConductSummary(t, types);
+        String pattern = containsAny(t, "지금도", "아직도", "계속", "반복", "매일", "여러 번", "몇 번")
+                ? "반복·지속되는 형태"
+                : containsAny(t, "한 번", "1번", "처음")
+                ? "현재 정보상 1회성에 가까운 형태"
+                : "반복성은 추가 확인이 필요한 형태";
+
+        if (readiness.status().contains("가해")) {
+            return actor + "에게 " + channel + "에서 " + conduct + " 행동을 했다고 진술한 사안이며, " + pattern + "로 정리됩니다.";
+        }
+        if (readiness.status().contains("학교폭력 해당성 낮음")) {
+            return channel + "에서 " + conduct + " 내용은 있으나 학교 관계가 약해 학교폭력 절차와의 연결은 제한적으로 봅니다.";
+        }
+        return actor + "로부터 " + channel + "에서 " + conduct + " 피해를 겪었다고 진술한 사안이며, " + pattern + "로 정리됩니다.";
+    }
+
+    private String buildPersonalizedJudgment(String text, List<String> types, ReportReadiness readiness) {
+        String t = normalize(text);
+        if (!readiness.ready()) {
+            return "결론보다 사안 구조 확인이 먼저라, 사용자가 말하기 쉬운 순서로 사실을 더 모아야 합니다.";
+        }
+        if (readiness.status().contains("가해")) {
+            if (containsAny(t, "미안", "죄책감", "후회", "반성")) {
+                return "방어보다 중단·원본 보존·피해 회복을 먼저 실행하면 상담과 학교 절차에서 설명 가능한 내용이 생깁니다.";
+            }
+            return "책임 회피로 보이지 않게 본인이 한 행동, 중단한 조치, 재발 방지 계획을 분리해 정리해야 합니다.";
+        }
+        if (containsAny(t, "무서", "불안", "보복", "찾아와", "협박")) {
+            return "사용자가 불안과 보복 우려를 말하고 있어 증거 정리와 동시에 보호자·담임에게 안전 조치를 요청하는 흐름이 적절합니다.";
+        }
+        if (containsAny(t, "말 못", "말하기", "부모", "보호자", "혼자")) {
+            return "혼자 설명하기 부담스러운 상태로 보여, 긴 설명보다 캡처와 짧은 도움 요청 문장부터 전달하는 방식이 맞습니다.";
+        }
+        if (types.contains("신체 폭력")) {
+            return "신체 피해는 시간이 지나면 흔적이 약해질 수 있어 사진·진료 기록을 먼저 확보하는 것이 판단 정확도를 높입니다.";
+        }
+        if (types.contains("사이버 폭력")) {
+            return "온라인 자료는 삭제되기 쉬워 화면 캡처보다 원본 링크·작성자·시간·참여자 정보를 함께 남기는 것이 중요합니다.";
+        }
+        return "현재 내용은 절차 안내보다 사실관계와 사용자가 원하는 해결 방향을 함께 정리하는 상담형 대응이 필요합니다.";
+    }
+
+    private String detectChannel(String text) {
+        if (containsAny(text, "단톡", "단체 채팅", "채팅방")) return "단체 채팅방";
+        if (containsAny(text, "카톡", "메시지", "dm", "디엠")) return "개별 메시지";
+        if (containsAny(text, "sns", "인스타", "게시", "댓글", "온라인")) return "SNS 또는 온라인 공간";
+        if (containsAny(text, "교실", "학교", "복도", "운동장", "학원")) return "학교 또는 학원 공간";
+        return "확인된 공간";
+    }
+
+    private String detectConductSummary(String text, List<String> types) {
+        if (types.contains("신체 폭력") && containsAny(text, "때렸", "맞았", "밀쳤", "밀쳐", "멍", "상처")) {
+            return "때리거나 밀치는 신체 폭력";
+        }
+        if (types.contains("사이버 폭력") && containsAny(text, "사진", "영상", "유포", "올렸", "게시")) return "사진·게시물 관련 괴롭힘";
+        if (containsAny(text, "욕", "욕설", "비방", "모욕", "놀림")) return "욕설·비방·조롱";
+        if (containsAny(text, "따돌", "왕따", "무시", "배제", "혼자")) return "따돌림이나 배제";
+        if (containsAny(text, "돈", "갈취", "빼앗", "강요")) return "금품 요구나 강요";
+        if (containsAny(text, "스토킹", "따라", "기다리", "찾아와")) return "반복 접근이나 연락";
+        if (!types.isEmpty()) return String.join("·", types);
+        return "구체적 행위";
     }
 
     private CaseFacts analyzeCaseFacts(String text, List<String> types, ReportReadiness readiness) {

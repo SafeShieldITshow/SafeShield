@@ -92,6 +92,25 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void buildsDifferentGuidanceForDifferentCaseContexts() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var groupChat = analysisService.analyze(
+                "같은 반 친구들이 단톡방에서 계속 욕설과 비방을 하고 있습니다. 캡처가 있고 불안해서 담임에게 신고하고 싶습니다.",
+                readiness
+        );
+        var physical = analysisService.analyze(
+                "같은 반 친구가 오늘 한 번 밀쳐서 멍이 들었습니다. 멍 사진이 있고 보호자에게 말하려고 합니다.",
+                readiness
+        );
+
+        assertTrue(groupChat.keyFindings().stream().anyMatch(item -> item.contains("단체 채팅방")));
+        assertTrue(groupChat.recommendedActions().stream().anyMatch(item -> item.contains("참여자 목록")));
+        assertTrue(physical.keyFindings().stream().anyMatch(item -> item.contains("때리거나 밀치는 신체 폭력")));
+        assertTrue(physical.recommendedActions().stream().anyMatch(item -> item.contains("가까운 사진과 전체 위치 사진")));
+    }
+
+    @Test
     void differentiatesMinorAndSeverePhysicalCases() {
         ReportReadiness readiness = readySchoolViolence();
 
