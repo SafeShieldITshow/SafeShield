@@ -130,6 +130,12 @@ const riskGuide = (score) => {
     return '사실관계를 더 확인하면서 차분히 정리할 수 있는 단계입니다.';
 };
 
+const detailValue = (details = [], label) => {
+    const prefix = `${label}:`;
+    const item = details.find((detail) => String(detail).startsWith(prefix));
+    return item ? String(item).slice(prefix.length).trim() : '';
+};
+
 const formatDate = (value) => {
     if (!value) return '';
     const date = new Date(value);
@@ -200,6 +206,13 @@ const SShieldResult = () => {
     const reportCreatedAt = formatDate(report?.created_at);
     const typeTags = report?.violence_types?.length ? report.violence_types : ['분류 정보 없음'];
     const riskStatusClass = riskClass(score);
+    const assessmentDetails = report?.assessment_details || [];
+    const confidenceText = detailValue(assessmentDetails, '판단 신뢰도') || '추가 대화에 따라 달라질 수 있습니다.';
+    const measureBasis = detailValue(assessmentDetails, '예상 조치 근거') || measureRangeText;
+    const visibleAssessmentDetails = assessmentDetails.filter((item) => (
+        !String(item).startsWith('판단 신뢰도:')
+        && !String(item).startsWith('예상 조치 근거:')
+    ));
 
     const logout = () => {
         clearSession();
@@ -278,21 +291,18 @@ const SShieldResult = () => {
                                     </div>
                                 </section>
 
-                                <div className="report-stat-grid">
-                                    <div className="report-stat-card">
-                                        <span>위험도</span>
-                                        <strong>{riskLevel(score)}</strong>
-                                        <p>{riskGuide(score)}</p>
-                                    </div>
+                                <div className="report-stat-grid compact">
                                     <div className="report-stat-card">
                                         <span>분류 유형</span>
                                         <strong>{typeTags.length}개</strong>
-                                        <p>{typeTags.join(', ')}</p>
+                                        <div className="mini-tags">
+                                            {typeTags.map((type) => <em key={type}>{type}</em>)}
+                                        </div>
                                     </div>
                                     <div className="report-stat-card">
-                                        <span>예상 조치</span>
-                                        <strong>{mStart + 1}호~{mEnd + 1}호</strong>
-                                        <p>{MEASURES[mStart]}부터 {MEASURES[mEnd]}까지</p>
+                                        <span>판단 신뢰도</span>
+                                        <strong>{confidenceText.split(' - ')[0]}</strong>
+                                        <p>{confidenceText.split(' - ').slice(1).join(' - ') || '확인된 사실 기준으로 산정했습니다.'}</p>
                                     </div>
                                     <div className="report-stat-card">
                                         <span>자료 정리</span>
@@ -311,7 +321,7 @@ const SShieldResult = () => {
                                             </div>
                                         </div>
                                         <ul className="ss-report-list clean">
-                                            {(report.assessment_details || []).map((item) => (
+                                            {visibleAssessmentDetails.map((item) => (
                                                 <li key={item}>{item}</li>
                                             ))}
                                         </ul>
@@ -322,7 +332,7 @@ const SShieldResult = () => {
                                             <span>02</span>
                                             <div>
                                                 <p className="ss-label">우선 권장 조치</p>
-                                                <small>지금 바로 할 수 있는 순서 중심입니다.</small>
+                                                <small>분석 기준으로 정리한 권장 순서입니다.</small>
                                             </div>
                                         </div>
                                         <ul className="ss-report-list clean">
@@ -332,22 +342,6 @@ const SShieldResult = () => {
                                         </ul>
                                     </section>
                                 </div>
-
-                                <section className="ss-card ss-risk-card refined">
-                                    <div className="risk-copy">
-                                        <p className="ss-label">위험도 산정</p>
-                                        <h3>{score}/10 · {riskLevel(score)}</h3>
-                                        <p>{riskGuide(score)}</p>
-                                    </div>
-                                    <div className="risk-meter" aria-label={`위험도 ${score}점`}>
-                                        <div style={{ width: `${Math.max(4, Math.min(100, score * 10))}%` }} />
-                                    </div>
-                                    <div className="ss-tags left">
-                                        {typeTags.map((type) => (
-                                            <span key={type} className="tag p">{type}</span>
-                                        ))}
-                                    </div>
-                                </section>
 
                                 <div className="report-main-grid">
                                     <section className="ss-card report-section">
@@ -368,7 +362,7 @@ const SShieldResult = () => {
                                         </div>
                                     </section>
 
-                                    <section className="ss-card report-section">
+                                    <section className="ss-card report-section measure-section">
                                         <div className="report-section-head">
                                             <span>04</span>
                                             <div>
@@ -376,6 +370,7 @@ const SShieldResult = () => {
                                                 <small>{measureRangeText}</small>
                                             </div>
                                         </div>
+                                        <p className="measure-basis-note">{measureBasis}</p>
                                         <div className="measure-steps">
                                             {MEASURES.map((measure, i) => (
                                                 <div

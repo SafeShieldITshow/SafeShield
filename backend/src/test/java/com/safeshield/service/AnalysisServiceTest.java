@@ -92,6 +92,23 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void doesNotOverrateMildComplimentOrMisunderstandingAsViolence() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "같은 반 친구에게 귀엽다고 했는데 상대가 그냥 기분이 상한 정도라고 했습니다. 욕설로 볼 일은 아니고 오늘 한 번 있었으며 불편한 점은 없다고 합니다. 어떻게 정리해야 하나요? " +
+                        "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
+                6
+        );
+        var result = analysisService.analyze(
+                "같은 반 친구에게 귀엽다고 했는데 상대가 그냥 기분이 상한 정도라고 했습니다. 욕설로 볼 일은 아니고 오늘 한 번 있었으며 불편한 점은 없다고 합니다. 어떻게 정리해야 하나요? " +
+                        "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
+                readiness
+        );
+
+        assertFalse(result.violenceTypes().contains("언어 폭력"), "가벼운 칭찬이나 오해 표현을 욕설·언어폭력으로 바로 분류하면 안 됩니다.");
+        assertTrue(result.riskScore() <= 3.2, "가벼운 표현·1회성·영향 없음은 위험도를 낮게 산정해야 합니다.");
+    }
+
+    @Test
     void buildsDifferentGuidanceForDifferentCaseContexts() {
         ReportReadiness readiness = readySchoolViolence();
 
@@ -243,6 +260,19 @@ class AnalysisServiceTest {
 
         assertFalse(readiness.ready(), "핵심 정보가 있어도 사용자 답변 2개만으로는 리포트를 열지 않습니다.");
         assertTrue(readiness.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
+    }
+
+    @Test
+    void acceptsNoImpactAnswerAsImpactConfirmation() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설을 오늘 한 번 했습니다. " +
+                        "캡처가 있고 불편한 점은 없습니다. 증거 정리 방법을 알고 싶습니다. " +
+                        "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
+                6
+        );
+
+        assertFalse(readiness.missingInfo().contains("피해 영향이나 피해 회복을 위해 이미 한 일이 있는지"),
+                "불편한 점 없음도 영향 확인 답변으로 인정해야 합니다.");
     }
 
     @Test

@@ -289,7 +289,7 @@ public class ChatService {
         if (trimmed.contains("아래 확인 카드") || trimmed.contains("아래 선택지")) return trimmed;
 
         return (trimmed + "\n\n"
-                + "아래 확인 카드에 답해 주세요. 선택하거나 직접 적으면 다음 답변과 리포트에 반영하겠습니다.").trim();
+                + "방금 답변을 반영했습니다. 이어서 필요한 확인만 하나 더 할게요.").trim();
     }
 
     private static String stripGeneratedQuestionSentences(String reply) {
@@ -487,6 +487,7 @@ public class ChatService {
                 option("불안·두려움", "확인 답변: 불안하거나 두려운 영향이 있습니다."),
                 option("등교 어려움", "확인 답변: 학교에 가기 어렵거나 생활에 영향이 있습니다."),
                 option("보복 걱정", "확인 답변: 보복이나 반복이 걱정됩니다."),
+                option("큰 영향 없음", "확인 답변: 현재 크게 불편한 점이나 생활 영향은 없습니다."),
                 option("이미 알림", "확인 답변: 보호자나 담임에게 일부 알렸습니다."),
                 option("직접 입력", "확인 답변: "));
     }

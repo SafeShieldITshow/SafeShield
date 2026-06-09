@@ -787,10 +787,7 @@ const SShieldChat = () => {
                                                     );
                                                     return (
                                                     <div className="confirmation-prompt" key={promptKey}>
-                                                        <span className="confirmation-kicker">답변과 이어지는 확인</span>
-                                                        {prompt.purpose && (
-                                                            <span className="confirmation-purpose">{prompt.purpose}</span>
-                                                        )}
+                                                        <span className="confirmation-kicker">다음 확인</span>
                                                         <p>{prompt.question}</p>
                                                         <span className="confirmation-multi-hint">
                                                             {prompt.instruction || '여러 개 선택 가능 · 필요하면 직접 입력도 함께 작성'}

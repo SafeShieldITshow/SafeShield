@@ -109,7 +109,7 @@ public class AnalysisService {
         if (hasTimeOrRepeat) facts.add("시점 또는 반복성 단서 확인");
         if (hasEvidenceOrChannel) facts.add("증거 또는 발생 경로 단서 확인");
         if (hasImpactOrRecovery) facts.add("피해 영향 또는 회복 노력 확인");
-        if (hasUserGoal) facts.add("사용자가 원하는 도움 확인");
+        if (hasUserGoal) facts.add("요청한 도움 방향 확인");
         if (hasFinalConfirmation) facts.add("같은 사안 여부와 리포트 생성 의사 확인");
 
         String role = detectRole(t);
@@ -141,7 +141,7 @@ public class AnalysisService {
             reason = "학교폭력 상담과 직접 관련된 사건 내용이 아직 확인되지 않았습니다.";
         } else if (!ready) {
             status = "추가 확인 필요";
-            reason = "리포트 생성 전에 사안 구조와 사용자가 원하는 도움을 더 따뜻하게 확인해야 합니다.";
+            reason = "리포트 생성 전에 사안 구조와 요청한 도움 방향을 더 확인해야 합니다.";
         } else if (lowSchoolViolence) {
             status = "학교폭력 해당성 낮음";
             reason = "현재 정보만으로는 학교 관계 또는 학교폭력 유형과의 연결이 약합니다.";
@@ -160,10 +160,19 @@ public class AnalysisService {
     }
 
     private boolean hasImpactOrRecovery(String text) {
-        return containsAny(text,
+        return hasNoMeaningfulImpact(text) || containsAny(text,
                 "무서", "불안", "힘들", "괴롭", "잠", "등교", "학교 가기", "상처", "멍", "병원", "치료",
                 "사과", "삭제", "멈췄", "그만", "담임", "보호자", "부모", "상담", "신고", "말했", "공유",
                 "회복", "반성", "재발", "차단", "울", "스트레스", "죄책감", "미안");
+    }
+
+    private boolean hasNoMeaningfulImpact(String text) {
+        return containsAny(text,
+                "영향 없음", "영향은 없", "영향이 없", "생활 영향 없음", "생활 영향은 없", "생활 영향이 없",
+                "큰 영향 없음", "큰 영향은 없", "크게 영향", "불편한 사항 없음", "불편한 사항은 없", "불편한 사항이 없",
+                "불편한 점 없음", "불편한 점은 없", "불편한 점이 없", "불편한 건 없", "불편한 것은 없",
+                "불편하지 않", "큰 불편 없음", "크게 불편", "괜찮", "문제 없음", "문제는 없",
+                "별 영향", "해당 없음", "기분 때문", "그냥 기분", "기분이 상한 정도");
     }
 
     private boolean hasUserGoal(String text) {
@@ -190,11 +199,12 @@ public class AnalysisService {
     private List<String> detectViolenceTypes(String text) {
         String t = normalize(text);
         List<String> types = new ArrayList<>();
+        boolean mildExpressionOnly = isMildExpressionOrMisunderstanding(t);
 
         if (containsAny(t, "때렸", "맞았", "폭행", "밀쳤", "발로", "주먹", "상처", "멍", "상해", "다쳤")) {
             types.add("신체 폭력");
         }
-        if (containsAny(t, "욕", "협박", "모욕", "비하", "비방", "놀림", "죽이", "꺼져", "소문", "명예훼손")) {
+        if (!mildExpressionOnly && containsAny(t, "욕", "협박", "모욕", "비하", "비방", "놀림", "죽이", "꺼져", "소문", "명예훼손")) {
             types.add("언어 폭력");
         }
         if (containsAny(t, "sns", "카톡", "카카오", "단톡", "단체 채팅", "디엠", "dm", "인스타", "게시", "댓글", "사진 올", "온라인")) {
@@ -249,6 +259,8 @@ public class AnalysisService {
         boolean directThreat = containsAny(t, "죽이", "때리겠", "찾아가", "가만 안", "협박");
         boolean weaponOrGroup = containsAny(t, "흉기", "칼", "위험한 물건", "여러 명", "단체로", "무리", "선배");
         boolean resolved = containsAny(t, "삭제", "사과", "멈췄", "그만뒀", "해결");
+        boolean mildExpression = isMildExpressionOrMisunderstanding(t);
+        boolean noMeaningfulImpact = hasNoMeaningfulImpact(t);
 
         if (repeated) score += 0.6;
         if (longTerm) score += 0.4;
@@ -261,6 +273,8 @@ public class AnalysisService {
         if (distress) score += 0.45;
         if (severeDistress) score += 0.8;
         if (resolved && !ongoing && !repeated) score -= 0.4;
+        if (mildExpression) score -= 0.8;
+        if (noMeaningfulImpact) score -= 0.5;
 
         double injuryScore = 0.0;
         if (containsAny(t, "멍", "상처", "다쳤")) injuryScore = Math.max(injuryScore, 0.5);
@@ -283,6 +297,8 @@ public class AnalysisService {
                     + factors.intent() * 0.5
                     + factors.aggravation() * 0.55
                     - factors.mitigation() * 0.35;
+            if (mildExpression) factorBasedScore -= 1.2;
+            if (noMeaningfulImpact) factorBasedScore -= 0.7;
             score = Math.max(score, factorBasedScore);
         }
 
@@ -295,7 +311,9 @@ public class AnalysisService {
                 && violenceTypes.stream().allMatch(type -> type.equals("언어 폭력") || type.equals("사이버 폭력"));
 
         double cap = 10.0;
-        if (verbalOrCyberOnly && !repeated && !severeSignal) {
+        if (mildExpression && !repeated && !severeSignal) {
+            cap = noMeaningfulImpact ? 2.6 : 3.2;
+        } else if (verbalOrCyberOnly && !repeated && !severeSignal) {
             cap = publicSpread || identityExposure ? 5.0 : 4.2;
         } else if (verbalOrCyberOnly && !severeSignal) {
             cap = 5.8;
@@ -398,6 +416,10 @@ public class AnalysisService {
         if (containsAny(t, "장난", "실수", "몰랐")) {
             intent = Math.max(1, intent - 1);
         }
+        if (isMildExpressionOrMisunderstanding(t)) {
+            seriousness = Math.min(seriousness, 1);
+            intent = Math.max(1, intent - 1);
+        }
 
         int mitigation = 0;
         if (containsAny(t, "삭제", "사과", "멈췄", "그만뒀", "반성", "돌려줬", "변상")) mitigation += 1;
@@ -420,6 +442,15 @@ public class AnalysisService {
 
         int total = Math.max(0, seriousness + persistence + intent + aggravation - mitigation);
         return new MeasureFactors(seriousness, persistence, intent, mitigation, aggravation, total, transferCandidate, expelCandidate);
+    }
+
+    private boolean isMildExpressionOrMisunderstanding(String text) {
+        boolean mildPhrase = containsAny(text,
+                "귀엽", "귀엽다고", "예쁘", "잘생겼", "칭찬", "장난", "농담", "오해", "기분 때문", "기분이 상");
+        boolean severePhrase = containsAny(text,
+                "협박", "죽이", "꺼져", "비방", "모욕", "명예훼손", "유포", "게시", "사진", "영상",
+                "때렸", "맞았", "밀쳤", "멍", "상처", "따돌", "왕따", "돈", "갈취", "성추행", "성희롱");
+        return mildPhrase && !severePhrase;
     }
 
     private boolean containsAny(String text, String... words) {
@@ -595,7 +626,7 @@ public class AnalysisService {
     private String buildPersonalizedJudgment(String text, List<String> types, ReportReadiness readiness) {
         String t = normalize(text);
         if (!readiness.ready()) {
-            return "결론보다 사안 구조 확인이 먼저라, 사용자가 말하기 쉬운 순서로 사실을 더 모아야 합니다.";
+            return "결론보다 사안 구조 확인이 먼저라, 사실관계와 요청한 도움 방향을 더 모아야 합니다.";
         }
         if (readiness.status().contains("가해")) {
             if (containsAny(t, "미안", "죄책감", "후회", "반성")) {
@@ -604,7 +635,7 @@ public class AnalysisService {
             return "책임 회피로 보이지 않게 본인이 한 행동, 중단한 조치, 재발 방지 계획을 분리해 정리해야 합니다.";
         }
         if (containsAny(t, "무서", "불안", "보복", "찾아와", "협박")) {
-            return "사용자가 불안과 보복 우려를 말하고 있어 증거 정리와 동시에 보호자·담임에게 안전 조치를 요청하는 흐름이 적절합니다.";
+            return "불안과 보복 우려가 확인되어 증거 정리와 동시에 보호자·담임에게 안전 조치를 요청하는 흐름이 적절합니다.";
         }
         if (containsAny(t, "말 못", "말하기", "부모", "보호자", "혼자")) {
             return "혼자 설명하기 부담스러운 상태로 보여, 긴 설명보다 캡처와 짧은 도움 요청 문장부터 전달하는 방식이 맞습니다.";
@@ -615,7 +646,7 @@ public class AnalysisService {
         if (types.contains("사이버 폭력")) {
             return "온라인 자료는 삭제되기 쉬워 화면 캡처보다 원본 링크·작성자·시간·참여자 정보를 함께 남기는 것이 중요합니다.";
         }
-        return "현재 내용은 절차 안내보다 사실관계와 사용자가 원하는 해결 방향을 함께 정리하는 상담형 대응이 필요합니다.";
+        return "현재 내용은 절차 안내보다 사실관계와 원하는 해결 방향을 함께 정리하는 방식이 필요합니다.";
     }
 
     private String detectChannel(String text) {
