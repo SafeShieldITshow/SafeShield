@@ -383,6 +383,11 @@ public class ChatService {
         String text = combinedText == null ? "" : combinedText;
         List<ConfirmationCandidate> candidates = new ArrayList<>();
 
+        if (hasRoleConflict(text) && !hasRoleConflictAnswer(text)) {
+            candidates.add(roleConflictQuestion());
+            return candidates;
+        }
+
         for (String missingInfo : readiness.missingInfo()) {
             if (missingInfo.contains("무슨 일")) candidates.add(incidentQuestion(text));
             else if (missingInfo.contains("학교 관계")) candidates.add(relationshipQuestion(text));
@@ -394,10 +399,65 @@ public class ChatService {
             else if (missingInfo.contains("조금 더")) candidates.addAll(deepDiveQuestions(text, userMessageCount));
         }
 
-        if (candidates.isEmpty()) {
+        candidates = new ArrayList<>(candidates.stream()
+                .filter(candidate -> !isConfirmationCandidateAnswered(candidate.id(), text))
+                .toList());
+
+        if (candidates.isEmpty() && !hasAnsweredDeepDive(text)) {
             candidates.add(genericDetailQuestion(text));
         }
         return candidates.stream().distinct().toList();
+    }
+
+    private static boolean isConfirmationCandidateAnswered(String id, String text) {
+        if (id == null) return false;
+        return switch (id) {
+            case "role_conflict" -> hasRoleConflictAnswer(text);
+            case "actor_stop", "impact_actor" -> hasAny(text,
+                    "완전히 중단", "문제 행동은 완전히 중단", "중단했습니다",
+                    "삭제함", "삭제했습니다", "남아 있는 게시물", "남아 있는지", "아직 남아",
+                    "확인하지 못", "아직 피해 회복 조치를 하지 못");
+            case "actor_recovery", "goal_actor" -> hasAny(text,
+                    "학교나 담임을 통해 사과", "보호자와 먼저 상의", "회복 방법",
+                    "이미 상담", "사과나 피해 회복 방법", "재발 방지", "학교에 어떻게 설명");
+            case "chat_pattern" -> hasAny(text,
+                    "여러 명이 함께", "한 명이 주도", "초대 제외", "강퇴", "읽씹", "단체로 무시");
+            case "chat_support" -> hasAny(text,
+                    "보호자에게 알렸", "담임이나 학교에 알렸", "아직 어른이나 학교에 말하지 못",
+                    "말하면 보복당할까");
+            case "post_spread" -> hasAny(text,
+                    "공개 게시물", "친구들이 볼 수 있는 범위", "댓글이나 추가 조롱", "공유되거나 퍼졌");
+            case "post_trace" -> hasAny(text,
+                    "게시물 url", "링크가 있습니다", "작성자 계정", "게시 시간이 보이는", "캡처만 있습니다");
+            case "physical_injury" -> hasAny(text,
+                    "팔이나 다리", "얼굴이나 머리", "몸통", "통증이 계속");
+            case "physical_support" -> hasAny(text,
+                    "목격자가 있습니다", "보건실이나 학교에 기록", "병원 진료를 받을 예정",
+                    "진료나 목격자 확인은 없습니다");
+            default -> false;
+        };
+    }
+
+    private static boolean hasRoleConflict(String text) {
+        String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        return hasVictimContext(t) && isPerpetratorText(t);
+    }
+
+    private static boolean hasRoleConflictAnswer(String text) {
+        return hasAny(text,
+                "같은 사안에서 서로 충돌", "같은 사건 안의 충돌", "별도 사안", "새 상담으로 분리",
+                "피해를 당한 입장이고 가해한 내용은 아닙니다", "제가 한 행동도 있는 사안");
+    }
+
+    private static boolean hasAnsweredDeepDive(String text) {
+        return hasAny(text,
+                "확인 답변: 문제 행동은 완전히 중단", "확인 답변: 남아 있던 게시물", "확인 답변: 아직 남아",
+                "확인 답변: 남아 있는지 아직 확인", "확인 답변: 학교나 담임을 통해 사과",
+                "확인 답변: 보호자와 먼저 상의", "확인 답변: 여러 명이 함께",
+                "확인 답변: 한 명이 주도", "확인 답변: 보호자에게 알렸",
+                "확인 답변: 담임이나 학교에 알렸", "확인 답변: 공개 게시물",
+                "확인 답변: 게시물 url", "확인 답변: 팔이나 다리",
+                "확인 답변: 목격자가 있습니다", "추가 설명:");
     }
 
     private static ConfirmationCandidate incidentQuestion(String text) {
@@ -523,6 +583,14 @@ public class ChatService {
         return candidate("final_check", "지금까지 말한 내용이 하나의 같은 사안이고, 이 내용으로 리포트를 생성해도 되나요?",
                 option("이 내용으로 분석", "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다."),
                 option("추가 설명 필요", "확인 답변: "));
+    }
+
+    private static ConfirmationCandidate roleConflictQuestion() {
+        return candidate("role_conflict", "앞에서는 피해를 당한 내용이 있었고, 방금은 본인이 한 행동도 나온 것 같아요. 같은 사건 안에서 서로 충돌한 내용인가요, 아니면 별도 사건인가요?",
+                option("같은 사건 안의 충돌", "확인 답변: 같은 사안에서 서로 충돌한 내용입니다."),
+                option("별도 사건", "확인 답변: 방금 말한 내용은 별도 사안입니다. 새 상담으로 분리하는 게 좋습니다."),
+                option("나는 피해 입장", "확인 답변: 저는 피해를 당한 입장이고 가해한 내용은 아닙니다."),
+                option("내 행동도 있음", "확인 답변: 제가 한 행동도 있는 사안입니다."));
     }
 
     private static List<ConfirmationCandidate> deepDiveQuestions(String text, long userMessageCount) {
@@ -1295,11 +1363,14 @@ public class ChatService {
         boolean directPhrase = containsAny(t,
                 "제가 때렸", "내가 때렸", "제가 밀쳤", "내가 밀쳤",
                 "제가 욕했", "내가 욕했", "제가 욕을 했", "내가 욕을 했",
-                "제가 올렸", "내가 올렸", "제가 사진을 올렸", "내가 사진을 올렸",
+                "제가 올렸", "내가 올렸", "제가 올린", "내가 올린", "제가 사진을 올렸", "내가 사진을 올렸",
                 "제가 게시", "내가 게시", "제가 댓글", "내가 댓글",
                 "제가 괴롭혔", "내가 괴롭혔", "제가 따돌", "내가 따돌",
                 "저도 같이 욕", "같이 욕했", "장난으로 올렸",
-                "사과하고 싶", "제가 처벌받", "내가 처벌받", "제가 가해", "내가 가해", "본인이 가해");
+                "사과하고 싶", "제가 처벌받", "내가 처벌받",
+                "제가 가해", "내가 가해", "나는 가해", "저는 가해", "본인이 가해",
+                "제가 가해자", "내가 가해자", "나는 가해자", "저는 가해자",
+                "가해자입니다", "가해를 했", "제가 한 행동", "내가 한 행동", "괴롭힌 건 저");
         if (directPhrase) return true;
         if (victimContext) return false;
         boolean selfActor = containsAny(t, "제가", "내가", "저도", "본인이");

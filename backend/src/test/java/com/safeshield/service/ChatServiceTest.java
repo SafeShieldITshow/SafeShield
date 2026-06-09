@@ -238,6 +238,20 @@ class ChatServiceTest {
     }
 
     @Test
+    void asksRoleConflictQuestionWhenVictimAndPerpetratorSignalsAreMixed() {
+        ReportReadiness readiness = needsMoreContext();
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                readiness,
+                "같은 반 친구가 저한테 욕을 해서 신고하려고 했습니다. " +
+                        "그런데 사실 저는 가해자입니다. 제가 단톡방에 사진을 올렸고 욕도 했습니다.",
+                5
+        );
+
+        assertTrue(questions.get(0).contains("같은 사건 안에서 서로 충돌"));
+    }
+
+    @Test
     void doesNotUsePerpetratorQuestionForVictimWantingApology() {
         ReportReadiness readiness = new ReportReadiness(
                 false,

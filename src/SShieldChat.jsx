@@ -646,6 +646,9 @@ const SShieldChat = () => {
         if (isChatBusy) return;
         const answers = confirmationAnswersForMessage(message);
         if (!answers.length) return;
+        setMessages((prev) => prev.map((item) => (
+            item.id === message.id ? { ...item, confirmationPrompts: [] } : item
+        )));
         handleSend(answers.join('\n'));
     };
 

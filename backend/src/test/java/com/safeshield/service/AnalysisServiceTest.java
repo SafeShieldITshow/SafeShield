@@ -281,6 +281,21 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void directPerpetratorAdmissionOverridesEarlierVictimContext() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "처음에는 같은 반 친구가 저한테 욕을 해서 신고하려고 한다고 말했습니다. " +
+                        "그런데 사실 저는 가해자입니다. 제가 오늘 한 번 단톡방에 사진을 올렸고 욕도 했습니다. " +
+                        "캡처가 있고 사과나 피해 회복 방법을 알고 싶습니다. " +
+                        "확인 답변: 같은 사안에서 서로 충돌한 내용입니다. " +
+                        "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
+                8
+        );
+
+        assertTrue(readiness.status().contains("가해"),
+                "이전 피해 맥락이 있어도 직접적인 가해 인정은 가해 또는 연루 관점으로 처리해야 합니다.");
+    }
+
+    @Test
     void treatsGuardianMentionAsVictimWhenUserIsSeekingHelpForSelf() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "같은 반 친구가 저를 때려서 멍 사진이 있고 오늘 보호자에게 말하려고 합니다. " +
