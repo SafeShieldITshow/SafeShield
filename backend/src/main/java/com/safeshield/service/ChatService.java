@@ -1101,9 +1101,9 @@ public class ChatService {
     }
 
     static boolean shouldGuardIrrelevantInput(String latestUserMessage, boolean conversationalFollowUp) {
-        return isIrrelevantInput(latestUserMessage)
-                && !conversationalFollowUp
-                && !isConfirmationAnswer(latestUserMessage);
+        if (isConfirmationAnswer(latestUserMessage)) return false;
+        if (isExplicitOffTopicNonsense(latestUserMessage)) return true;
+        return isIrrelevantInput(latestUserMessage) && !conversationalFollowUp;
     }
 
     private static boolean isConfirmationAnswer(String text) {
@@ -1115,28 +1115,42 @@ public class ChatService {
         String t = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
         if (t.isBlank()) return false;
         if (t.length() <= 1) return true;
-        boolean hasConsultationSignal = containsAny(t,
-                "학교", "같은 반", "반 친구", "친구", "선배", "후배", "학생", "담임", "선생", "학원",
-                "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
-                "sns", "카톡", "단톡", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "갈취", "스토킹",
-                "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담");
-        if (hasConsultationSignal) return false;
+        if (hasConsultationSignal(t)) return false;
+        if (isExplicitNonsenseOrSmallTalk(t)) return true;
         if (isAcknowledgement(t) || isEmotionalConversation(t)) return false;
 
         return true;
     }
 
+    private static boolean isExplicitOffTopicNonsense(String text) {
+        String t = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+        return !t.isBlank() && !hasConsultationSignal(t) && isExplicitNonsenseOrSmallTalk(t);
+    }
+
+    private static boolean hasConsultationSignal(String text) {
+        return containsAny(text,
+                "학교", "같은 반", "반 친구", "친구", "선배", "후배", "학생", "담임", "선생", "학원",
+                "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
+                "괴롭", "괴롭힘", "놀림", "놀렸", "놀려", "비하", "무시", "소외", "패드립",
+                "sns", "카톡", "단톡", "채팅", "채팅방", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "갈취", "스토킹",
+                "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담");
+    }
+
+    private static boolean isExplicitNonsenseOrSmallTalk(String text) {
+        if (containsAny(text,
+                "똥싸", "똥 쌌", "오줌", "방귀", "뭐먹", "배고파", "졸려", "잠와", "심심",
+                "게임", "롤 ", "발로란트", "마크", "유튜브", "노래", "아이돌", "날씨", "농담",
+                "ㅋㅋ", "ㅎㅎ", "ㅗ", "ㅅㅂ", "씨발", "개소리", "헛소리")) {
+            return true;
+        }
+        String compact = text.replaceAll("\\s+", "");
+        return compact.matches("^[ㅋㅎㅠㅜㅡㅇㄴㄱㄷㅁㅂㅅㅈㅊㅍㅎ]{2,}$");
+    }
+
     private String buildIrrelevantInputReply() {
         return """
-                학교폭력 상담과 직접 관련된 사건 내용이 아직 확인되지 않았습니다.
-
-                이 채팅에서는 학교폭력, 사이버폭력, 따돌림, 협박, 폭행, 증거 정리처럼 상담에 필요한 내용만 분석할 수 있습니다.
-
-                상담을 이어가려면 아래처럼 적어주세요.
-                • 누가 어떤 행동을 했는지
-                • 상대가 학교 관계자인지
-                • 언제부터 몇 번 있었는지
-                • 캡처, 사진, 진단서, 목격자 같은 증거가 있는지
+                이 내용은 학교폭력 상담과 직접 연결되는 정보로 보기 어렵습니다.
+                상담 기록과 리포트가 섞이지 않게, 학교폭력·사이버폭력·따돌림·협박·폭행·증거 정리와 관련된 내용만 이어서 다룰게요.
                 """.trim();
     }
 

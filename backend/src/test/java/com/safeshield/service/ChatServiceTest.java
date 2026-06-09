@@ -307,6 +307,16 @@ class ChatServiceTest {
     }
 
     @Test
+    void guardsExplicitNonsenseEvenInsideConversation() {
+        assertTrue(ChatService.shouldGuardIrrelevantInput("배고파서 게임하고 싶다 ㅋㅋ", false));
+        assertTrue(ChatService.shouldGuardIrrelevantInput("똥싸기", false));
+        assertTrue(ChatService.shouldGuardIrrelevantInput("짜증나서 똥싸기", true));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("무서워서 학교에 말하기가 걱정돼요", true));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("친구가 게임 채팅에서 욕하고 놀려요", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("친구가 씨발이라고 욕했어요", false));
+    }
+
+    @Test
     void doesNotRepeatAnsweredCoreConfirmationQuestion() {
         ReportReadiness relationshipMissing = new ReportReadiness(
                 false,
