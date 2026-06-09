@@ -69,31 +69,39 @@ public class ReportService {
         }
 
         AnalysisResult analysis = analysisService.analyze(userText, readiness);
-        String reportTitle = normalizeTitle(title, analysis);
-        String summary = buildSummary(analysis);
-
         Report report = new Report();
         report.setUser(user);
         report.setSession(session);
-        report.setTitle(reportTitle);
-        report.setSummary(summary);
-        report.setRiskScore(analysis.riskScore());
-
-        try {
-            report.setViolenceTypes(objectMapper.writeValueAsString(analysis.violenceTypes()));
-            report.setMatchedLaws(objectMapper.writeValueAsString(analysis.matchedLaws()));
-            report.setLawRelevanceScores(objectMapper.writeValueAsString(analysis.lawRelevanceScores()));
-            report.setExpectedMeasureRange(objectMapper.writeValueAsString(analysis.expectedMeasureRange()));
-            report.setEvidenceGuide(objectMapper.writeValueAsString(analysis.evidenceGuide()));
-            report.setAssessmentStatus(analysis.assessmentStatus());
-            report.setAssessmentDetails(objectMapper.writeValueAsString(analysis.keyFindings()));
-            report.setRecommendedActions(objectMapper.writeValueAsString(analysis.recommendedActions()));
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "리포트 데이터를 저장하지 못했습니다.");
-        }
+        applyAnalysis(report, analysis, title);
 
         reportRepository.save(report);
         return toMap(report);
+    }
+
+    public boolean refreshReportsForSession(User user, Session session) {
+        if (user == null || session == null) return false;
+        requireOwner(user, session);
+
+        List<Report> reports = reportRepository.findBySessionOrderByCreatedAtAsc(session);
+        if (reports.isEmpty()) return false;
+
+        List<Message> userMessages = messageRepository.findBySessionOrderByCreatedAtAsc(session).stream()
+                .filter(m -> "user".equals(m.getRole()))
+                .toList();
+        if (userMessages.isEmpty()) return false;
+
+        String userText = userMessages.stream()
+                .map(Message::getContent)
+                .reduce("", (a, b) -> a + " " + b)
+                .trim();
+        ReportReadiness readiness = analysisService.assessReportReadiness(userText, userMessages.size());
+        AnalysisResult analysis = analysisService.analyze(userText, readiness);
+
+        for (Report report : reports) {
+            applyAnalysis(report, analysis, generatedOrBlankTitle(report));
+        }
+        reportRepository.saveAll(reports);
+        return true;
     }
 
     public List<Map<String, Object>> list(User user) {
@@ -130,6 +138,31 @@ public class ReportService {
         if (title != null && !title.isBlank()) return title.trim();
         String primaryType = analysis.violenceTypes().isEmpty() ? "상담" : analysis.violenceTypes().get(0);
         return analysis.assessmentStatus() + " - " + primaryType;
+    }
+
+    private String generatedOrBlankTitle(Report report) {
+        String title = report.getTitle();
+        if (title == null || title.isBlank() || title.contains(" - ")) return "";
+        return title;
+    }
+
+    private void applyAnalysis(Report report, AnalysisResult analysis, String title) {
+        report.setTitle(normalizeTitle(title, analysis));
+        report.setSummary(buildSummary(analysis));
+        report.setRiskScore(analysis.riskScore());
+
+        try {
+            report.setViolenceTypes(objectMapper.writeValueAsString(analysis.violenceTypes()));
+            report.setMatchedLaws(objectMapper.writeValueAsString(analysis.matchedLaws()));
+            report.setLawRelevanceScores(objectMapper.writeValueAsString(analysis.lawRelevanceScores()));
+            report.setExpectedMeasureRange(objectMapper.writeValueAsString(analysis.expectedMeasureRange()));
+            report.setEvidenceGuide(objectMapper.writeValueAsString(analysis.evidenceGuide()));
+            report.setAssessmentStatus(analysis.assessmentStatus());
+            report.setAssessmentDetails(objectMapper.writeValueAsString(analysis.keyFindings()));
+            report.setRecommendedActions(objectMapper.writeValueAsString(analysis.recommendedActions()));
+        } catch (Exception e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "리포트 데이터를 저장하지 못했습니다.");
+        }
     }
 
     private String buildSummary(AnalysisResult analysis) {

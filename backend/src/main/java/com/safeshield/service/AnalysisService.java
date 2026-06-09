@@ -256,9 +256,14 @@ public class AnalysisService {
         boolean publicSpread = containsAny(t, "공개", "퍼졌", "유포", "공유", "단톡", "단체", "여러 명", "댓글", "게시");
         boolean identityExposure = containsAny(t, "사진", "영상", "얼굴", "신상", "이름", "학교명", "전화번호");
         boolean severeDistress = containsAny(t, "죽고", "자살", "자해", "극단");
-        boolean distress = severeDistress || containsAny(t, "무서", "불안", "학교 못", "등교 못", "잠을 못", "상담", "병원");
-        boolean directThreat = containsAny(t, "죽이", "때리겠", "찾아가", "가만 안", "협박");
-        boolean weaponOrGroup = containsAny(t, "흉기", "칼", "위험한 물건", "여러 명", "단체로", "무리", "선배");
+        boolean noMedicalOrInjury = containsAny(t, "병원 안", "병원은 안", "병원 가지", "치료 안", "진단서 없",
+                "멍 없음", "멍은 없", "상처 없음", "상처는 없", "다친 곳 없", "다친 곳은 없", "크게 다치지", "다치지는 않");
+        boolean noThreat = containsAny(t, "협박 없", "협박은 없", "보복 걱정 없", "때리겠다는 말은 없", "위협은 없");
+        boolean distress = severeDistress
+                || containsAny(t, "무서", "불안", "학교 못", "등교 못", "잠을 못", "상담")
+                || (containsAny(t, "병원") && !noMedicalOrInjury);
+        boolean directThreat = containsAny(t, "죽이", "때리겠", "찾아가", "가만 안", "협박") && !noThreat;
+        boolean weaponOrGroup = containsAny(t, "흉기", "칼", "위험한 물건", "여러 명", "단체로", "무리");
         boolean resolved = containsAny(t, "삭제", "사과", "멈췄", "그만뒀", "해결");
         boolean mildExpression = isMildExpressionOrMisunderstanding(t);
         boolean noMeaningfulImpact = hasNoMeaningfulImpact(t);
@@ -282,6 +287,7 @@ public class AnalysisService {
         if (containsAny(t, "멍", "상처", "다쳤")) injuryScore = Math.max(injuryScore, 0.5);
         if (containsAny(t, "진단", "치료", "병원", "상해")) injuryScore = Math.max(injuryScore, 0.9);
         if (containsAny(t, "출혈", "골절", "응급실", "수술", "기절")) injuryScore = Math.max(injuryScore, 1.3);
+        if (noMedicalOrInjury && injuryScore < 1.3) injuryScore = 0.0;
         score += injuryScore;
 
         if (violenceTypes.contains("성폭력") && containsAny(t, "사진", "영상", "촬영", "유포", "온라인", "dm", "디엠")) {
@@ -304,8 +310,10 @@ public class AnalysisService {
             score = Math.max(score, factorBasedScore);
         }
 
+        boolean physicalType = violenceTypes.contains("신체 폭력");
+        boolean seriousPhysicalSignal = physicalType && (injuryScore >= 0.9 || directThreat || weaponOrGroup);
         boolean severeSignal = severeDistress || injuryScore >= 1.1 || directThreat || weaponOrGroup
-                || violenceTypes.contains("신체 폭력")
+                || seriousPhysicalSignal
                 || violenceTypes.contains("성폭력")
                 || violenceTypes.contains("스토킹")
                 || violenceTypes.contains("갈취");
@@ -324,8 +332,12 @@ public class AnalysisService {
             cap = publicSpread || identityExposure ? 5.0 : 4.2;
         } else if (verbalOrCyberOnly && !severeSignal) {
             cap = 5.8;
-        } else if (violenceTypes.contains("신체 폭력") && oneOff && injuryScore <= 0.5 && !directThreat && !weaponOrGroup) {
+        } else if (physicalType && oneOff && injuryScore <= 0.5 && !directThreat && !weaponOrGroup) {
             cap = 5.3;
+        } else if (physicalType && injuryScore <= 0.5 && !directThreat && !weaponOrGroup && (repeated || longTerm || ongoing)) {
+            cap = 6.8;
+        } else if (physicalType && injuryScore <= 0.5 && !directThreat && !weaponOrGroup) {
+            cap = 5.8;
         } else if (!severeSignal) {
             cap = 5.8;
         }

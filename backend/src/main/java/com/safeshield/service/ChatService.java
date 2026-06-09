@@ -88,6 +88,7 @@ public class ChatService {
     private final MessageRepository messageRepository;
     private final LawApiService lawApiService;
     private final AnalysisService analysisService;
+    private final ReportService reportService;
 
     @Value("${groq.api-key:}")
     private String groqApiKey;
@@ -120,11 +121,13 @@ public class ChatService {
     private volatile String lastProvider = "none";
 
     public ChatService(SessionRepository sessionRepository, MessageRepository messageRepository,
-                       LawApiService lawApiService, AnalysisService analysisService) {
+                       LawApiService lawApiService, AnalysisService analysisService,
+                       ReportService reportService) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.lawApiService = lawApiService;
         this.analysisService = analysisService;
+        this.reportService = reportService;
         CloseableHttpClient httpClient = HttpClients.custom()
                 .setDefaultRequestConfig(RequestConfig.custom()
                         .setConnectTimeout(Timeout.ofSeconds(8))
@@ -170,12 +173,14 @@ public class ChatService {
         aiMessage.setContent(reply);
         messageRepository.save(aiMessage);
 
+        boolean reportUpdated = reportService.refreshReportsForSession(user, session);
         long userMessageCount = messageRepository.countBySessionAndRole(session, "user");
         return Map.of(
                 "session_id", session.getId(),
                 "reply", reply,
                 "user_message_count", userMessageCount,
                 "new_session_started", newSessionStarted,
+                "report_updated", reportUpdated,
                 "report_ready", readiness.ready(),
                 "report_status", readiness.status(),
                 "report_reason", readiness.reason(),
@@ -529,7 +534,7 @@ public class ChatService {
         boolean physical = hasAny(text, "멍", "상처", "맞", "때렸", "밀쳤", "밀쳐", "병원", "진단");
 
         if (actor) {
-            if (!hasAny(text, "중단", "그만", "삭제", "수정")) {
+            if (!hasAny(text, "중단", "그만", "삭제", "수정", "남아", "남아 있", "확인하지 못")) {
                 questions.add(candidate("actor_stop", "지금 문제 행동은 완전히 중단됐나요? 게시물·댓글·대화가 남아 있다면 어떻게 처리했는지도 알려주세요.",
                         option("완전히 중단", "확인 답변: 문제 행동은 완전히 중단했습니다."),
                         option("삭제함", "확인 답변: 남아 있던 게시물이나 댓글을 삭제했습니다."),

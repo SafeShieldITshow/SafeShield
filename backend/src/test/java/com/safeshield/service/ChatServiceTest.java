@@ -223,6 +223,21 @@ class ChatServiceTest {
     }
 
     @Test
+    void doesNotRepeatActorStopQuestionAfterRemainingPostAnswer() {
+        ReportReadiness readiness = needsMoreContext();
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                readiness,
+                "제가 같은 반 친구에게 단톡방에서 욕설을 했고 사진도 올렸습니다. " +
+                        "사과나 피해 회복 방법을 알고 싶습니다. " +
+                        "확인 답변: 아직 남아 있는 게시물이나 대화가 있습니다.",
+                5
+        );
+
+        assertFalse(questions.stream().anyMatch(question -> question.contains("완전히 중단")));
+    }
+
+    @Test
     void doesNotUsePerpetratorQuestionForVictimWantingApology() {
         ReportReadiness readiness = new ReportReadiness(
                 false,

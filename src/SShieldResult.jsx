@@ -175,25 +175,36 @@ const SShieldResult = () => {
     const [error, setError] = useState('');
     const [params] = useSearchParams();
     const navigate = useNavigate();
+    const reportId = params.get('id');
 
     useEffect(() => {
-        const id = params.get('id');
-        const request = id ? api.get(`/reports/${id}`) : api.get('/reports/latest');
+        const id = reportId;
+        let cancelled = false;
 
-        request
+        const applyReport = (data) => {
+            setReport(data);
+            const rawKeys = data.evidence_guide?.length ? data.evidence_guide : DEFAULT_EVIDENCE_KEYS;
+            const keys = compactEvidenceKeys(rawKeys);
+            const fallbackDesc = evidenceFallbackDesc(data.assessment_status);
+            setEvidenceItems(keys.map((key, index) => ({
+                id: `e${index}`,
+                icon: EVIDENCE_MAP[key]?.icon ?? '증거',
+                title: key,
+                desc: EVIDENCE_MAP[key]?.desc ?? fallbackDesc,
+            })));
+        };
+
+        const loadReport = (initial = false) => {
+            const request = id ? api.get(`/reports/${id}`) : api.get('/reports/latest');
+            if (initial) setLoading(true);
+            return request
             .then((data) => {
-                setReport(data);
-                const rawKeys = data.evidence_guide?.length ? data.evidence_guide : DEFAULT_EVIDENCE_KEYS;
-                const keys = compactEvidenceKeys(rawKeys);
-                const fallbackDesc = evidenceFallbackDesc(data.assessment_status);
-                setEvidenceItems(keys.map((key, index) => ({
-                    id: `e${index}`,
-                    icon: EVIDENCE_MAP[key]?.icon ?? '증거',
-                    title: key,
-                    desc: EVIDENCE_MAP[key]?.desc ?? fallbackDesc,
-                })));
+                if (cancelled) return;
+                setError('');
+                applyReport(data);
             })
             .catch((e) => {
+                if (cancelled || !initial) return;
                 setReport(null);
                 setError(e.message);
                 setEvidenceItems(DEFAULT_EVIDENCE_KEYS.map((key, index) => ({
@@ -203,8 +214,21 @@ const SShieldResult = () => {
                     desc: EVIDENCE_MAP[key]?.desc ?? '',
                 })));
             })
-            .finally(() => setLoading(false));
-    }, [params]);
+            .finally(() => {
+                if (!cancelled && initial) setLoading(false);
+            });
+        };
+
+        loadReport(true);
+        const timer = window.setInterval(() => {
+            if (document.visibilityState === 'visible') loadReport(false);
+        }, 5000);
+
+        return () => {
+            cancelled = true;
+            window.clearInterval(timer);
+        };
+    }, [reportId]);
 
     const toggleCheck = (id) => setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
     const checkedCount = Object.values(checked).filter(Boolean).length;

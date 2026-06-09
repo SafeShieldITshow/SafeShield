@@ -194,6 +194,25 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void doesNotRatePhysicalKeywordAloneAsHighRisk() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var oneOff = analysisService.analyze(
+                "학원 선배가 오늘 한 번 밀쳤고 병원은 안 갔으며 협박은 없습니다. 어떻게 해야 할지 알고 싶습니다.",
+                readiness
+        );
+        var repeatedWithoutInjury = analysisService.analyze(
+                "학원 선배가 몇 주 동안 여러 번 밀쳤지만 다친 곳은 없습니다. 목격자가 있고 상담을 원합니다.",
+                readiness
+        );
+
+        assertTrue(oneOff.riskScore() <= 5.3,
+                "관계 표현이나 폭행 키워드만으로 고위험 점수가 나오면 안 됩니다.");
+        assertTrue(repeatedWithoutInjury.riskScore() < 7.0,
+                "반복 신체 접촉이라도 상해·협박·집단성 단서가 없으면 8점대 고위험으로 올리지 않아야 합니다.");
+    }
+
+    @Test
     void rejectsIrrelevantInputAsNotReadyForReport() {
         ReportReadiness readiness = analysisService.assessReportReadiness("똥싸기", 2);
         var result = analysisService.analyze("똥싸기", readiness);
