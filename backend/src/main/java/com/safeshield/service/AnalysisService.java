@@ -90,7 +90,8 @@ public class AnalysisService {
                 "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는");
         boolean hasRelationshipAnswer = hasDefiniteSchoolRelationship(t) || hasConfirmedNonSchoolRelationship(t);
         boolean hasTimeOrRepeat = containsAny(t, "오늘", "어제", "며칠", "몇 번", "계속", "반복", "매일", "한 번", "지난",
-                "방금", "언제", "개월", "주일", "현재까지는 한 번", "여러 번", "지금도 계속", "정확한 시점");
+                "방금", "언제", "개월", "주일", "몇 주", "주 이상", "동안", "최근", "지속", "오래",
+                "현재까지는 한 번", "여러 번", "지금도 계속", "정확한 시점");
         boolean hasEvidenceOrChannel = containsAny(t, "캡처", "녹음", "사진", "진단", "병원", "목격", "sns", "카톡", "단톡",
                 "댓글", "게시", "메시지", "증거", "아직 확보한 증거는 없습니다", "증거는 없습니다");
         boolean hasImpactOrRecovery = hasImpactOrRecovery(t);

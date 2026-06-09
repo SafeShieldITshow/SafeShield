@@ -236,6 +236,19 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void recognizesDurationConfirmationAnswerAsTimelineFact() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "같은 학원 선배가 카톡에서 욕설과 비방을 했습니다. 캡처가 있고 불안해서 신고 상담을 원합니다. " +
+                        "확인 답변: 상대는 선후배 또는 학원 관계입니다. " +
+                        "확인 답변: 몇 주 이상 지속됐습니다.",
+                7
+        );
+
+        assertFalse(readiness.missingInfo().contains("언제부터 몇 번 있었는지"),
+                "확인 카드의 지속 기간 답변은 시간·반복성 정보로 반영되어야 합니다.");
+    }
+
+    @Test
     void doesNotTreatVictimWordingAsPerpetrator() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "저는 피해를 당한 입장입니다. 같은 반 친구에게 제가 욕을 먹었고 오늘 캡처가 있습니다. " +

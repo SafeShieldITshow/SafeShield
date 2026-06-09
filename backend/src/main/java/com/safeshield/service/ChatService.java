@@ -721,7 +721,7 @@ public class ChatService {
 
     private String getAiReply(List<Message> history) {
         String latestUserMessage = latestUserMessage(history);
-        if (isIrrelevantInput(latestUserMessage) && !isConversationalFollowUp(latestUserMessage, history)) {
+        if (shouldGuardIrrelevantInput(latestUserMessage, isConversationalFollowUp(latestUserMessage, history))) {
             lastProvider = "guardrail";
             if (isPerpetratorContext(combinedUserText(history))) {
                 return buildPerpetratorOffTopicReply();
@@ -933,7 +933,18 @@ public class ChatService {
         return "";
     }
 
-    private boolean isIrrelevantInput(String text) {
+    static boolean shouldGuardIrrelevantInput(String latestUserMessage, boolean conversationalFollowUp) {
+        return isIrrelevantInput(latestUserMessage)
+                && !conversationalFollowUp
+                && !isConfirmationAnswer(latestUserMessage);
+    }
+
+    private static boolean isConfirmationAnswer(String text) {
+        String t = text == null ? "" : text.trim();
+        return t.startsWith("확인 답변:") || t.startsWith("확인답변:");
+    }
+
+    private static boolean isIrrelevantInput(String text) {
         String t = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
         if (t.isBlank()) return false;
         if (t.length() <= 1) return true;
@@ -977,11 +988,11 @@ public class ChatService {
                 || containsAny(text, "어떡", "어떻게", "괜찮", "말해", "얘기", "상담", "리포트", "기록", "반영");
     }
 
-    private boolean isAcknowledgement(String text) {
+    private static boolean isAcknowledgement(String text) {
         return containsAny(text, "고마워", "감사", "알겠", "응", "네", "ㅇㅋ", "오케이", "맞아", "그래");
     }
 
-    private boolean isEmotionalConversation(String text) {
+    private static boolean isEmotionalConversation(String text) {
         return containsAny(text, "힘들", "무서", "불안", "짜증", "괴롭", "말하기", "모르겠", "걱정", "답답", "억울");
     }
 

@@ -243,6 +243,12 @@ class ChatServiceTest {
         assertFalse(questions.get(0).contains("사과 방식"));
     }
 
+    @Test
+    void doesNotTreatConfirmationAnswerAsIrrelevantInput() {
+        assertFalse(ChatService.shouldGuardIrrelevantInput("확인 답변: 몇 주 이상 지속됐습니다.", false));
+        assertTrue(ChatService.shouldGuardIrrelevantInput("똥싸기", false));
+    }
+
     private ReportReadiness needsMoreContext() {
         return new ReportReadiness(
                 false,
