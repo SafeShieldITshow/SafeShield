@@ -993,6 +993,11 @@ public class ChatService {
         ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessageCount(history));
         boolean perpetratorContext = isPerpetratorContext(combined);
 
+        if (isConfirmationAnswer(latest)) {
+            String confirmationReply = buildConfirmationFallbackReply(latest, readiness);
+            if (!confirmationReply.isBlank()) return confirmationReply;
+        }
+
         if (perpetratorContext) {
             if (!hasCaseFactSignal(latest) && !isAcknowledgement(latest) && !isEmotionalConversation(latest)) {
                 return """
@@ -1049,6 +1054,26 @@ public class ChatService {
                 리포트를 정확히 만들려면 아직 사건 내용, 학교 관계, 시점, 증거 중 빠진 부분을 더 확인해야 합니다.
                 편하게 이어서 말해 주세요. 길게 정리하지 않아도 됩니다.
                 """.trim();
+    }
+
+    private String buildConfirmationFallbackReply(String latest, ReportReadiness readiness) {
+        String t = latest == null ? "" : latest;
+        if (containsAny(t, "같은 반", "같은 학교", "선후배", "학원 관계")) {
+            return "상대와의 관계가 확인됐습니다. 같은 공간에서 계속 마주칠 수 있는 관계라서, 이후 대응은 혼자 직접 부딪히기보다 보호자나 담임을 통해 정리하는 쪽이 안전합니다.";
+        }
+        if (containsAny(t, "캡처", "참여자 목록", "보낸 시간", "앞뒤 대화", "증거는 거의 다")) {
+            return "증거가 어느 정도 남아 있다는 점은 중요합니다. 지금은 캡처를 지우거나 편집하지 말고, 날짜와 참여자가 보이는 원본 형태로 따로 보관해 두는 게 좋습니다.";
+        }
+        if (containsAny(t, "불안", "두려", "등교", "보복", "큰 영향 없음", "이미 알림")) {
+            return "지금 느끼는 영향도 리포트에 반영됩니다. 불안이나 보복 걱정이 있다면 대응 순서는 증거 정리보다 안전 확보가 먼저입니다.";
+        }
+        if (containsAny(t, "한 번", "여러 번", "몇 주", "지금도 계속", "기억나지")) {
+            return "발생 시점과 반복성도 기록에 반영했습니다. 반복되거나 지금도 이어지는 경우에는 단순한 다툼보다 보호 조치 필요성이 더 커집니다.";
+        }
+        if (readiness.ready()) {
+            return "방금 답변까지 상담 기록에 반영했습니다. 리포트에는 지금까지 말한 관계, 증거, 영향이 함께 계산됩니다.";
+        }
+        return "방금 답변은 상담 기록에 반영했습니다. 필요한 내용은 이어지는 대화 안에서 자연스럽게 더 보완하면 됩니다.";
     }
 
     private String latestUserMessage(List<Message> history) {
@@ -1478,6 +1503,7 @@ public class ChatService {
                 14. 아래 대화 메모는 맥락 유지용입니다. 그대로 출력하지 말고, 이미 말한 내용을 다시 처음부터 묻지 마세요.
                 15. 정해진 설문 순서로 사용자를 끌고 가지 말고, 방금 사용자가 새로 꺼낸 내용에 먼저 반응하세요. 확인 카드는 보조 수단일 뿐이며, 이미 답한 항목을 다시 묻지 마세요.
                 16. 사용자가 불완전하거나 왔다 갔다 말해도 바로 틀렸다고 하지 말고, 새로 나온 단서가 기존 판단을 어떻게 바꾸는지만 짧게 이어가세요.
+                17. "~니깐요", "그러니깐요", 같은 말을 쓰지 마세요. 같은 어미나 같은 단어를 연속해서 반복하지 마세요.
 
                 """ + roleInstruction + """
 
@@ -1539,6 +1565,7 @@ public class ChatService {
                 14. 아래 대화 메모는 맥락 유지용입니다. 그대로 출력하지 말고, 이번 답변은 앞선 내용과 이어지게 작성하세요.
                 15. 사용자가 대화를 이어가는 방향을 우선 따라가세요. 정해진 절차로 빨리 끝내려 하지 말고, 새로 나온 단서가 판단을 어떻게 바꾸는지만 짚으세요.
                 16. 사용자가 피해 입장과 가해 입장을 섞어 말하면 한쪽으로 단정하지 말고, 같은 사안의 충돌인지 별도 사안인지 확인해야 한다고 짧게 설명하세요.
+                17. "~니깐요", "그러니깐요", 같은 말을 쓰지 마세요. 같은 어미나 같은 단어를 연속해서 반복하지 마세요.
 
                 """ + roleInstruction + """
 
@@ -1669,6 +1696,7 @@ public class ChatService {
             return false;
         }
         if (!usesAllowedCharacters(reply)) return false;
+        if (hasUnnaturalConversationStyle(reply)) return false;
 
         Map<String, Set<String>> allowed = parseAllowedCitations(lawContext);
         for (String marker : KNOWN_LAW_MARKERS) {
@@ -1684,6 +1712,42 @@ public class ChatService {
             if (law == null || !allowed.get(law).containsAll(references)) return false;
         }
         return true;
+    }
+
+    private static boolean hasUnnaturalConversationStyle(String reply) {
+        String text = reply == null ? "" : reply.trim();
+        if (text.contains("니깐요")) return true;
+        if (countOccurrences(text, "니까요") >= 2) return true;
+        if (countOccurrences(text, "같은 반 학생") >= 2) return true;
+        if (countRepeatedSentenceEndings(text, "요.") >= 4 && text.length() < 180) return true;
+
+        String[] sentences = text.split("(?<=[.!?。])\\s+|\\R+");
+        Set<String> compacted = new HashSet<>();
+        for (String sentence : sentences) {
+            String normalized = sentence.replaceAll("[\\s.,!?。]", "").trim();
+            if (normalized.length() < 8) continue;
+            if (!compacted.add(normalized)) return true;
+        }
+        return false;
+    }
+
+    private static int countOccurrences(String text, String needle) {
+        if (text == null || needle == null || needle.isEmpty()) return 0;
+        int count = 0;
+        int index = 0;
+        while ((index = text.indexOf(needle, index)) >= 0) {
+            count++;
+            index += needle.length();
+        }
+        return count;
+    }
+
+    private static int countRepeatedSentenceEndings(String text, String ending) {
+        int count = 0;
+        for (String sentence : text.split("(?<=[.!?。])\\s+|\\R+")) {
+            if (sentence.trim().endsWith(ending)) count++;
+        }
+        return count;
     }
 
     static boolean isGeneratedReplyValid(String reply, String lawContext) {

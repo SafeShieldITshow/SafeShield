@@ -170,6 +170,16 @@ class ChatServiceTest {
     }
 
     @Test
+    void rejectsAwkwardRepeatedConversationStyle() {
+        String reply = """
+                같은 반 학생이니깐요. 혼자 감당하지 않아도 된다는 걸 기억하세요.
+                증거가 많이 있으니깐요. 캡처도 있으니깐요.
+                """;
+
+        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
     void buildsContextSpecificFollowUpQuestionForGroupChat() {
         ReportReadiness readiness = needsMoreContext();
 
