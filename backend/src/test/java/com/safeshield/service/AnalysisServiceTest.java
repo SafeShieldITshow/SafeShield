@@ -74,6 +74,41 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void usesChatSpecificEvidenceWithoutUnrelatedRecording() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var result = analysisService.analyze(
+                "같은 반 친구들이 단톡방에서 계속 욕설과 비방을 하고 있습니다. 참여자와 시간이 보이는 캡처가 있습니다.",
+                readiness
+        );
+
+        assertTrue(result.evidenceGuide().contains("대화방 전체 캡처"));
+        assertTrue(result.evidenceGuide().contains("참여자·계정 정보 정리"));
+        assertTrue(result.evidenceGuide().contains("대화 내보내기 원본"));
+        assertFalse(result.evidenceGuide().contains("녹음 파일 원본"),
+                "문자·단톡 사안에 녹음 파일을 기본 증거처럼 보여주면 안 됩니다.");
+        assertFalse(result.evidenceGuide().contains("URL·작성자·게시시간 기록"),
+                "단톡 사안에 게시물 URL 증거를 섞으면 안 됩니다.");
+    }
+
+    @Test
+    void usesPostSpecificEvidenceForPhotoSpreadCase() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var result = analysisService.analyze(
+                "같은 반 친구가 SNS에 제 사진을 올렸고 댓글로 조롱이 붙었습니다. 게시물 URL과 캡처가 있습니다.",
+                readiness
+        );
+
+        assertTrue(result.evidenceGuide().contains("게시물 전체 화면 캡처"));
+        assertTrue(result.evidenceGuide().contains("URL·작성자·게시시간 기록"));
+        assertTrue(result.evidenceGuide().contains("댓글·공유 범위 기록"));
+        assertTrue(result.evidenceGuide().contains("원본 파일 백업"));
+        assertFalse(result.evidenceGuide().contains("대화 내보내기 원본"),
+                "게시물 사안에 단톡방 내보내기 증거를 섞으면 안 됩니다.");
+    }
+
+    @Test
     void differentiatesRiskWithinCyberViolenceCases() {
         ReportReadiness readiness = readySchoolViolence();
 

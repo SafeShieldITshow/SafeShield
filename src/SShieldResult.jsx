@@ -25,8 +25,13 @@ const EVIDENCE_MAP = {
     '목격자 이름과 연락처': { icon: '목격', desc: '본 사람의 이름, 반, 연락 가능 여부, 들은 말의 요지를 정리하세요.' },
     '사건 일지': { icon: '기록', desc: '언제, 어디서, 누가, 무엇을 했는지 시간순으로 짧게 적어두세요.' },
     '녹음 파일 원본': { icon: '녹음', desc: '파일을 편집하지 말고 원본 그대로 보관하고 녹음 날짜를 기록하세요.' },
+    '음성·통화 파일 원본': { icon: '녹음', desc: '녹음이나 통화 파일은 편집하지 말고 원본과 생성 시간을 함께 보관하세요.' },
     '발언 직후 사건 메모': { icon: '메모', desc: '욕설·협박의 정확한 표현, 주변에 있던 사람, 직후 상황을 적어두세요.' },
     '대화 캡처': { icon: '캡처', desc: '보낸 사람, 시간, 앞뒤 대화 맥락이 같이 보이도록 저장하세요.' },
+    '대화 내보내기 원본': { icon: '원본', desc: '대화방 내보내기 파일이나 원본 백업을 따로 보관하세요.' },
+    '댓글·공유 범위 기록': { icon: '확산', desc: '댓글 흐름, 공유된 범위, 본 사람 수나 반응을 시간순으로 정리하세요.' },
+    '삭제·신고 처리 기록': { icon: '처리', desc: '삭제 요청, 플랫폼 신고, 차단, 처리 결과 화면을 날짜와 함께 남기세요.' },
+    '보건실·담임 기록': { icon: '학교', desc: '보건실 방문, 담임 공유, 학교에서 받은 안내 내용을 날짜별로 남기세요.' },
     '반복 상황 일지': { icon: '반복', desc: '따돌림이나 배제가 반복된 날짜와 장소를 표처럼 누적하세요.' },
     '대화방·초대 제외 화면': { icon: '단톡', desc: '초대 제외, 강퇴, 읽씹 강요 등 대화방 상황이 보이게 저장하세요.' },
     '담임 공유 기록': { icon: '공유', desc: '보호자나 담임에게 알린 날짜, 전달한 증거, 받은 답변을 남기세요.' },
@@ -66,8 +71,12 @@ const EVIDENCE_GROUPS = {
     '참여자·계정 정보 정리': 'account',
     '원본 이미지·댓글 백업': 'original',
     '원본 파일 백업': 'original',
+    '대화 내보내기 원본': 'original',
+    '음성·통화 파일 원본': 'original',
     '대화·사진 원본 보관': 'original',
     '대화·녹음 원본': 'original',
+    '댓글·공유 범위 기록': 'spread',
+    '삭제·신고 처리 기록': 'process',
     '일지 작성': 'timeline',
     '사건 일지': 'timeline',
     '반복 상황 일지': 'timeline',
@@ -82,7 +91,14 @@ const EVIDENCE_GROUPS = {
     '진단서·상담 기록': 'medical',
     '담임 공유 기록': 'school-share',
     '보호자·담임 상담 기록': 'school-share',
+    '보건실·담임 기록': 'school-medical',
 };
+
+const evidenceTitle = (item) => (
+    item.icon && !item.title.includes(item.icon)
+        ? `${item.icon} ${item.title}`
+        : item.title
+);
 
 const compactEvidenceKeys = (keys = []) => {
     const seenKeys = new Set();
@@ -397,7 +413,7 @@ const SShieldResult = () => {
                                         {evidenceItems.map((item) => (
                                             <div key={item.id} className={`check-item ${checked[item.id] ? 'checked' : ''}`} onClick={() => toggleCheck(item.id)}>
                                                 <div className="check-box">{checked[item.id] && <span className="check-mark">✓</span>}</div>
-                                                <div className="check-content"><strong>{item.icon} {item.title}</strong><p>{item.desc}</p></div>
+                                                <div className="check-content"><strong>{evidenceTitle(item)}</strong><p>{item.desc}</p></div>
                                             </div>
                                         ))}
                                     </div>
