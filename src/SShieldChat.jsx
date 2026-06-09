@@ -275,7 +275,7 @@ const toGuestHistoryPayload = (items) => items
         content: String(message.text || '').trim(),
     }))
     .filter((message) => message.content)
-    .slice(-12);
+    .slice(-24);
 
 const SShieldChat = () => {
     const initialSessionIdRef = useRef(null);
