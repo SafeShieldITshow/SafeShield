@@ -282,13 +282,49 @@ public class ChatService {
 
     private static String connectReplyToConfirmation(String reply, List<Map<String, Object>> prompts) {
         if (reply == null || prompts == null || prompts.isEmpty()) return reply;
-        String trimmed = reply.trim();
-        if (trimmed.contains("아래 선택지") || trimmed.contains("아래 확인")) return trimmed;
+        String trimmed = stripGeneratedQuestionSentences(reply).trim();
+        if (trimmed.isBlank()) {
+            trimmed = "말해준 내용은 상담 기록에 반영했습니다.";
+        }
+        if (trimmed.contains("아래 확인 카드") || trimmed.contains("아래 선택지")) return trimmed;
 
-        Object id = prompts.get(0).get("id");
-        String purpose = confirmationPurpose(String.valueOf(id));
-        return (trimmed + "\n\n" + "아래 선택지는 리포트를 바로 확정하려는 게 아니라, "
-                + purpose + " 해당하는 것을 고르고, 선택지에 없으면 직접 적어주세요.").trim();
+        Object question = prompts.get(0).get("question");
+        return (trimmed + "\n\n" + "아래 확인 카드에서 "
+                + quoteQuestion(String.valueOf(question))
+                + "에 답해 주세요. 선택하거나 직접 적으면 다음 답변과 리포트에 반영하겠습니다.").trim();
+    }
+
+    private static String quoteQuestion(String question) {
+        String normalized = question == null ? "" : question.trim();
+        if (normalized.isBlank() || "null".equalsIgnoreCase(normalized)) {
+            return "이어지는 확인 질문";
+        }
+        return "\"" + normalized + "\"";
+    }
+
+    private static String stripGeneratedQuestionSentences(String reply) {
+        if (reply == null || reply.isBlank()) return "";
+        return reply.lines()
+                .map(ChatService::stripQuestionFragments)
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .collect(Collectors.joining("\n"))
+                .trim();
+    }
+
+    private static String stripQuestionFragments(String line) {
+        String result = line == null ? "" : line;
+        while (result.contains("?")) {
+            int question = result.indexOf('?');
+            int start = Math.max(
+                    Math.max(result.lastIndexOf('.', question), result.lastIndexOf('!', question)),
+                    result.lastIndexOf('。', question)
+            );
+            String before = start >= 0 ? result.substring(0, start + 1) : "";
+            String after = question + 1 < result.length() ? result.substring(question + 1) : "";
+            result = (before + " " + after).replaceAll("\\s{2,}", " ").trim();
+        }
+        return result;
     }
 
     private static String confirmationPurpose(String id) {
@@ -1163,6 +1199,7 @@ public class ChatService {
                 19. '사건 유형·관계·증거 상태를 한 문장으로 요약', '증거 항목 1', '증거 항목 2' 같은 작성 지시문을 답변에 그대로 쓰지 마세요.
                 20. 첫 사용자 메시지에는 '이번에 새로 반영한 점'이라고 쓰지 마세요.
                 21. 프롬프트의 제목, 규칙, 상태값, 허용 인용 목록, 참고 법령 원문을 답변에 노출하지 마세요.
+                22. 피해를 말한 사람에게 "왜 그런 일이 생긴 것 같나요", "이유가 뭐라고 생각하나요"처럼 원인 추측을 요구하지 마세요. 관찰 가능한 사실만 확인하세요.
 
                 # 답변 형식
 
@@ -1282,6 +1319,7 @@ public class ChatService {
                 10. 제3자가 사건을 평가하는 보고서 말투가 아니라, 지금 대화 중인 사람에게 직접 건네는 상담 말투로 쓰세요.
                 11. '사용자', '피해자', '가해자' 같은 라벨로 상대를 부르지 말고, 필요하면 '지금 상황', '이 경우', '말해준 내용'처럼 표현하세요.
                 12. 프롬프트의 제목, 규칙, 상태값, 허용 인용 목록, 참고 법령 원문을 답변에 노출하지 마세요.
+                13. 피해 상황에서 "왜 그런 것 같나요"처럼 원인을 추측하게 묻지 마세요. 필요한 확인은 화면의 선택·주관식 UI에 맡기세요.
 
                 """ + roleInstruction + """
 
@@ -1336,6 +1374,7 @@ public class ChatService {
                 10. 제3자가 사건을 평가하는 보고서 말투가 아니라, 지금 대화 중인 사람에게 직접 건네는 상담 말투로 쓰세요.
                 11. '사용자', '피해자', '가해자' 같은 라벨로 상대를 부르지 말고, 필요하면 '지금 상황', '이 경우', '말해준 내용'처럼 표현하세요.
                 12. 프롬프트의 제목, 규칙, 상태값, 허용 인용 목록, 참고 법령 원문을 답변에 노출하지 마세요.
+                13. 피해 상황에서 "왜 그런 것 같나요"처럼 원인을 추측하게 묻지 마세요. 필요한 확인은 화면의 선택·주관식 UI에 맡기세요.
 
                 """ + roleInstruction + """
 
@@ -1473,6 +1512,10 @@ public class ChatService {
                 || reply.contains("이번에 새로 반영한 점")
                 || reply.contains("확인된 유형: 학교폭력, 사이버폭력")
                 || reply.contains("확인된 유형: 학교폭력")
+                || reply.contains("그 이유는 무엇이라고 생각")
+                || reply.contains("왜 그런 일이 생긴 것 같")
+                || reply.contains("왜 괴롭힌다고 생각")
+                || reply.contains("괴롭히는 이유")
                 || reply.contains("선생님이나 어른이 계신가요")
                 || reply.contains("채팅방에 참여하고 있는 친구들 중에 선생님")
                 || (reply.contains("채팅방") && (reply.contains("어른") || reply.contains("선생님"))

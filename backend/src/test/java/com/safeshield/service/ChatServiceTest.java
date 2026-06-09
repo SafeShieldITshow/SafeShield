@@ -159,6 +159,17 @@ class ChatServiceTest {
     }
 
     @Test
+    void rejectsVictimBlamingReasonQuestion() {
+        String reply = """
+                같은 반 학생이라면 학교에서 함께 지내는 관계가 중요한 부분입니다.
+                지금 겪고 있는 상황을 조금 더 자세히 들으려고 합니다.
+                친구들이 단체 채팅방에서 계속 욕하고 놀리는데, 그 이유는 무엇이라고 생각하나요?
+                """;
+
+        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
     void buildsContextSpecificFollowUpQuestionForGroupChat() {
         ReportReadiness readiness = needsMoreContext();
 
