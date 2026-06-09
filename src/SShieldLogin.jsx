@@ -19,8 +19,9 @@ function SShieldLogin() {
     const isSignup = activeTab === 'signup';
 
     useEffect(() => {
-        if (params.get('oauth_error')) {
-            setError('Google 로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        const oauthError = params.get('oauth_error');
+        if (oauthError) {
+            setError(oauthErrorMessage(oauthError));
         }
     }, [params]);
 
@@ -191,5 +192,25 @@ function SShieldLogin() {
         </div>
     );
 }
+
+const oauthErrorMessage = (code) => {
+    const normalized = String(code || '').toLowerCase();
+    if (normalized.includes('invalid_client')) {
+        return 'Google OAuth 클라이언트 ID 또는 시크릿이 맞지 않습니다. Railway 환경변수와 Google Console의 클라이언트가 같은지 확인해 주세요.';
+    }
+    if (normalized.includes('invalid_token_response')) {
+        return 'Google 토큰 교환에 실패했습니다. 클라이언트 시크릿 또는 OAuth 앱 설정을 다시 확인해 주세요.';
+    }
+    if (normalized.includes('access_denied')) {
+        return 'Google 로그인이 취소되었거나 이 계정이 OAuth 테스트 사용자에 포함되지 않았습니다.';
+    }
+    if (normalized.includes('authorization_request_not_found')) {
+        return 'Google 로그인 세션이 만료되었습니다. 같은 브라우저에서 다시 시도해 주세요.';
+    }
+    if (normalized.includes('email')) {
+        return 'Google 계정에서 이메일 정보를 받아오지 못했습니다. 이메일 권한을 허용한 뒤 다시 시도해 주세요.';
+    }
+    return `Google 로그인에 실패했습니다. 오류 코드: ${code}`;
+};
 
 export default SShieldLogin;
