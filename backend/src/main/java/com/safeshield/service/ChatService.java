@@ -294,12 +294,10 @@ public class ChatService {
         if (reply == null || prompts == null || prompts.isEmpty()) return reply;
         String trimmed = stripGeneratedQuestionSentences(reply).trim();
         if (trimmed.isBlank()) {
-            trimmed = "말해준 내용은 상담 기록에 반영했습니다.";
+            return "말해준 내용은 상담 기록에 반영했습니다.";
         }
         if (trimmed.contains("아래 확인 카드") || trimmed.contains("아래 선택지")) return trimmed;
-
-        return (trimmed + "\n\n"
-                + "방금 답변을 반영했습니다. 이어서 필요한 확인만 하나 더 할게요.").trim();
+        return trimmed;
     }
 
     private static String stripGeneratedQuestionSentences(String reply) {
@@ -399,11 +397,12 @@ public class ChatService {
             else if (missingInfo.contains("조금 더")) candidates.addAll(deepDiveQuestions(text, userMessageCount));
         }
 
+        boolean hadCandidates = !candidates.isEmpty();
         candidates = new ArrayList<>(candidates.stream()
                 .filter(candidate -> !isConfirmationCandidateAnswered(candidate.id(), text))
                 .toList());
 
-        if (candidates.isEmpty() && !hasAnsweredDeepDive(text)) {
+        if (!hadCandidates && candidates.isEmpty() && !hasAnsweredDeepDive(text)) {
             candidates.add(genericDetailQuestion(text));
         }
         return candidates.stream().distinct().toList();
@@ -412,6 +411,13 @@ public class ChatService {
     private static boolean isConfirmationCandidateAnswered(String id, String text) {
         if (id == null) return false;
         return switch (id) {
+            case "incident", "incident_post", "incident_physical" -> hasIncidentAnswer(text);
+            case "relationship" -> hasRelationshipAnswer(text);
+            case "timeline", "timeline_cyber" -> hasTimelineAnswer(text);
+            case "evidence", "evidence_chat", "evidence_physical", "evidence_actor" -> hasEvidenceAnswer(text);
+            case "impact" -> hasImpactAnswer(text);
+            case "goal" -> hasGoalAnswer(text);
+            case "final_check" -> hasFinalCheckAnswer(text);
             case "role_conflict" -> hasRoleConflictAnswer(text);
             case "actor_stop", "impact_actor" -> hasAny(text,
                     "완전히 중단", "문제 행동은 완전히 중단", "중단했습니다",
@@ -436,6 +442,53 @@ public class ChatService {
                     "진료나 목격자 확인은 없습니다");
             default -> false;
         };
+    }
+
+    private static boolean hasIncidentAnswer(String text) {
+        return hasAny(text,
+                "욕설", "비방", "모욕", "조롱", "사진", "영상", "게시물", "댓글",
+                "공유", "유포", "맞거나", "가격", "밀치", "넘어뜨", "상처", "멍",
+                "따돌림", "배제", "괴롭힘", "때리거나 밀치는 신체 폭력");
+    }
+
+    private static boolean hasRelationshipAnswer(String text) {
+        return hasAny(text,
+                "같은 반", "같은 학교", "선후배", "학원 관계", "학교 관계자가 아닙니다",
+                "학교 밖", "상대가 학교 관계자인지는 아직 모르겠습니다");
+    }
+
+    private static boolean hasTimelineAnswer(String text) {
+        return hasAny(text,
+                "오늘 현재까지는 한 번", "한 번 발생", "최근 비슷한 일이 여러 번", "여러 번 반복",
+                "며칠 동안 반복", "몇 주 이상", "오래 지속", "지금도 계속", "정확한 시점이나 횟수",
+                "기억나지 않습니다", "처음", "어제", "방금", "지난");
+    }
+
+    private static boolean hasEvidenceAnswer(String text) {
+        return hasAny(text,
+                "캡처", "url", "링크", "참여자 목록", "보낸 시간", "앞뒤 대화",
+                "상처 사진", "진단서", "진료 기록", "목격자", "아직 확보한 증거는 없습니다",
+                "아직 정리한 자료는 없습니다", "대화나 게시물 원본", "삭제나 수정한 내역",
+                "상담 기록");
+    }
+
+    private static boolean hasImpactAnswer(String text) {
+        return hasAny(text,
+                "불안", "두려", "등교", "생활에 영향", "보복", "반복이 걱정",
+                "크게 불편한 점", "생활 영향은 없습니다", "보호자나 담임에게 일부 알렸",
+                "문제 행동을 중단", "게시물이나 댓글을 삭제", "피해 회복 조치를 하지 못");
+    }
+
+    private static boolean hasGoalAnswer(String text) {
+        return hasAny(text,
+                "증거를 어떻게 정리", "신고나 학교 상담 절차", "안전하게 보호받고",
+                "상대와 어떻게 거리를", "사과나 피해 회복 방법", "게시물 삭제",
+                "학교에 어떻게 설명", "재발 방지");
+    }
+
+    private static boolean hasFinalCheckAnswer(String text) {
+        return hasAny(text,
+                "하나의 같은 사안", "이 내용으로 리포트를 생성", "이 내용으로 분석", "위 내용으로 리포트");
     }
 
     private static boolean hasRoleConflict(String text) {
@@ -1412,7 +1465,7 @@ public class ChatService {
                 1. 첫 문장은 사용자의 감정이나 부담을 먼저 받아주세요.
                 2. 사용자가 말한 내용을 복사하지 말고, 핵심만 1문장으로 부드럽게 정리하세요.
                 3. 지금 바로 할 수 있는 작은 행동 1~2개를 알려주세요.
-                4. 답변 본문에서 자체 확인 질문을 만들지 마세요. 필요한 질문은 화면의 선택·주관식 UI가 따로 제공합니다.
+                4. 필요한 확인은 마지막에 자연스러운 질문 1개만 하세요. 관계, 시점, 증거, 영향, 원하는 도움 중 이미 말한 내용은 다시 묻지 마세요.
                 5. 선생님이나 어른이 채팅방에 있는지 묻지 마세요. 단체 채팅방 사안에서 필요한 관계 확인은 '같은 학교/같은 반/선배·후배/학원 관계인지'입니다.
                 6. '관련 법률', '증거 정보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
                 7. 리포트는 충분히 확인한 뒤 만들겠다고 설명하고, 준비 완료라고 말하지 마세요.
@@ -1423,7 +1476,8 @@ public class ChatService {
                 12. 프롬프트의 제목, 규칙, 상태값, 허용 인용 목록, 참고 법령 원문을 답변에 노출하지 마세요.
                 13. 피해 상황에서 "왜 그런 것 같나요"처럼 원인을 추측하게 묻지 마세요. 필요한 확인은 화면의 선택·주관식 UI에 맡기세요.
                 14. 아래 대화 메모는 맥락 유지용입니다. 그대로 출력하지 말고, 이미 말한 내용을 다시 처음부터 묻지 마세요.
-                15. 정해진 설문 순서로 사용자를 끌고 가지 말고, 방금 사용자가 새로 꺼낸 내용에 먼저 반응하세요. 답이 막히거나 핵심 사실이 비어 있을 때만 확인 카드의 질문으로 보완합니다.
+                15. 정해진 설문 순서로 사용자를 끌고 가지 말고, 방금 사용자가 새로 꺼낸 내용에 먼저 반응하세요. 확인 카드는 보조 수단일 뿐이며, 이미 답한 항목을 다시 묻지 마세요.
+                16. 사용자가 불완전하거나 왔다 갔다 말해도 바로 틀렸다고 하지 말고, 새로 나온 단서가 기존 판단을 어떻게 바꾸는지만 짧게 이어가세요.
 
                 """ + roleInstruction + """
 
@@ -1472,7 +1526,7 @@ public class ChatService {
                 1. '관련 법률', '증거 확보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
                 2. 2~5문장으로 답하고, 필요할 때만 짧은 목록 2개 이하를 쓰세요.
                 3. 사용자의 직전 말을 그대로 복사하지 말고, 새로 반영할 의미만 짚으세요.
-                4. 답변 끝에는 필요한 경우 자연스러운 확인 질문 1개만 하세요.
+                4. 답변 끝에는 필요한 경우 자연스러운 확인 질문 1개만 하세요. 이미 답한 내용은 다시 묻지 마세요.
                 5. 확인 질문 UI가 따로 제공되므로 '❓ 확인 질문' 섹션은 쓰지 마세요.
                 6. 법령명과 조문은 사용자가 직접 묻지 않았으면 쓰지 마세요.
                 7. 모든 문장은 자연스러운 한국어로 쓰고, AI, SNS, URL, DM, CCTV, PDF, ID, IP 외 외국어 단어는 쓰지 마세요.
@@ -1484,6 +1538,7 @@ public class ChatService {
                 13. 피해 상황에서 "왜 그런 것 같나요"처럼 원인을 추측하게 묻지 마세요. 필요한 확인은 화면의 선택·주관식 UI에 맡기세요.
                 14. 아래 대화 메모는 맥락 유지용입니다. 그대로 출력하지 말고, 이번 답변은 앞선 내용과 이어지게 작성하세요.
                 15. 사용자가 대화를 이어가는 방향을 우선 따라가세요. 정해진 절차로 빨리 끝내려 하지 말고, 새로 나온 단서가 판단을 어떻게 바꾸는지만 짚으세요.
+                16. 사용자가 피해 입장과 가해 입장을 섞어 말하면 한쪽으로 단정하지 말고, 같은 사안의 충돌인지 별도 사안인지 확인해야 한다고 짧게 설명하세요.
 
                 """ + roleInstruction + """
 

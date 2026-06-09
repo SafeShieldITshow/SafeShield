@@ -278,6 +278,50 @@ class ChatServiceTest {
         assertTrue(ChatService.shouldGuardIrrelevantInput("똥싸기", false));
     }
 
+    @Test
+    void doesNotRepeatAnsweredCoreConfirmationQuestion() {
+        ReportReadiness relationshipMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "관계를 확인해야 합니다.",
+                List.of("상대가 학교 관계자인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+        ReportReadiness timelineMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "시점을 확인해야 합니다.",
+                List.of("언제부터 몇 번 있었는지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+        ReportReadiness evidenceMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "증거를 확인해야 합니다.",
+                List.of("남아 있는 증거가 무엇인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        assertTrue(ChatService.previewConfirmationQuestions(
+                relationshipMissing,
+                "확인 답변: 상대는 선후배 또는 학원 관계입니다.",
+                3
+        ).isEmpty());
+        assertTrue(ChatService.previewConfirmationQuestions(
+                timelineMissing,
+                "확인 답변: 몇 주 이상 지속됐습니다.",
+                3
+        ).isEmpty());
+        assertTrue(ChatService.previewConfirmationQuestions(
+                evidenceMissing,
+                "확인 답변: 참여자 목록과 보낸 시간이 보이는 캡처가 있습니다.",
+                3
+        ).isEmpty());
+    }
+
     private ReportReadiness needsMoreContext() {
         return new ReportReadiness(
                 false,
