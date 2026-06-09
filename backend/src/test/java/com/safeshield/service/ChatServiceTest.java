@@ -180,6 +180,13 @@ class ChatServiceTest {
     }
 
     @Test
+    void rejectsAwkwardSingleLineBecauseEnding() {
+        String reply = "그런 일들이 며칠 동안 계속해서 올라와서요.";
+
+        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
     void rejectsUnsafePhysicalViolenceAdvice() {
         String reply = """
                 학교에서 맞았고 멍이 들었는데요. 그 감정은 정말 힘들고 혼자 감당하기도 어려울 것 같아요.
