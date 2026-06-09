@@ -993,6 +993,10 @@ public class ChatService {
         ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessageCount(history));
         boolean perpetratorContext = isPerpetratorContext(combined);
 
+        if (isPhysicalViolenceSignal(latest)) {
+            return buildPhysicalViolenceFallbackReply(latest, readiness);
+        }
+
         if (isConfirmationAnswer(latest)) {
             String confirmationReply = buildConfirmationFallbackReply(latest, readiness);
             if (!confirmationReply.isBlank()) return confirmationReply;
@@ -1074,6 +1078,18 @@ public class ChatService {
             return "방금 답변까지 상담 기록에 반영했습니다. 리포트에는 지금까지 말한 관계, 증거, 영향이 함께 계산됩니다.";
         }
         return "방금 답변은 상담 기록에 반영했습니다. 필요한 내용은 이어지는 대화 안에서 자연스럽게 더 보완하면 됩니다.";
+    }
+
+    private String buildPhysicalViolenceFallbackReply(String latest, ReportReadiness readiness) {
+        String t = latest == null ? "" : latest;
+        if (containsAny(t, "멍", "상처", "다쳤", "통증", "맞", "폭행", "밀쳤")) {
+            return """
+                    학교에서 맞고 멍까지 들었다면, 먼저 몸 상태와 안전을 확인하는 게 우선입니다.
+                    멍이 보이는 부위는 오늘 날짜가 남도록 사진으로 남기고, 통증이 있거나 머리·얼굴을 맞았다면 보호자에게 바로 말해 진료 여부를 확인하세요.
+                    같은 공간에서 다시 마주칠 수 있다면 혼자 상대를 찾아가 따지기보다 보호자나 담임에게 상황과 사진을 함께 보여주는 쪽이 안전합니다.
+                    """.trim();
+        }
+        return "";
     }
 
     private String latestUserMessage(List<Message> history) {
@@ -1423,6 +1439,10 @@ public class ChatService {
         return containsAny(text, "또 맞", "또 때", "때렸", "맞았", "출혈", "골절", "응급실", "흉기", "칼", "성추행", "성폭행", "자살", "자해", "죽고 싶", "보복", "협박");
     }
 
+    private boolean isPhysicalViolenceSignal(String text) {
+        return containsAny(text, "맞았", "맞고", "때렸", "폭행", "밀쳤", "멍", "상처", "통증", "다쳤");
+    }
+
     private boolean hasCaseFactSignal(String text) {
         return containsAny(text,
                 "학교", "같은 반", "반 친구", "친구", "선배", "후배", "학생", "담임", "선생", "학원",
@@ -1697,6 +1717,7 @@ public class ChatService {
         }
         if (!usesAllowedCharacters(reply)) return false;
         if (hasUnnaturalConversationStyle(reply)) return false;
+        if (hasUnsafePhysicalViolenceAdvice(reply)) return false;
 
         Map<String, Set<String>> allowed = parseAllowedCitations(lawContext);
         for (String marker : KNOWN_LAW_MARKERS) {
@@ -1729,6 +1750,17 @@ public class ChatService {
             if (!compacted.add(normalized)) return true;
         }
         return false;
+    }
+
+    private static boolean hasUnsafePhysicalViolenceAdvice(String reply) {
+        String text = reply == null ? "" : reply;
+        boolean physicalContext = containsAny(text, "맞", "멍", "폭행", "상처", "통증", "밀쳤", "신체");
+        if (!physicalContext) return false;
+        if (containsAny(text, "지금은 안전", "혼자서도 괜찮", "혼자 감당", "물 많이", "따뜻한 물", "목욕", "잘 쉬")) {
+            return true;
+        }
+        boolean hasSafetyAction = containsAny(text, "보호자", "담임", "사진", "진료", "병원", "보건실", "117");
+        return !hasSafetyAction;
     }
 
     private static int countOccurrences(String text, String needle) {
