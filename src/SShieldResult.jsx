@@ -118,6 +118,31 @@ const riskLevel = (score) => {
     return '낮음';
 };
 
+const riskClass = (score) => {
+    if (score >= 7) return 'high';
+    if (score >= 4) return 'medium';
+    return 'low';
+};
+
+const riskGuide = (score) => {
+    if (score >= 7) return '빠른 보호자·학교 공유와 안전 조치가 우선입니다.';
+    if (score >= 4) return '증거 정리와 상담 연결을 같이 진행하는 단계입니다.';
+    return '사실관계를 더 확인하면서 차분히 정리할 수 있는 단계입니다.';
+};
+
+const formatDate = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+};
+
 const SShieldResult = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
@@ -163,26 +188,18 @@ const SShieldResult = () => {
     const checkedCount = Object.values(checked).filter(Boolean).length;
 
     const score = report?.risk_score ?? 0;
-    const cx = 80;
-    const cy = 90;
-    const r = 60;
-    const angle = (score / 10) * 180;
-    const rad = (Math.PI * angle) / 180;
-    const x = cx + r * Math.cos(Math.PI - rad);
-    const y = cy - r * Math.sin(Math.PI - rad);
-    const lawWidths = (report?.law_relevance_scores ?? []).map((s) => Math.round(s * 100));
     const rawRange = report?.expected_measure_range ?? [0, 3];
     const mStart = Math.max(0, Math.min(MEASURES.length - 1, rawRange[0] ?? 0));
     const mEnd = Math.max(mStart, Math.min(MEASURES.length - 1, rawRange[1] ?? 3));
-    const COL_W = 31;
-    const measureX = 15;
-    const measureWidth = (mEnd + 1) * COL_W;
     const measureRangeText = `${mStart + 1}호(${MEASURES[mStart]})부터 ${mEnd + 1}호(${MEASURES[mEnd]})까지 가능성이 있습니다.`;
     const isPerpetratorReport = isPerpetratorStatus(report?.assessment_status);
     const evidenceSectionTitle = isPerpetratorReport ? '사실관계 자료 정리 가이드' : '증거 수집 가이드';
     const evidenceSectionDesc = isPerpetratorReport
         ? '본인이 한 행동, 중단·삭제·사과·피해 회복 내역을 원본 형태로 정리하세요.'
         : '상황에 맞는 증거를 최대한 원본 형태로 보관하세요.';
+    const reportCreatedAt = formatDate(report?.created_at);
+    const typeTags = report?.violence_types?.length ? report.violence_types : ['분류 정보 없음'];
+    const riskStatusClass = riskClass(score);
 
     const logout = () => {
         clearSession();
@@ -248,102 +265,137 @@ const SShieldResult = () => {
                             </div>
                         ) : (
                             <>
-                                <div className="ss-summary-card">
-                                    <span className="ss-summary-badge">{report.assessment_status || 'AI 요약'}</span>
-                                    <p className="ss-summary-text">{report.summary}</p>
+                                <section className="report-hero">
+                                    <div className="report-hero-main">
+                                        <span className="ss-summary-badge">{report.assessment_status || 'AI 요약'}</span>
+                                        <h2>{report.title || '분석 결과 리포트'}</h2>
+                                        <p>{report.summary}</p>
+                                        {reportCreatedAt && <span className="report-date">생성일 {reportCreatedAt}</span>}
+                                    </div>
+                                    <div className={`report-risk-chip ${riskStatusClass}`}>
+                                        <strong>{score}</strong>
+                                        <span>/10 · {riskLevel(score)}</span>
+                                    </div>
+                                </section>
+
+                                <div className="report-stat-grid">
+                                    <div className="report-stat-card">
+                                        <span>위험도</span>
+                                        <strong>{riskLevel(score)}</strong>
+                                        <p>{riskGuide(score)}</p>
+                                    </div>
+                                    <div className="report-stat-card">
+                                        <span>분류 유형</span>
+                                        <strong>{typeTags.length}개</strong>
+                                        <p>{typeTags.join(', ')}</p>
+                                    </div>
+                                    <div className="report-stat-card">
+                                        <span>예상 조치</span>
+                                        <strong>{mStart + 1}호~{mEnd + 1}호</strong>
+                                        <p>{MEASURES[mStart]}부터 {MEASURES[mEnd]}까지</p>
+                                    </div>
+                                    <div className="report-stat-card">
+                                        <span>자료 정리</span>
+                                        <strong>{checkedCount}/{evidenceItems.length}</strong>
+                                        <p>체크한 항목은 화면에서 바로 확인할 수 있습니다.</p>
+                                    </div>
                                 </div>
 
-                                <div className="ss-grid">
-                                    <div className="ss-card">
-                                        <p className="ss-label">핵심 판단 근거</p>
-                                        <ul className="ss-report-list">
+                                <div className="report-main-grid">
+                                    <section className="ss-card report-section">
+                                        <div className="report-section-head">
+                                            <span>01</span>
+                                            <div>
+                                                <p className="ss-label">핵심 판단 근거</p>
+                                                <small>대화에서 확인된 사실을 기준으로 정리했습니다.</small>
+                                            </div>
+                                        </div>
+                                        <ul className="ss-report-list clean">
                                             {(report.assessment_details || []).map((item) => (
                                                 <li key={item}>{item}</li>
                                             ))}
                                         </ul>
-                                    </div>
-                                    <div className="ss-card">
-                                        <p className="ss-label">우선 권장 조치</p>
-                                        <ul className="ss-report-list">
+                                    </section>
+
+                                    <section className="ss-card report-section action-section">
+                                        <div className="report-section-head">
+                                            <span>02</span>
+                                            <div>
+                                                <p className="ss-label">우선 권장 조치</p>
+                                                <small>지금 바로 할 수 있는 순서 중심입니다.</small>
+                                            </div>
+                                        </div>
+                                        <ul className="ss-report-list clean">
                                             {(report.recommended_actions || []).map((item) => (
                                                 <li key={item}>{item}</li>
                                             ))}
                                         </ul>
-                                    </div>
+                                    </section>
                                 </div>
 
-                                <div className="ss-card ss-risk-card">
-                                    <div className="ss-gauge-container">
-                                        <svg viewBox="0 0 160 130" width="160" height="130">
-                                            <path d="M 20 90 A 60 60 0 0 1 140 90" stroke="#3A3A3A" strokeWidth="12" fill="none" strokeLinecap="round" />
-                                            <path d={`M 20 90 A 60 60 0 0 1 ${x} ${y}`} stroke="#7e74f0" strokeWidth="12" fill="none" strokeLinecap="round" />
-                                            <circle cx="80" cy="90" r="4" fill="#FEFEFE" />
-                                            <text x="80" y="115" textAnchor="middle" fill="#FEFEFE" fontSize="16" fontWeight="900">
-                                                {score}<tspan fontSize="10" fill="#888">/10</tspan>
-                                            </text>
-                                            <text x="80" y="128" textAnchor="middle" fill="#7e74f0" fontSize="11" fontWeight="700">
-                                                {riskLevel(score)}
-                                            </text>
-                                        </svg>
+                                <section className="ss-card ss-risk-card refined">
+                                    <div className="risk-copy">
+                                        <p className="ss-label">위험도 산정</p>
+                                        <h3>{score}/10 · {riskLevel(score)}</h3>
+                                        <p>{riskGuide(score)}</p>
                                     </div>
-                                    <div>
-                                        <p className="ss-danger">위험도 {riskLevel(score)}</p>
-                                        <p className="ss-risk-desc">분석된 유형: {(report.violence_types || []).join(', ') || '분류 정보 없음'}</p>
+                                    <div className="risk-meter" aria-label={`위험도 ${score}점`}>
+                                        <div style={{ width: `${Math.max(4, Math.min(100, score * 10))}%` }} />
                                     </div>
-                                </div>
-
-                                <h2 className="ss-sub-title">상황 분석</h2>
-                                <div className="ss-grid">
-                                    <div className="ss-card">
-                                        <p className="ss-label">관련 법령</p>
-                                        <div className="ss-law-list">
-                                            {(report.matched_laws || []).map((law, i) => (
-                                                <div className="ss-law-item" key={law}>
-                                                    <p>{law}</p>
-                                                    <div className="ss-bar-bg">
-                                                        <div className="ss-bar-fill" style={{ width: `${lawWidths[i] ?? 50}%` }} />
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div className="ss-card">
-                                        <p className="ss-label">예상 조치 범위</p>
-                                        <svg viewBox="0 0 280 85">
-                                            <defs>
-                                                <linearGradient id="grad" x1="0%" y1="0%" x2="100%">
-                                                    <stop offset="0%" stopColor="#3a3050" />
-                                                    <stop offset="100%" stopColor="#5f52d0" />
-                                                </linearGradient>
-                                            </defs>
-                                            <rect x={measureX} y="5" width={measureWidth} height="50" fill="url(#grad)" />
-                                            <line x1="15" y1="30" x2="265" y2="30" stroke="rgba(255,255,255,0.45)" strokeWidth="0.8" />
-                                            {MEASURES.map((_, i) => (
-                                                <line key={i} x1={15 + i * 31} y1="5" x2={15 + i * 31} y2="55" stroke="rgba(255,255,255,0.45)" strokeWidth="0.8" />
-                                            ))}
-                                            {MEASURES.map((measure, i) => (
-                                                <text key={measure} x={15 + i * 31} y="72" textAnchor="middle" fill="#fff" fontSize="8">{i + 1}</text>
-                                            ))}
-                                        </svg>
-                                        <p className="ss-risk-desc">{measureRangeText}</p>
-                                    </div>
-                                </div>
-
-                                <h2 className="ss-sub-title">폭력 유형 분류</h2>
-                                <div className="ss-card ss-center">
-                                    <p className="ss-ai">AI가 분석한 해당 유형</p>
-                                    <div className="ss-tags">
-                                        {(report.violence_types || []).map((type) => (
+                                    <div className="ss-tags left">
+                                        {typeTags.map((type) => (
                                             <span key={type} className="tag p">{type}</span>
                                         ))}
                                     </div>
+                                </section>
+
+                                <div className="report-main-grid">
+                                    <section className="ss-card report-section">
+                                        <div className="report-section-head">
+                                            <span>03</span>
+                                            <div>
+                                                <p className="ss-label">관련 법령</p>
+                                                <small>현재 사안과 연결되는 항목만 표시합니다.</small>
+                                            </div>
+                                        </div>
+                                        <div className="ss-law-list refined">
+                                            {(report.matched_laws || []).length ? (report.matched_laws || []).map((law, i) => (
+                                                <div className="ss-law-item" key={law}>
+                                                    <p>{law}</p>
+                                                    <span>{Math.round((report.law_relevance_scores?.[i] ?? 0.5) * 100)}%</span>
+                                                </div>
+                                            )) : <p className="empty-note">관련 법령 정보가 아직 충분하지 않습니다.</p>}
+                                        </div>
+                                    </section>
+
+                                    <section className="ss-card report-section">
+                                        <div className="report-section-head">
+                                            <span>04</span>
+                                            <div>
+                                                <p className="ss-label">예상 조치 범위</p>
+                                                <small>{measureRangeText}</small>
+                                            </div>
+                                        </div>
+                                        <div className="measure-steps">
+                                            {MEASURES.map((measure, i) => (
+                                                <div
+                                                    key={measure}
+                                                    className={`measure-step ${i <= mEnd ? 'active' : ''} ${i >= mStart && i <= mEnd ? 'in-range' : ''}`}
+                                                >
+                                                    <strong>{i + 1}</strong>
+                                                    <span>{measure}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </section>
                                 </div>
 
-                                <h2 className="ss-sub-title">{evidenceSectionTitle}</h2>
-                                <div className="ss-card">
+                                <section className="ss-card report-section evidence-section">
                                     <div className="ss-evidence-header">
-                                        <p className="ss-ai" style={{ margin: 0 }}>{evidenceSectionDesc}</p>
+                                        <div>
+                                            <p className="ss-label">{evidenceSectionTitle}</p>
+                                            <p className="ss-ai" style={{ margin: 0 }}>{evidenceSectionDesc}</p>
+                                        </div>
                                         <span className="ss-check-progress">{checkedCount} / {evidenceItems.length} 완료</span>
                                     </div>
                                     <div className="ss-checklist">
@@ -354,10 +406,9 @@ const SShieldResult = () => {
                                             </div>
                                         ))}
                                     </div>
-                                </div>
+                                </section>
 
-                                <h2 className="ss-sub-title">다음 행동</h2>
-                                <div className="ss-actions">
+                                <div className="ss-actions report-actions">
                                     <a href="tel:117" className="ss-action-link"><button>117 학교폭력 신고</button></a>
                                     <button onClick={goToReportChat}>상담 이어가기</button>
                                 </div>

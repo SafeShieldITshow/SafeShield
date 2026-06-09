@@ -158,6 +158,27 @@
   box-shadow: var(--shadow-sm);
 }
 
+.confirmation-kicker {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 7px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #efeaff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.confirmation-purpose {
+  display: block;
+  margin: 0 0 8px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .confirmation-prompt p {
   margin: 0 0 9px;
   color: #f7f5ff;
@@ -276,20 +297,29 @@
   border-radius: var(--r-lg);
   padding: 7px 8px 7px 18px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  gap: 10px;
   box-shadow: var(--shadow-sm);
 }
-.ss-input-box input {
+.ss-input-box textarea {
   flex: 1;
   background: transparent;
   border: none;
   color: var(--text);
   font-size: 14px;
   font-family: var(--font);
+  line-height: 1.5;
   outline: none;
+  min-height: 24px;
+  max-height: 132px;
+  resize: none;
+  overflow-y: hidden;
+  padding: 7px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
-.ss-input-box input::placeholder { color: var(--text-muted); }
-.ss-input-box input:disabled {
+.ss-input-box textarea::placeholder { color: var(--text-muted); }
+.ss-input-box textarea:disabled {
   cursor: wait;
   opacity: 0.65;
 }
@@ -366,6 +396,7 @@
   font-weight: 700;
   cursor: pointer;
   transition: background var(--ease), transform var(--ease);
+  margin-bottom: 2px;
 }
 
 .guest-history-notice button:hover {

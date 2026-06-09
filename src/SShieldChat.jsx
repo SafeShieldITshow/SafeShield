@@ -26,7 +26,9 @@ const removeInlineDisclaimer = (text = '') => text
 const normalizeConfirmationPrompts = (prompts = []) => (Array.isArray(prompts) ? prompts : [])
     .map((prompt) => ({
         id: prompt.id || prompt.question,
+        purpose: String(prompt.purpose || '').trim(),
         question: String(prompt.question || '').trim(),
+        instruction: String(prompt.instruction || '').trim(),
         options: (Array.isArray(prompt.options) ? prompt.options : [])
             .map((option) => ({
                 label: String(option.label || '').trim(),
@@ -424,6 +426,14 @@ const SShieldChat = () => {
         }
     }, [messages]);
 
+    useEffect(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = `${Math.min(el.scrollHeight, 132)}px`;
+        el.style.overflowY = el.scrollHeight > 132 ? 'auto' : 'hidden';
+    }, [input]);
+
     const handleScroll = () => {
         const el = scrollRef.current;
         if (!el) return;
@@ -659,6 +669,13 @@ const SShieldChat = () => {
         }, 700);
     };
 
+    const handleInputKeyDown = (e) => {
+        if (e.key !== 'Enter') return;
+        if (e.shiftKey) return;
+        e.preventDefault();
+        sendOrAskTopic();
+    };
+
     return (
         <div className={`ss-chat-root ${isLoggingOut ? 'logging-out' : ''}`}>
             <aside
@@ -770,8 +787,14 @@ const SShieldChat = () => {
                                                     );
                                                     return (
                                                     <div className="confirmation-prompt" key={promptKey}>
+                                                        <span className="confirmation-kicker">답변과 이어지는 확인</span>
+                                                        {prompt.purpose && (
+                                                            <span className="confirmation-purpose">{prompt.purpose}</span>
+                                                        )}
                                                         <p>{prompt.question}</p>
-                                                        <span className="confirmation-multi-hint">여러 개 선택 가능 · 필요하면 직접 입력도 함께 작성</span>
+                                                        <span className="confirmation-multi-hint">
+                                                            {prompt.instruction || '여러 개 선택 가능 · 필요하면 직접 입력도 함께 작성'}
+                                                        </span>
                                                         <div className="confirmation-options">
                                                             {prompt.options.map((option) => {
                                                                 const optionKey = confirmationOptionKey(option);
@@ -857,14 +880,14 @@ const SShieldChat = () => {
                     )}
 
                     <div className="ss-input-box">
-                        <input
+                        <textarea
                             ref={inputRef}
-                            type="text"
                             placeholder="상황을 입력해 주세요"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && sendOrAskTopic()}
+                            onKeyDown={handleInputKeyDown}
                             disabled={isChatBusy}
+                            rows={1}
                         />
                         <button className="ss-send-btn" onClick={() => sendOrAskTopic()} disabled={isChatBusy}>
                             보내기
