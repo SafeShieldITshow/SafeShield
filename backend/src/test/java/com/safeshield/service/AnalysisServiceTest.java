@@ -127,6 +127,19 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void keepsOneOffMinorVerbalCaseLowWhenNoImpactAndResolved() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var result = analysisService.analyze(
+                "같은 반 친구가 오늘 한 번 욕을 했지만 바로 사과했고 현재 불편한 점은 없습니다.",
+                readiness
+        );
+
+        assertTrue(result.riskScore() <= 3.0,
+                "1회성 경미 발언, 사과, 영향 없음이 함께 있으면 위험도를 낮게 제한해야 합니다.");
+    }
+
+    @Test
     void doesNotOverrateMildComplimentOrMisunderstandingAsViolence() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "같은 반 친구에게 귀엽다고 했는데 상대가 그냥 기분이 상한 정도라고 했습니다. 욕설로 볼 일은 아니고 오늘 한 번 있었으며 불편한 점은 없다고 합니다. 어떻게 정리해야 하나요? " +
@@ -206,9 +219,9 @@ class AnalysisServiceTest {
     void becomesReadyWhenCaseStructureIsConfirmed() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
-                        "캡처와 URL이 있고 불안해서 등교가 힘듭니다. 증거 정리와 신고 절차를 알고 싶습니다. " +
+                "캡처와 URL이 있고 불안해서 등교가 힘듭니다. 증거 정리와 신고 절차를 알고 싶습니다. " +
                         "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
-                6
+                8
         );
         var result = analysisService.analyze(
                 "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
@@ -228,11 +241,24 @@ class AnalysisServiceTest {
                 "저는 피해를 당한 입장입니다. 같은 반 친구에게 제가 욕을 먹었고 오늘 캡처가 있습니다. " +
                         "여러 번 반복됐고 불안해서 담임에게 상담하고 싶습니다. " +
                         "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
-                5
+                7
         );
 
         assertTrue(readiness.ready(), "피해자 문장도 사안 구조가 충분하면 리포트 준비가 되어야 합니다.");
         assertFalse(readiness.status().contains("가해"), "제가 욕을 먹었다는 표현을 가해자 관점으로 오판하면 안 됩니다.");
+    }
+
+    @Test
+    void treatsGuardianMentionAsVictimWhenUserIsSeekingHelpForSelf() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "같은 반 친구가 저를 때려서 멍 사진이 있고 오늘 보호자에게 말하려고 합니다. " +
+                        "불안해서 신고 절차를 알고 싶고, 확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
+                7
+        );
+
+        assertTrue(readiness.ready(), "보호자에게 말하겠다는 피해자 문장을 보호자 관점으로 오판하면 안 됩니다.");
+        assertFalse(readiness.status().contains("목격자"), "피해자가 보호자를 언급한 것만으로 목격자 또는 보호자 관점이 되면 안 됩니다.");
+        assertFalse(readiness.status().contains("가해"), "피해자 문장이 가해 관점으로 바뀌면 안 됩니다.");
     }
 
     @Test
@@ -241,7 +267,7 @@ class AnalysisServiceTest {
                 "저는 가해 또는 연루된 입장입니다. 같은 반 친구에게 제가 단톡방에서 여러 번 욕설을 했고 사진도 올렸습니다. " +
                         "캡처가 있고 오늘 담임에게 말하려고 합니다. 미안하고 사과와 피해 회복 방법을 알고 싶습니다. " +
                         "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
-                6
+                8
         );
         var result = analysisService.analyze(
                 "저는 가해 또는 연루된 입장입니다. 같은 반 친구에게 제가 단톡방에서 여러 번 욕설을 했고 사진도 올렸습니다. " +
@@ -268,13 +294,13 @@ class AnalysisServiceTest {
         ReportReadiness almost = analysisService.assessReportReadiness(
                 "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
                         "캡처와 URL이 있고 불안해서 증거 정리와 신고 절차를 알고 싶습니다.",
-                6
+                8
         );
         ReportReadiness confirmed = analysisService.assessReportReadiness(
                 "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
                         "캡처와 URL이 있고 불안해서 증거 정리와 신고 절차를 알고 싶습니다. " +
                         "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
-                6
+                8
         );
 
         assertFalse(first.ready(), "첫 메시지에 정보가 충분해도 바로 리포트를 열지 않습니다.");
@@ -303,7 +329,7 @@ class AnalysisServiceTest {
                 "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설을 오늘 한 번 했습니다. " +
                         "캡처가 있고 불편한 점은 없습니다. 증거 정리 방법을 알고 싶습니다. " +
                         "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.",
-                6
+                7
         );
 
         assertFalse(readiness.missingInfo().contains("피해 영향이나 피해 회복을 위해 이미 한 일이 있는지"),

@@ -227,10 +227,10 @@ public class AnalysisService {
     }
 
     private int requiredUserMessageCount(String text, String role, List<String> types) {
-        int required = 5;
-        if ("가해 또는 연루".equals(role) || types.size() >= 2) required = 6;
-        if (containsAny(text, "단톡", "단체 채팅", "여러 명", "무리", "보복", "협박", "지금도", "아직도")) required = 6;
-        if (containsAny(text, "성추행", "성희롱", "성적", "갈취", "스토킹", "흉기", "칼", "골절", "응급실")) required = 6;
+        int required = 7;
+        if ("가해 또는 연루".equals(role) || types.size() >= 2) required = 8;
+        if (containsAny(text, "단톡", "단체 채팅", "여러 명", "무리", "보복", "협박", "지금도", "아직도")) required = Math.max(required, 8);
+        if (containsAny(text, "성추행", "성희롱", "성적", "갈취", "스토킹", "흉기", "칼", "골절", "응급실")) required = Math.max(required, 9);
         return required;
     }
 
@@ -261,6 +261,7 @@ public class AnalysisService {
         boolean resolved = containsAny(t, "삭제", "사과", "멈췄", "그만뒀", "해결");
         boolean mildExpression = isMildExpressionOrMisunderstanding(t);
         boolean noMeaningfulImpact = hasNoMeaningfulImpact(t);
+        boolean minorContext = containsAny(t, "별거 아니", "사소", "가벼운", "오해", "장난", "실수", "기분만", "기분이 상한 정도");
 
         if (repeated) score += 0.6;
         if (longTerm) score += 0.4;
@@ -313,6 +314,11 @@ public class AnalysisService {
         double cap = 10.0;
         if (mildExpression && !repeated && !severeSignal) {
             cap = noMeaningfulImpact ? 2.6 : 3.2;
+        } else if (verbalOrCyberOnly && oneOff && !repeated && !ongoing && !publicSpread && !identityExposure && !severeSignal
+                && (noMeaningfulImpact || minorContext || resolved)) {
+            cap = 3.0;
+        } else if (verbalOrCyberOnly && oneOff && !repeated && !ongoing && !publicSpread && !identityExposure && !severeSignal) {
+            cap = 3.8;
         } else if (verbalOrCyberOnly && !repeated && !severeSignal) {
             cap = publicSpread || identityExposure ? 5.0 : 4.2;
         } else if (verbalOrCyberOnly && !severeSignal) {
@@ -464,13 +470,21 @@ public class AnalysisService {
         if (isPerpetratorPerspective(text)) {
             return "가해 또는 연루";
         }
-        if (containsAny(text, "봤", "목격", "친구가 당", "자녀", "아이", "부모", "보호자")) {
+        if (isVictimPerspective(text)) {
+            return "피해 또는 상담";
+        }
+        if (isWitnessOrGuardianPerspective(text)) {
             return "목격자 또는 보호자";
         }
         return "피해 또는 상담";
     }
 
     private boolean isPerpetratorPerspective(String text) {
+        if (isVictimPerspective(text) && !containsAny(text,
+                "저는 가해", "제가 가해", "내가 가해", "본인이 가해",
+                "제가 때렸", "내가 때렸", "제가 욕했", "내가 욕했", "제가 올렸", "내가 올렸")) {
+            return false;
+        }
         boolean directPhrase = containsAny(text,
                 "제가 때렸", "내가 때렸", "제가 밀쳤", "내가 밀쳤",
                 "제가 욕했", "내가 욕했", "제가 욕을 했", "내가 욕을 했",
@@ -478,12 +492,26 @@ public class AnalysisService {
                 "제가 게시", "내가 게시", "제가 댓글", "내가 댓글",
                 "제가 괴롭혔", "내가 괴롭혔", "제가 따돌", "내가 따돌",
                 "저도 같이 욕", "같이 욕했", "장난으로 올렸",
-                "사과하고 싶", "처벌받", "제가 가해", "내가 가해", "본인이 가해");
+                "사과하고 싶", "제가 처벌받", "내가 처벌받", "제가 가해", "내가 가해", "본인이 가해");
         boolean selfActor = containsAny(text, "제가", "내가", "저도", "본인이");
         boolean harmfulAction = containsAny(text,
                 "때렸", "밀쳤", "욕했", "욕을 했", "욕설을 했", "올렸", "게시", "댓글을 달",
                 "괴롭혔", "따돌", "놀렸", "빼앗", "강요");
         return directPhrase || (selfActor && harmfulAction);
+    }
+
+    private boolean isVictimPerspective(String text) {
+        return containsAny(text,
+                "피해를 당", "피해 당", "제가 피해", "저는 피해", "내가 피해", "제가 당", "내가 당",
+                "맞아서", "맞았고", "맞았어요", "욕을 먹", "욕먹", "괴롭힘 당", "괴롭힘을 당",
+                "신고하려", "신고하고 싶", "사과 받고", "사과 받", "처벌받게", "상대가 저를", "친구가 저를",
+                "제 사진", "저한테", "저에게");
+    }
+
+    private boolean isWitnessOrGuardianPerspective(String text) {
+        return containsAny(text,
+                "목격", "제가 봤", "내가 봤", "친구가 당", "친구가 맞", "친구가 욕",
+                "자녀", "우리 아이", "제 아이", "아이가", "부모입니다", "보호자입니다", "엄마입니다", "아빠입니다");
     }
 
     private boolean hasSchoolContext(String text) {

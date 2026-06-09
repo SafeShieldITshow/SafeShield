@@ -222,6 +222,27 @@ class ChatServiceTest {
         assertTrue(questions.get(0).contains("완전히 중단"));
     }
 
+    @Test
+    void doesNotUsePerpetratorQuestionForVictimWantingApology() {
+        ReportReadiness readiness = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "원하는 도움을 확인해야 합니다.",
+                List.of("원하는 도움이 무엇인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                readiness,
+                "같은 반 친구가 저한테 욕을 했고 저는 사과 받고 싶습니다. 캡처가 있습니다.",
+                4
+        );
+
+        assertTrue(questions.get(0).contains("가장 필요한 도움"));
+        assertFalse(questions.get(0).contains("사과 방식"));
+    }
+
     private ReportReadiness needsMoreContext() {
         return new ReportReadiness(
                 false,
