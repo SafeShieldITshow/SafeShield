@@ -288,18 +288,8 @@ public class ChatService {
         }
         if (trimmed.contains("아래 확인 카드") || trimmed.contains("아래 선택지")) return trimmed;
 
-        Object question = prompts.get(0).get("question");
-        return (trimmed + "\n\n" + "아래 확인 카드에서 "
-                + quoteQuestion(String.valueOf(question))
-                + "에 답해 주세요. 선택하거나 직접 적으면 다음 답변과 리포트에 반영하겠습니다.").trim();
-    }
-
-    private static String quoteQuestion(String question) {
-        String normalized = question == null ? "" : question.trim();
-        if (normalized.isBlank() || "null".equalsIgnoreCase(normalized)) {
-            return "이어지는 확인 질문";
-        }
-        return "\"" + normalized + "\"";
+        return (trimmed + "\n\n"
+                + "아래 확인 카드에 답해 주세요. 선택하거나 직접 적으면 다음 답변과 리포트에 반영하겠습니다.").trim();
     }
 
     private static String stripGeneratedQuestionSentences(String reply) {
