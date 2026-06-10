@@ -303,6 +303,8 @@ class ChatServiceTest {
     @Test
     void doesNotTreatConfirmationAnswerAsIrrelevantInput() {
         assertFalse(ChatService.shouldGuardIrrelevantInput("확인 답변: 몇 주 이상 지속됐습니다.", false));
+        assertTrue(ChatService.shouldGuardIrrelevantInput("확인 답변: 똥싸기", false));
+        assertTrue(ChatService.shouldGuardIrrelevantInput("확인 답변: ㅁㄴㅇㄹ", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("똥싸기", false));
     }
 

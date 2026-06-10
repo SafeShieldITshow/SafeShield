@@ -156,6 +156,17 @@ public class ChatService {
         boolean newSessionStarted = false;
         Session session = requestedSession;
 
+        List<Message> existingHistory = messageRepository.findBySessionOrderByCreatedAtAsc(session);
+        if (isConversationStopped(existingHistory)) {
+            ReportReadiness readiness = assessReadiness(existingHistory);
+            return stoppedResponse(
+                    session,
+                    buildConversationStoppedReply("이미 중단된 상담입니다. 새 상담에서 다시 시작해야 합니다."),
+                    messageRepository.countBySessionAndRole(session, "user"),
+                    readiness
+            );
+        }
+
         Message userMessage = new Message();
         userMessage.setSession(session);
         userMessage.setRole("user");
@@ -164,6 +175,21 @@ public class ChatService {
 
         List<Message> history = messageRepository.findBySessionOrderByCreatedAtAsc(session);
         ReportReadiness readiness = assessReadiness(history);
+        if (shouldGuardIrrelevantInput(normalized, isConversationalFollowUp(normalized, history))) {
+            String reply = buildConversationStoppedReply(stopReasonForInput(normalized));
+            Message aiMessage = new Message();
+            aiMessage.setSession(session);
+            aiMessage.setRole("assistant");
+            aiMessage.setContent(reply);
+            messageRepository.save(aiMessage);
+            return stoppedResponse(
+                    session,
+                    reply,
+                    messageRepository.countBySessionAndRole(session, "user"),
+                    readiness
+            );
+        }
+
         List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
         String reply = connectReplyToConfirmation(getAiReply(history), confirmationPrompts);
 
@@ -175,18 +201,19 @@ public class ChatService {
 
         boolean reportUpdated = reportService.refreshReportsForSession(user, session);
         long userMessageCount = messageRepository.countBySessionAndRole(session, "user");
-        return Map.of(
-                "session_id", session.getId(),
-                "reply", reply,
-                "user_message_count", userMessageCount,
-                "new_session_started", newSessionStarted,
-                "report_updated", reportUpdated,
-                "report_ready", readiness.ready(),
-                "report_status", readiness.status(),
-                "report_reason", readiness.reason(),
-                "missing_info", readiness.missingInfo(),
-                "confirmation_prompts", confirmationPrompts
-        );
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("session_id", session.getId());
+        response.put("reply", reply);
+        response.put("user_message_count", userMessageCount);
+        response.put("new_session_started", newSessionStarted);
+        response.put("report_updated", reportUpdated);
+        response.put("report_ready", readiness.ready());
+        response.put("report_status", readiness.status());
+        response.put("report_reason", readiness.reason());
+        response.put("missing_info", readiness.missingInfo());
+        response.put("confirmation_prompts", confirmationPrompts);
+        response.put("conversation_stopped", false);
+        return response;
     }
 
     public Map<String, Object> sendGuestMessage(String content, List<HistoryMessage> clientHistory) {
@@ -200,6 +227,21 @@ public class ChatService {
 
         List<Message> history = guestHistory(clientHistory, normalized);
         ReportReadiness readiness = assessReadiness(history);
+        if (isConversationStopped(history) || shouldGuardIrrelevantInput(normalized, isConversationalFollowUp(normalized, history))) {
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("session_id", null);
+            response.put("reply", buildConversationStoppedReply(stopReasonForInput(normalized)));
+            response.put("user_message_count", userMessageCount(history));
+            response.put("new_session_started", false);
+            response.put("report_ready", false);
+            response.put("report_status", "대화 중단");
+            response.put("report_reason", stopReasonForInput(normalized));
+            response.put("missing_info", List.of());
+            response.put("confirmation_prompts", List.of());
+            response.put("conversation_stopped", true);
+            response.put("temporary", true);
+            return response;
+        }
         List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
         String reply = connectReplyToConfirmation(getAiReply(history), confirmationPrompts);
 
@@ -213,6 +255,7 @@ public class ChatService {
         response.put("report_reason", readiness.reason());
         response.put("missing_info", readiness.missingInfo());
         response.put("confirmation_prompts", confirmationPrompts);
+        response.put("conversation_stopped", false);
         response.put("temporary", true);
         return response;
     }
@@ -261,14 +304,32 @@ public class ChatService {
     }
 
     private Map<String, Object> readinessToMap(ReportReadiness readiness, List<Message> history) {
+        boolean stopped = isConversationStopped(history);
         return Map.of(
-                "ready", readiness.ready(),
-                "status", readiness.status(),
-                "reason", readiness.reason(),
-                "missing_info", readiness.missingInfo(),
-                "confirmation_prompts", confirmationPrompts(readiness, history),
-                "school_violence_likely", readiness.schoolViolenceLikely()
+                "ready", stopped ? false : readiness.ready(),
+                "status", stopped ? "대화 중단" : readiness.status(),
+                "reason", stopped ? "학교폭력 상담과 무관한 입력으로 상담이 중단되었습니다." : readiness.reason(),
+                "missing_info", stopped ? List.of() : readiness.missingInfo(),
+                "confirmation_prompts", stopped ? List.of() : confirmationPrompts(readiness, history),
+                "school_violence_likely", !stopped && readiness.schoolViolenceLikely(),
+                "conversation_stopped", stopped
         );
+    }
+
+    private Map<String, Object> stoppedResponse(Session session, String reply, long userMessageCount, ReportReadiness readiness) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("session_id", session.getId());
+        response.put("reply", reply);
+        response.put("user_message_count", userMessageCount);
+        response.put("new_session_started", false);
+        response.put("report_updated", false);
+        response.put("report_ready", false);
+        response.put("report_status", "대화 중단");
+        response.put("report_reason", "학교폭력 상담과 무관한 입력으로 상담이 중단되었습니다.");
+        response.put("missing_info", readiness == null ? List.of() : readiness.missingInfo());
+        response.put("confirmation_prompts", List.of());
+        response.put("conversation_stopped", true);
+        return response;
     }
 
     private List<Map<String, Object>> confirmationPrompts(ReportReadiness readiness, List<Message> history) {
@@ -1100,15 +1161,32 @@ public class ChatService {
         return "";
     }
 
+    private static boolean isConversationStopped(List<Message> history) {
+        if (history == null) return false;
+        return history.stream()
+                .filter(message -> "assistant".equals(message.getRole()))
+                .map(Message::getContent)
+                .filter(Objects::nonNull)
+                .anyMatch(content -> content.contains("__대화가 중단 되었습니다.__"));
+    }
+
     static boolean shouldGuardIrrelevantInput(String latestUserMessage, boolean conversationalFollowUp) {
+        String answerText = confirmationAnswerBody(latestUserMessage);
+        if (isExplicitOffTopicNonsense(answerText)) return true;
         if (isConfirmationAnswer(latestUserMessage)) return false;
-        if (isExplicitOffTopicNonsense(latestUserMessage)) return true;
-        return isIrrelevantInput(latestUserMessage) && !conversationalFollowUp;
+        return isIrrelevantInput(answerText) && !conversationalFollowUp;
     }
 
     private static boolean isConfirmationAnswer(String text) {
         String t = text == null ? "" : text.trim();
         return t.startsWith("확인 답변:") || t.startsWith("확인답변:");
+    }
+
+    private static String confirmationAnswerBody(String text) {
+        String t = text == null ? "" : text.trim();
+        if (t.startsWith("확인 답변:")) return t.substring("확인 답변:".length()).trim();
+        if (t.startsWith("확인답변:")) return t.substring("확인답변:".length()).trim();
+        return t;
     }
 
     private static boolean isIrrelevantInput(String text) {
@@ -1140,26 +1218,38 @@ public class ChatService {
         if (containsAny(text,
                 "똥싸", "똥 쌌", "오줌", "방귀", "뭐먹", "배고파", "졸려", "잠와", "심심",
                 "게임", "롤 ", "발로란트", "마크", "유튜브", "노래", "아이돌", "날씨", "농담",
-                "ㅋㅋ", "ㅎㅎ", "ㅗ", "ㅅㅂ", "씨발", "개소리", "헛소리")) {
+                "ㅋㅋ", "ㅎㅎ", "ㅗ", "ㅅㅂ", "ㅂㅅ", "씨발", "시발", "병신", "개소리", "헛소리", "아무거나", "아무말")) {
             return true;
         }
         String compact = text.replaceAll("\\s+", "");
-        return compact.matches("^[ㅋㅎㅠㅜㅡㅇㄴㄱㄷㅁㅂㅅㅈㅊㅍㅎ]{2,}$");
+        return compact.matches("^[ㅋㅎㅠㅜㅡㅇㄴㄱㄷㄹㅁㅂㅅㅈㅊㅍㅎ]{2,}$");
     }
 
     private String buildIrrelevantInputReply() {
-        return """
-                이 내용은 학교폭력 상담과 직접 연결되는 정보로 보기 어렵습니다.
-                상담 기록과 리포트가 섞이지 않게, 학교폭력·사이버폭력·따돌림·협박·폭행·증거 정리와 관련된 내용만 이어서 다룰게요.
-                """.trim();
+        return buildConversationStoppedReply("학교폭력 상담과 무관한 입력입니다.");
     }
 
     private String buildPerpetratorOffTopicReply() {
+        return buildConversationStoppedReply("본인이 한 행동과 피해 회복 상담에 무관한 입력입니다.");
+    }
+
+    private String buildConversationStoppedReply(String reason) {
         return """
-                지금 상담은 본인이 한 행동과 피해 회복을 기준으로 정리 중입니다.
-                방금 내용은 이 사안과 직접 연결되는 정보로 보기 어렵습니다.
-                같은 사안에 반영할 내용이면 삭제·사과·피해 회복·재발 방지 중 무엇과 관련되는지 말해 주세요. 다른 사안이면 새 상담으로 분리하는 편이 좋습니다.
-                """.trim();
+                __대화가 중단 되었습니다.__
+                사유 : %s
+                새 상담이 필요하면 새 상담으로 다시 시작해 주세요.
+                """.formatted(reason).trim();
+    }
+
+    private static String stopReasonForInput(String text) {
+        String body = confirmationAnswerBody(text);
+        if (isConfirmationAnswer(text)) {
+            return "확인 질문에 학교폭력 상담과 무관한 답변이 입력되었습니다.";
+        }
+        if (isExplicitNonsenseOrSmallTalk(body)) {
+            return "학교폭력 상담과 무관한 장난성 또는 의미 없는 입력입니다.";
+        }
+        return "학교폭력 상담과 직접 관련 없는 입력입니다.";
     }
 
     private boolean isConversationalFollowUp(String text, List<Message> history) {

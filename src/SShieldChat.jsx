@@ -10,6 +10,8 @@ const EXAMPLE_QUESTIONS = [
     'SNS에 제 사진과 비방 글이 올라왔습니다.',
 ];
 
+const CONVERSATION_STOPPED_MARKER = '__대화가 중단 되었습니다.__';
+
 const initialMessage = () => ({
     id: 'welcome',
     type: 'ai',
@@ -40,6 +42,12 @@ const normalizeConfirmationPrompts = (prompts = []) => (Array.isArray(prompts) ?
 
 const clearConfirmationPrompts = (items) => items.map((message) => (
     message.confirmationPrompts?.length ? { ...message, confirmationPrompts: [] } : message
+));
+
+const isStoppedMessage = (text = '') => String(text).includes(CONVERSATION_STOPPED_MARKER);
+
+const hasStoppedConversation = (items = []) => items.some((message) => (
+    message.type === 'ai' && isStoppedMessage(message.text)
 ));
 
 const attachPromptsToLatestAiMessage = (items, prompts) => {
@@ -296,6 +304,7 @@ const SShieldChat = () => {
     const [isSessionLoading, setIsSessionLoading] = useState(false);
     const [isSessionsLoading, setIsSessionsLoading] = useState(false);
     const [isGuestMode, setIsGuestMode] = useState(() => !hasToken());
+    const [conversationStopped, setConversationStopped] = useState(false);
     const scrollRef = useRef(null);
     const inputRef = useRef(null);
     const typingTimerRef = useRef(null);
@@ -310,6 +319,7 @@ const SShieldChat = () => {
     const isGuest = isGuestMode;
     const isCurrentLoading = pendingKeys.has(conversationKey);
     const isChatBusy = isCurrentLoading || isSessionLoading;
+    const isChatLocked = isChatBusy || conversationStopped;
 
     const requireLoginForSavedFeature = () => {
         alert('상담 기록과 리포트는 로그인 후 이용할 수 있습니다.');
@@ -321,6 +331,7 @@ const SShieldChat = () => {
         conversationKeyRef.current = key;
         setSessionId(id);
         setConversationKey(key);
+        setConversationStopped(false);
         if (id) setSession(id);
     }, []);
 
@@ -369,6 +380,7 @@ const SShieldChat = () => {
             const readiness = detail.readiness || {};
             const uiMessages = items.length ? items.map(toUiMessage) : [initialMessage()];
             setMessages(attachPromptsToLatestAiMessage(uiMessages, readiness.confirmation_prompts));
+            setConversationStopped(Boolean(readiness.conversation_stopped) || hasStoppedConversation(uiMessages));
             setShowReport(Boolean(readiness.ready));
         } catch {
             if (loadSequence !== messageLoadSequenceRef.current) return;
@@ -489,7 +501,7 @@ const SShieldChat = () => {
 
     const sendOrAskTopic = (text) => {
         const content = (text || input).trim();
-        if (!content || isChatBusy) return;
+        if (!content || isChatLocked) return;
 
         if (shouldConfirmTopic(content)) {
             setTopicPrompt(content);
@@ -517,6 +529,7 @@ const SShieldChat = () => {
             activateConversation(null, targetKey);
             setIsSessionLoading(false);
             setShowReport(false);
+            setConversationStopped(false);
         }
         setMessages((prev) => [
             ...(options.forceNewSession ? [] : clearConfirmationPrompts(prev)),
@@ -538,7 +551,9 @@ const SShieldChat = () => {
                 if (!guestSend && targetSessionId === null) {
                     activateConversation(data.session_id);
                 }
-                setShowReport(!guestSend && Boolean(data.report_ready));
+                const stopped = Boolean(data.conversation_stopped) || isStoppedMessage(data.reply);
+                setConversationStopped(stopped);
+                setShowReport(!stopped && !guestSend && Boolean(data.report_ready));
                 appendTypingReply(data.reply, data.confirmation_prompts);
             }
             if (!guestSend) loadSessions();
@@ -563,7 +578,7 @@ const SShieldChat = () => {
     };
 
     const handleGenerateReport = async () => {
-        if (!sessionId || isChatBusy) return;
+        if (!sessionId || isChatLocked) return;
         setGeneratingReport(true);
         try {
             const report = await api.post('/reports/generate', { sessionId, title: '' });
@@ -576,7 +591,7 @@ const SShieldChat = () => {
     };
 
     const handleConfirmationOption = (messageId, prompt, promptIndex, option) => {
-        if (isChatBusy) return;
+        if (isChatLocked) return;
         const message = String(option?.message || '').trim();
         if (!message) return;
 
@@ -604,6 +619,7 @@ const SShieldChat = () => {
     };
 
     const handleConfirmationCustomChange = (messageId, prompt, promptIndex, value) => {
+        if (isChatLocked) return;
         const key = confirmationPromptKey(messageId, prompt, promptIndex);
         setConfirmationDrafts((prev) => ({
             ...prev,
@@ -643,7 +659,7 @@ const SShieldChat = () => {
         .filter(Boolean);
 
     const handleSendConfirmation = (message) => {
-        if (isChatBusy) return;
+        if (isChatLocked) return;
         const answers = confirmationAnswersForMessage(message);
         if (!answers.length) return;
         setMessages((prev) => prev.map((item) => (
@@ -662,6 +678,7 @@ const SShieldChat = () => {
         setShowReport(false);
         setMessages([initialMessage()]);
         setInput('');
+        setConversationStopped(false);
     };
 
     const handleLogout = () => {
@@ -806,7 +823,7 @@ const SShieldChat = () => {
                                                                         type="button"
                                                                         aria-pressed={selected}
                                                                         onClick={() => handleConfirmationOption(msg.id, prompt, promptIndex, option)}
-                                                                        disabled={isChatBusy}
+                                                                        disabled={isChatLocked}
                                                                     >
                                                                         {option.label}
                                                                     </button>
@@ -824,7 +841,7 @@ const SShieldChat = () => {
                                                                     handleSendConfirmation(msg);
                                                                 }
                                                             }}
-                                                            disabled={isChatBusy}
+                                                            disabled={isChatLocked}
                                                         />
                                                     </div>
                                                     );
@@ -834,7 +851,7 @@ const SShieldChat = () => {
                                                         type="button"
                                                         className="confirmation-submit-btn"
                                                         onClick={() => handleSendConfirmation(msg)}
-                                                        disabled={isChatBusy || !confirmationAnswersForMessage(msg).length}
+                                                        disabled={isChatLocked || !confirmationAnswersForMessage(msg).length}
                                                     >
                                                         확인 답변 보내기
                                                     </button>
@@ -864,7 +881,7 @@ const SShieldChat = () => {
                 <footer className="ss-chat-footer">
                     <div className="example-chips">
                         {EXAMPLE_QUESTIONS.map((q) => (
-                            <button key={q} className="example-chip" onClick={() => sendOrAskTopic(q)} disabled={isChatBusy}>
+                            <button key={q} className="example-chip" onClick={() => sendOrAskTopic(q)} disabled={isChatLocked}>
                                 {q}
                             </button>
                         ))}
@@ -873,23 +890,28 @@ const SShieldChat = () => {
                     {showReport && (
                         <div className="chat-cta">
                             <p>핵심 정보가 확인되었습니다. 분석 리포트를 생성해 확인해 보세요.</p>
-                            <button className="chat-cta-btn" onClick={handleGenerateReport} disabled={generatingReport || isChatBusy}>
+                            <button className="chat-cta-btn" onClick={handleGenerateReport} disabled={generatingReport || isChatLocked}>
                                 {generatingReport ? '생성 중...' : '리포트 보기'}
                             </button>
                         </div>
                     )}
 
+                    {conversationStopped && (
+                        <p className="ss-stopped-notice">
+                            이 상담은 중단되었습니다. 새 상담을 눌러 다시 시작해 주세요.
+                        </p>
+                    )}
                     <div className="ss-input-box">
                         <textarea
                             ref={inputRef}
-                            placeholder="상황을 입력해 주세요"
+                            placeholder={conversationStopped ? '대화가 중단되었습니다. 새 상담을 시작해 주세요.' : '상황을 입력해 주세요'}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleInputKeyDown}
-                            disabled={isChatBusy}
+                            disabled={isChatLocked}
                             rows={1}
                         />
-                        <button className="ss-send-btn" onClick={() => sendOrAskTopic()} disabled={isChatBusy}>
+                        <button className="ss-send-btn" onClick={() => sendOrAskTopic()} disabled={isChatLocked}>
                             보내기
                         </button>
                     </div>
