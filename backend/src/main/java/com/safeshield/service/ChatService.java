@@ -1252,6 +1252,7 @@ public class ChatService {
         String t = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
         if (t.isBlank()) return false;
         if (t.length() <= 1) return true;
+        if (isConsultationMetaQuestion(t)) return false;
         if (hasConsultationSignal(t)) return false;
         if (isExplicitNonsenseOrSmallTalk(t)) return true;
         if (isAcknowledgement(t) || isEmotionalConversation(t)) return false;
@@ -1270,7 +1271,16 @@ public class ChatService {
                 "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
                 "괴롭", "괴롭힘", "놀림", "놀렸", "놀려", "비하", "무시", "소외", "패드립",
                 "sns", "카톡", "단톡", "채팅", "채팅방", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "갈취", "스토킹",
-                "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담");
+                "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담", "확인 질문");
+    }
+
+    private static boolean isConsultationMetaQuestion(String text) {
+        boolean explicitQuestion = containsAny(text, "어떤 확인", "무슨 확인", "뭐 확인", "뭘 확인", "무엇을 확인",
+                "어떤 질문", "무슨 질문", "뭐 물어", "뭘 물어", "추가 질문", "추가 확인",
+                "뭘 더", "뭐가 더");
+        boolean asksWhatIsNeeded = containsAny(text, "필요한가", "필요해", "필요하")
+                && containsAny(text, "확인", "질문", "리포트", "상담", "어떤", "무슨", "무엇", "뭐", "뭘");
+        return explicitQuestion || asksWhatIsNeeded;
     }
 
     private static boolean isExplicitNonsenseOrSmallTalk(String text) {
@@ -1316,7 +1326,8 @@ public class ChatService {
         if (userMessageCount(history) <= 1) return false;
         return isAcknowledgement(text)
                 || isEmotionalConversation(text)
-                || containsAny(text, "어떡", "어떻게", "괜찮", "말해", "얘기", "상담", "리포트", "기록", "반영");
+                || isConsultationMetaQuestion(text)
+                || containsAny(text, "어떡", "어떻게", "어떤", "무엇", "뭐", "괜찮", "말해", "얘기", "상담", "리포트", "기록", "반영");
     }
 
     private static boolean isAcknowledgement(String text) {

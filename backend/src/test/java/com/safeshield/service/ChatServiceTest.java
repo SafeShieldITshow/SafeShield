@@ -312,6 +312,10 @@ class ChatServiceTest {
         assertTrue(ChatService.shouldGuardIrrelevantInput("똥싸기", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("응가", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("똥", false));
+        assertTrue(ChatService.shouldGuardIrrelevantInput("밥 필요해", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("어떤 확인이 필요한가요?", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("뭘 더 확인해야 해요?", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("추가 질문이 뭐예요?", false));
     }
 
     @Test
