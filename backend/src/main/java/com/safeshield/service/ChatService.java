@@ -335,7 +335,7 @@ public class ChatService {
     private List<Map<String, Object>> confirmationPrompts(ReportReadiness readiness, List<Message> history) {
         if (readiness.ready() || readiness.missingInfo().isEmpty()) return List.of();
         String combined = combinedUserText(history);
-        return confirmationCandidates(readiness, combined, userMessageCount(history)).stream()
+        return confirmationCandidates(readiness, combined, userMessageCount(history), history).stream()
                 .limit(1)
                 .map(ChatService::confirmationPrompt)
                 .toList();
@@ -440,12 +440,23 @@ public class ChatService {
     }
 
     static List<String> previewConfirmationQuestions(ReportReadiness readiness, String combinedText, long userMessageCount) {
-        return confirmationCandidates(readiness, combinedText, userMessageCount).stream()
+        return confirmationCandidates(readiness, combinedText, userMessageCount, List.of()).stream()
                 .map(ConfirmationCandidate::question)
                 .toList();
     }
 
-    private static List<ConfirmationCandidate> confirmationCandidates(ReportReadiness readiness, String combinedText, long userMessageCount) {
+    static List<String> previewConfirmationQuestions(ReportReadiness readiness, List<Message> history) {
+        return confirmationCandidates(readiness, combinedUserText(history), userMessageCount(history), history).stream()
+                .map(ConfirmationCandidate::question)
+                .toList();
+    }
+
+    private static List<ConfirmationCandidate> confirmationCandidates(
+            ReportReadiness readiness,
+            String combinedText,
+            long userMessageCount,
+            List<Message> history
+    ) {
         if (readiness == null || readiness.ready()) return List.of();
         String text = combinedText == null ? "" : combinedText;
         List<ConfirmationCandidate> candidates = new ArrayList<>();
@@ -469,12 +480,33 @@ public class ChatService {
         boolean hadCandidates = !candidates.isEmpty();
         candidates = new ArrayList<>(candidates.stream()
                 .filter(candidate -> !isConfirmationCandidateAnswered(candidate.id(), text))
+                .filter(candidate -> !wasCandidateAnsweredAfterQuestion(candidate, history))
                 .toList());
 
         if (!hadCandidates && candidates.isEmpty() && !hasAnsweredDeepDive(text)) {
             candidates.add(genericDetailQuestion(text));
         }
         return candidates.stream().distinct().toList();
+    }
+
+    private static boolean wasCandidateAnsweredAfterQuestion(ConfirmationCandidate candidate, List<Message> history) {
+        if (candidate == null || candidate.question() == null || candidate.question().isBlank() || history == null) {
+            return false;
+        }
+        boolean asked = false;
+        for (Message message : history) {
+            if (message == null) continue;
+            String role = message.getRole();
+            String content = message.getContent() == null ? "" : message.getContent().trim();
+            if ("assistant".equals(role) && content.contains(candidate.question())) {
+                asked = true;
+                continue;
+            }
+            if (asked && "user".equals(role) && !content.isBlank()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isConfirmationCandidateAnswered(String id, String text) {
@@ -536,6 +568,7 @@ public class ChatService {
     private static boolean hasEvidenceAnswer(String text) {
         return hasAny(text,
                 "캡처", "url", "링크", "참여자 목록", "보낸 시간", "앞뒤 대화",
+                "대화 전체", "내용 전체", "전체 내용", "전체가 있습니다", "원본", "전체 맥락",
                 "상처 사진", "진단서", "진료 기록", "목격자", "아직 확보한 증거는 없습니다",
                 "아직 정리한 자료는 없습니다", "대화나 게시물 원본", "삭제나 수정한 내역",
                 "상담 기록");
@@ -1800,7 +1833,8 @@ public class ChatService {
                 .trim();
     }
 
-    private long userMessageCount(List<Message> history) {
+    private static long userMessageCount(List<Message> history) {
+        if (history == null) return 0;
         return history.stream().filter(message -> "user".equals(message.getRole())).count();
     }
 

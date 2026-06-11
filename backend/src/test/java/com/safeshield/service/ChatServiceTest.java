@@ -1,6 +1,7 @@
 package com.safeshield.service;
 
 import com.safeshield.dto.ReportReadiness;
+import com.safeshield.model.Message;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -323,6 +324,45 @@ class ChatServiceTest {
     }
 
     @Test
+    void doesNotRepeatQuestionAfterUserAnsweredItInConversationHistory() {
+        ReportReadiness evidenceMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "증거를 확인해야 합니다.",
+                List.of("남아 있는 증거가 무엇인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+        List<Message> history = List.of(
+                transientMessage("user", "친구들이 단체 채팅방에서 계속 욕하고 놀립니다."),
+                transientMessage("assistant", "대화 증거에는 무엇이 남아 있나요? 리포트에는 참여자, 시간, 앞뒤 맥락이 중요합니다."),
+                transientMessage("user", "추가 설명: 내용 전체가 있습니다.")
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(evidenceMissing, history);
+
+        assertFalse(questions.stream().anyMatch(question -> question.contains("대화 증거에는 무엇이 남아 있나요")));
+    }
+
+    @Test
+    void treatsWholeConversationContentAsEvidenceAnswer() {
+        ReportReadiness evidenceMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "증거를 확인해야 합니다.",
+                List.of("남아 있는 증거가 무엇인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        assertTrue(ChatService.previewConfirmationQuestions(
+                evidenceMissing,
+                "친구들이 단체 채팅방에서 계속 욕하고 놀립니다. 추가 설명: 내용 전체가 있습니다.",
+                3
+        ).isEmpty());
+    }
+
+    @Test
     void guardsExplicitNonsenseEvenInsideConversation() {
         assertTrue(ChatService.shouldGuardIrrelevantInput("배고파서 게임하고 싶다 ㅋㅋ", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("똥싸기", false));
@@ -385,5 +425,12 @@ class ChatServiceTest {
                 List.of("구체적인 사건 내용 확인"),
                 true
         );
+    }
+
+    private static Message transientMessage(String role, String content) {
+        Message message = new Message();
+        message.setRole(role);
+        message.setContent(content);
+        return message;
     }
 }
