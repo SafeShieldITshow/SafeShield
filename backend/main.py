@@ -37,6 +37,9 @@ GROQ_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_COMPLETION_TOKENS", "900"))
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
+DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+DEEPSEEK_MAX_TOKENS = int(os.getenv("DEEPSEEK_MAX_TOKENS", "900"))
 DB = os.path.join(os.path.dirname(__file__), "safeshield.db")
 
 # ── DB ──────────────────────────────────────────────────────────────────────
@@ -180,6 +183,21 @@ def _call_groq(msgs):
     return data["choices"][0]["message"]["content"]
 
 
+def _call_deepseek(msgs):
+    body = {"model": DEEPSEEK_MODEL,
+            "messages": [{"role": "system", "content": SYSTEM}] + msgs,
+            "max_tokens": max(400, min(DEEPSEEK_MAX_TOKENS, 1200)),
+            "temperature": 0.3}
+    if DEEPSEEK_MODEL.startswith("deepseek-v4"):
+        body["thinking"] = {"type": "disabled"}
+    data = _http_post(
+        "https://api.deepseek.com/chat/completions",
+        {"Content-Type": "application/json", "Authorization": f"Bearer {DEEPSEEK_KEY}"},
+        body
+    )
+    return data["choices"][0]["message"]["content"]
+
+
 def _call_gemini(msgs):
     contents = [{"role": "user" if m["role"] == "user" else "model",
                  "parts": [{"text": m["content"]}]} for m in msgs]
@@ -198,13 +216,13 @@ def _call_gemini(msgs):
 
 
 def ai_response(msgs):
-    if GROQ_KEY:
+    if DEEPSEEK_KEY:
         try:
-            result = _call_groq(msgs)
-            print("[AI] Groq OK")
+            result = _call_deepseek(msgs)
+            print("[AI] DeepSeek OK")
             return result
         except Exception as e:
-            print(f"[Groq ERROR] {e}")
+            print(f"[DeepSeek ERROR] {e}")
     if GEMINI_KEY:
         try:
             result = _call_gemini(msgs)
@@ -212,6 +230,13 @@ def ai_response(msgs):
             return result
         except Exception as e:
             print(f"[Gemini ERROR] {e}")
+    if GROQ_KEY:
+        try:
+            result = _call_groq(msgs)
+            print("[AI] Groq OK")
+            return result
+        except Exception as e:
+            print(f"[Groq ERROR] {e}")
     if ANTHROPIC_KEY and _anthropic_ok:
         try:
             client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)

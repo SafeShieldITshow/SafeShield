@@ -7,7 +7,7 @@
 - Frontend: React 19, Vite
 - Backend: Spring Boot 3, Spring Security, JPA
 - Database: H2 파일 데이터베이스 (`backend/safeshield-db.mv.db`)
-- AI: Groq, Gemini, Anthropic 순차 연결
+- AI: DeepSeek, Gemini, Groq 순차 연결(Anthropic 추가 백업)
 - Law data: 국가법령정보센터 Open API
 - Login: 일반 계정 JWT 인증, Google OAuth 2.0
 
@@ -17,7 +17,7 @@
 
 - 일반 회원가입/로그인과 Google OAuth 로그인
 - 로그인된 사용자별 상담 세션 저장
-- Groq 우선, Gemini/Anthropic 백업 순서의 실제 AI 상담 응답
+- DeepSeek 우선, Gemini/Groq 백업 순서의 실제 AI 상담 응답
 - 국가법령정보센터 Open API 기반 법령 문맥 연결
 - AI 답변의 법령 인용 검증 및 외국어/중복 면책 문구 제거
 - 상담 중 리포트 생성 가능 여부 확인

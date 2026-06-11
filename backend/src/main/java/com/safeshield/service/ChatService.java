@@ -919,6 +919,21 @@ public class ChatService {
         PromptContext promptContext = buildPromptContext(history);
         Exception lastError = null;
 
+        if (!effectiveDeepSeekApiKey().isBlank() && System.currentTimeMillis() > deepSeekDisabledUntil) {
+            try {
+                String reply = requireValidGeneratedReply(
+                        callDeepSeekApi(history, promptContext.prompt()),
+                        promptContext
+                );
+                lastProvider = "deepseek";
+                return reply;
+            } catch (Exception e) {
+                lastError = e;
+                deepSeekDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
+                logProviderFailure("DeepSeek", e);
+            }
+        }
+
         if (geminiApiKey != null && !geminiApiKey.isBlank()
                 && System.currentTimeMillis() > geminiDisabledUntil) {
             try {
@@ -947,21 +962,6 @@ public class ChatService {
                 lastError = e;
                 groqDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
                 logProviderFailure("Groq", e);
-            }
-        }
-
-        if (!effectiveDeepSeekApiKey().isBlank() && System.currentTimeMillis() > deepSeekDisabledUntil) {
-            try {
-                String reply = requireValidGeneratedReply(
-                        callDeepSeekApi(history, promptContext.prompt()),
-                        promptContext
-                );
-                lastProvider = "deepseek";
-                return reply;
-            } catch (Exception e) {
-                lastError = e;
-                deepSeekDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
-                logProviderFailure("DeepSeek", e);
             }
         }
 
