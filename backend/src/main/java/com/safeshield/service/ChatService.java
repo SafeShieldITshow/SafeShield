@@ -351,14 +351,22 @@ public class ChatService {
         return prompt;
     }
 
-    private static String connectReplyToConfirmation(String reply, List<Map<String, Object>> prompts) {
+    static String connectReplyToConfirmation(String reply, List<Map<String, Object>> prompts) {
         if (reply == null || prompts == null || prompts.isEmpty()) return reply;
         String trimmed = stripGeneratedQuestionSentences(reply).trim();
         if (trimmed.isBlank()) {
-            return "말해준 내용은 상담 기록에 반영했습니다.";
+            trimmed = "말해준 내용은 상담 기록에 반영했습니다.";
         }
         if (trimmed.contains("아래 확인 카드") || trimmed.contains("아래 선택지")) return trimmed;
-        return trimmed;
+        String question = firstConfirmationQuestion(prompts);
+        if (question.isBlank() || trimmed.contains(question)) return trimmed;
+        return trimmed + "\n\n다음으로 하나만 더 확인할게요. " + question;
+    }
+
+    private static String firstConfirmationQuestion(List<Map<String, Object>> prompts) {
+        if (prompts == null || prompts.isEmpty()) return "";
+        Object question = prompts.get(0).get("question");
+        return question == null ? "" : String.valueOf(question).trim();
     }
 
     private static String stripGeneratedQuestionSentences(String reply) {
@@ -1179,13 +1187,18 @@ public class ChatService {
 
     private static boolean isConfirmationAnswer(String text) {
         String t = text == null ? "" : text.trim();
-        return t.startsWith("확인 답변:") || t.startsWith("확인답변:");
+        return t.startsWith("확인 답변:")
+                || t.startsWith("확인답변:")
+                || t.startsWith("추가 설명:")
+                || t.startsWith("추가설명:");
     }
 
     private static String confirmationAnswerBody(String text) {
         String t = text == null ? "" : text.trim();
         if (t.startsWith("확인 답변:")) return t.substring("확인 답변:".length()).trim();
         if (t.startsWith("확인답변:")) return t.substring("확인답변:".length()).trim();
+        if (t.startsWith("추가 설명:")) return t.substring("추가 설명:".length()).trim();
+        if (t.startsWith("추가설명:")) return t.substring("추가설명:".length()).trim();
         return t;
     }
 

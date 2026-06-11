@@ -4,6 +4,7 @@ import com.safeshield.dto.ReportReadiness;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -303,9 +304,22 @@ class ChatServiceTest {
     @Test
     void doesNotTreatConfirmationAnswerAsIrrelevantInput() {
         assertFalse(ChatService.shouldGuardIrrelevantInput("확인 답변: 몇 주 이상 지속됐습니다.", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("추가 설명: 내용 전체가 있습니다.", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("확인 답변: 똥싸기", false));
+        assertTrue(ChatService.shouldGuardIrrelevantInput("추가 설명: 똥싸기", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("확인 답변: ㅁㄴㅇㄹ", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("똥싸기", false));
+    }
+
+    @Test
+    void appendsNextConfirmationQuestionToReply() {
+        String reply = ChatService.connectReplyToConfirmation(
+                "같은 학교 학생들이 단체 채팅방에서 괴롭히는 상황이군요.",
+                List.of(Map.of("question", "대화 전체가 보이는 캡처나 원본이 있나요?"))
+        );
+
+        assertTrue(reply.contains("다음으로 하나만 더 확인할게요."));
+        assertTrue(reply.contains("대화 전체가 보이는 캡처나 원본이 있나요?"));
     }
 
     @Test
