@@ -354,6 +354,7 @@ public class ChatService {
     static String connectReplyToConfirmation(String reply, List<Map<String, Object>> prompts) {
         if (reply == null || prompts == null || prompts.isEmpty()) return reply;
         String trimmed = stripGeneratedQuestionSentences(reply).trim();
+        trimmed = stripDanglingConfirmationLeadIn(trimmed);
         if (trimmed.isBlank()) {
             trimmed = "말해준 내용은 상담 기록에 반영했습니다.";
         }
@@ -361,6 +362,15 @@ public class ChatService {
         String question = firstConfirmationQuestion(prompts);
         if (question.isBlank() || trimmed.contains(question)) return trimmed;
         return trimmed + "\n\n다음으로 하나만 더 확인할게요. " + question;
+    }
+
+    private static String stripDanglingConfirmationLeadIn(String reply) {
+        if (reply == null || reply.isBlank()) return "";
+        return reply.lines()
+                .map(line -> line.replaceAll("^(다음으로\\s+)?하나만\\s+더\\s+확인할게요\\.\\s*", "").trim())
+                .filter(line -> !line.isBlank())
+                .collect(Collectors.joining("\n"))
+                .trim();
     }
 
     private static String firstConfirmationQuestion(List<Map<String, Object>> prompts) {
