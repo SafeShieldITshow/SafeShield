@@ -10,7 +10,11 @@ const EXAMPLE_QUESTIONS = [
     'SNS에 제 사진과 비방 글이 올라왔습니다.',
 ];
 
-const CONVERSATION_STOPPED_MARKER = '__대화가 중단 되었습니다.__';
+const CONVERSATION_STOPPED_MARKERS = [
+    '__대화가 중단 되었습니다.__',
+    '**대화가 중단되었습니다.**',
+    '대화가 중단되었습니다.',
+];
 
 const initialMessage = () => ({
     id: 'welcome',
@@ -44,7 +48,9 @@ const clearConfirmationPrompts = (items) => items.map((message) => (
     message.confirmationPrompts?.length ? { ...message, confirmationPrompts: [] } : message
 ));
 
-const isStoppedMessage = (text = '') => String(text).includes(CONVERSATION_STOPPED_MARKER);
+const isStoppedMessage = (text = '') => CONVERSATION_STOPPED_MARKERS.some((marker) => (
+    String(text).includes(marker)
+));
 
 const hasStoppedConversation = (items = []) => items.some((message) => (
     message.type === 'ai' && isStoppedMessage(message.text)
@@ -92,9 +98,12 @@ function now() {
 }
 
 function renderInlineMarkdown(text) {
-    const parts = String(text).split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+    const parts = String(text).split(/(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`)/g);
     return parts.map((part, index) => {
         if (part.startsWith('**') && part.endsWith('**')) {
+            return <strong key={index}>{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith('__') && part.endsWith('__')) {
             return <strong key={index}>{part.slice(2, -2)}</strong>;
         }
         if (part.startsWith('`') && part.endsWith('`')) {

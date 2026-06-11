@@ -310,6 +310,8 @@ class ChatServiceTest {
         assertTrue(ChatService.shouldGuardIrrelevantInput("추가 설명: 똥싸기", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("확인 답변: ㅁㄴㅇㄹ", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("똥싸기", false));
+        assertTrue(ChatService.shouldGuardIrrelevantInput("응가", false));
+        assertTrue(ChatService.shouldGuardIrrelevantInput("똥", false));
     }
 
     @Test

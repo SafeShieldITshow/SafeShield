@@ -1219,7 +1219,9 @@ public class ChatService {
                 .filter(message -> "assistant".equals(message.getRole()))
                 .map(Message::getContent)
                 .filter(Objects::nonNull)
-                .anyMatch(content -> content.contains("__대화가 중단 되었습니다.__"));
+                .anyMatch(content -> content.contains("__대화가 중단 되었습니다.__")
+                        || content.contains("**대화가 중단되었습니다.**")
+                        || content.contains("대화가 중단되었습니다."));
     }
 
     static boolean shouldGuardIrrelevantInput(String latestUserMessage, boolean conversationalFollowUp) {
@@ -1272,13 +1274,14 @@ public class ChatService {
     }
 
     private static boolean isExplicitNonsenseOrSmallTalk(String text) {
+        String compact = text.replaceAll("[\\s\\p{Punct}]+", "");
+        if (compact.matches("^(똥+|응가+|오줌+|방귀+|쉬+)$")) return true;
         if (containsAny(text,
-                "똥싸", "똥 쌌", "오줌", "방귀", "뭐먹", "배고파", "졸려", "잠와", "심심",
+                "똥싸", "똥 쌌", "응가", "오줌", "방귀", "뭐먹", "배고파", "졸려", "잠와", "심심",
                 "게임", "롤 ", "발로란트", "마크", "유튜브", "노래", "아이돌", "날씨", "농담",
                 "ㅋㅋ", "ㅎㅎ", "ㅗ", "ㅅㅂ", "ㅂㅅ", "씨발", "시발", "병신", "개소리", "헛소리", "아무거나", "아무말")) {
             return true;
         }
-        String compact = text.replaceAll("\\s+", "");
         return compact.matches("^[ㅋㅎㅠㅜㅡㅇㄴㄱㄷㄹㅁㅂㅅㅈㅊㅍㅎ]{2,}$");
     }
 
@@ -1292,7 +1295,7 @@ public class ChatService {
 
     private String buildConversationStoppedReply(String reason) {
         return """
-                __대화가 중단 되었습니다.__
+                **대화가 중단되었습니다.**
                 사유 : %s
                 새 상담이 필요하면 새 상담으로 다시 시작해 주세요.
                 """.formatted(reason).trim();
