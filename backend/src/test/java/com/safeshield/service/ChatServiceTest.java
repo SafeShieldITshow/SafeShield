@@ -326,11 +326,11 @@ class ChatServiceTest {
     @Test
     void doesNotDuplicateConfirmationLeadInWhenAppendingQuestion() {
         String reply = ChatService.connectReplyToConfirmation(
-                "내용 전체가 있다는 점은 중요합니다.\n다음으로 하나만 더 확인할게요.",
+                "내용 전체가 있다는 점은 중요합니다. 다음으로 하나만 더 확인할게요. 리포트에는 참여자와 시간이 중요합니다.",
                 List.of(Map.of("question", "상대와의 관계는 어디에 가깝나요?"))
         );
 
-        assertFalse(reply.contains("다음으로 하나만 더 확인할게요.\n\n다음으로 하나만 더 확인할게요."));
+        assertFalse(reply.contains("내용 전체가 있다는 점은 중요합니다. 다음으로 하나만 더 확인할게요."));
         assertTrue(reply.endsWith("다음으로 하나만 더 확인할게요. 상대와의 관계는 어디에 가깝나요?"));
     }
 

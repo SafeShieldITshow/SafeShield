@@ -366,8 +366,9 @@ public class ChatService {
 
     private static String stripDanglingConfirmationLeadIn(String reply) {
         if (reply == null || reply.isBlank()) return "";
-        return reply.lines()
-                .map(line -> line.replaceAll("^(다음으로\\s+)?하나만\\s+더\\s+확인할게요\\.\\s*", "").trim())
+        String cleaned = reply.replaceAll("(다음으로\\s+)?하나만\\s+더\\s+확인할게요\\.\\s*", "");
+        return cleaned.lines()
+                .map(String::trim)
                 .filter(line -> !line.isBlank())
                 .collect(Collectors.joining("\n"))
                 .trim();
