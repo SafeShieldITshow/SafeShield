@@ -175,7 +175,7 @@ public class ChatService {
 
         List<Message> history = messageRepository.findBySessionOrderByCreatedAtAsc(session);
         ReportReadiness readiness = assessReadiness(history);
-        if (shouldGuardIrrelevantInput(normalized, isConversationalFollowUp(normalized, history))) {
+        if (shouldGuardIrrelevantInput(normalized, hasConversationContext(history), isConversationalFollowUp(normalized, history))) {
             String reply = buildConversationStoppedReply(stopReasonForInput(normalized));
             Message aiMessage = new Message();
             aiMessage.setSession(session);
@@ -227,7 +227,7 @@ public class ChatService {
 
         List<Message> history = guestHistory(clientHistory, normalized);
         ReportReadiness readiness = assessReadiness(history);
-        if (isConversationStopped(history) || shouldGuardIrrelevantInput(normalized, isConversationalFollowUp(normalized, history))) {
+        if (isConversationStopped(history) || shouldGuardIrrelevantInput(normalized, hasConversationContext(history), isConversationalFollowUp(normalized, history))) {
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("session_id", null);
             response.put("reply", buildConversationStoppedReply(stopReasonForInput(normalized)));
@@ -361,12 +361,12 @@ public class ChatService {
         if (trimmed.contains("아래 확인 카드") || trimmed.contains("아래 선택지")) return trimmed;
         String question = firstConfirmationQuestion(prompts);
         if (question.isBlank() || trimmed.contains(question)) return trimmed;
-        return trimmed + "\n\n다음으로 하나만 더 확인할게요. " + question;
+        return trimmed + "\n\n확인을 위해 질문 하나 할게요. " + question;
     }
 
     private static String stripDanglingConfirmationLeadIn(String reply) {
         if (reply == null || reply.isBlank()) return "";
-        String cleaned = reply.replaceAll("(다음으로\\s+)?하나만\\s+더\\s+확인할게요\\.\\s*", "");
+        String cleaned = reply.replaceAll("((다음으로\\s+)?하나만\\s+더\\s+확인할게요|확인을\\s+위해\\s+질문\\s+하나\\s+할게요)\\.\\s*", "");
         return cleaned.lines()
                 .map(String::trim)
                 .filter(line -> !line.isBlank())
@@ -851,7 +851,7 @@ public class ChatService {
     }
 
     private static ConfirmationCandidate genericDetailQuestion(String text) {
-        return candidate("more_context", "리포트를 더 정확하게 만들기 위해 하나만 더 확인할게요. 지금 가장 걱정되는 부분은 무엇인가요?",
+        return candidate("more_context", "확인을 위해 질문 하나 할게요. 지금 가장 걱정되는 부분은 무엇인가요?",
                 option("보복", "확인 답변: 보복이나 반복이 가장 걱정됩니다."),
                 option("증거 부족", "확인 답변: 증거가 충분한지 걱정됩니다."),
                 option("학교에 말하기", "확인 답변: 학교나 담임에게 말하는 것이 걱정됩니다."),
@@ -960,7 +960,7 @@ public class ChatService {
 
     private String getAiReply(List<Message> history) {
         String latestUserMessage = latestUserMessage(history);
-        if (shouldGuardIrrelevantInput(latestUserMessage, isConversationalFollowUp(latestUserMessage, history))) {
+        if (shouldGuardIrrelevantInput(latestUserMessage, hasConversationContext(history), isConversationalFollowUp(latestUserMessage, history))) {
             lastProvider = "guardrail";
             if (isPerpetratorContext(combinedUserText(history))) {
                 return buildPerpetratorOffTopicReply();
@@ -1225,10 +1225,19 @@ public class ChatService {
     }
 
     static boolean shouldGuardIrrelevantInput(String latestUserMessage, boolean conversationalFollowUp) {
+        return shouldGuardIrrelevantInput(latestUserMessage, false, conversationalFollowUp);
+    }
+
+    static boolean shouldGuardIrrelevantInput(String latestUserMessage, boolean hasConversationContext, boolean conversationalFollowUp) {
         String answerText = confirmationAnswerBody(latestUserMessage);
         if (isExplicitOffTopicNonsense(answerText)) return true;
         if (isConfirmationAnswer(latestUserMessage)) return false;
+        if (hasConversationContext) return false;
         return isIrrelevantInput(answerText) && !conversationalFollowUp;
+    }
+
+    private static boolean hasConversationContext(List<Message> history) {
+        return userMessageCount(history) > 1;
     }
 
     private static boolean isConfirmationAnswer(String text) {
@@ -1335,7 +1344,9 @@ public class ChatService {
     }
 
     private static boolean isEmotionalConversation(String text) {
-        return containsAny(text, "힘들", "무서", "불안", "짜증", "괴롭", "말하기", "모르겠", "걱정", "답답", "억울");
+        return containsAny(text,
+                "힘들", "무서", "불안", "짜증", "괴롭", "말하기", "모르겠", "걱정", "답답", "억울",
+                "부끄", "창피", "민망", "쪽팔", "망설", "말 못", "말하기 싫", "하고 싶은데", "하고싶은데");
     }
 
     private String callGroqApi(List<Message> history, String systemPrompt) {

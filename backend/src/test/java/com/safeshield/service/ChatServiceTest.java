@@ -316,6 +316,8 @@ class ChatServiceTest {
         assertFalse(ChatService.shouldGuardIrrelevantInput("어떤 확인이 필요한가요?", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("뭘 더 확인해야 해요?", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("추가 질문이 뭐예요?", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("하고 싶은데 부끄러워요", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("말하고 싶은데 창피해요", false));
     }
 
     @Test
@@ -325,19 +327,19 @@ class ChatServiceTest {
                 List.of(Map.of("question", "대화 전체가 보이는 캡처나 원본이 있나요?"))
         );
 
-        assertTrue(reply.contains("다음으로 하나만 더 확인할게요."));
+        assertTrue(reply.contains("확인을 위해 질문 하나 할게요."));
         assertTrue(reply.contains("대화 전체가 보이는 캡처나 원본이 있나요?"));
     }
 
     @Test
     void doesNotDuplicateConfirmationLeadInWhenAppendingQuestion() {
         String reply = ChatService.connectReplyToConfirmation(
-                "내용 전체가 있다는 점은 중요합니다. 다음으로 하나만 더 확인할게요. 리포트에는 참여자와 시간이 중요합니다.",
+                "내용 전체가 있다는 점은 중요합니다. 확인을 위해 질문 하나 할게요. 리포트에는 참여자와 시간이 중요합니다.",
                 List.of(Map.of("question", "상대와의 관계는 어디에 가깝나요?"))
         );
 
-        assertFalse(reply.contains("내용 전체가 있다는 점은 중요합니다. 다음으로 하나만 더 확인할게요."));
-        assertTrue(reply.endsWith("다음으로 하나만 더 확인할게요. 상대와의 관계는 어디에 가깝나요?"));
+        assertFalse(reply.contains("내용 전체가 있다는 점은 중요합니다. 확인을 위해 질문 하나 할게요."));
+        assertTrue(reply.endsWith("확인을 위해 질문 하나 할게요. 상대와의 관계는 어디에 가깝나요?"));
     }
 
     @Test
@@ -384,7 +386,9 @@ class ChatServiceTest {
         assertTrue(ChatService.shouldGuardIrrelevantInput("배고파서 게임하고 싶다 ㅋㅋ", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("똥싸기", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("짜증나서 똥싸기", true));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("밥 필요해", true, false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("무서워서 학교에 말하기가 걱정돼요", true));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("하고 싶은데 부끄러워요", true));
         assertFalse(ChatService.shouldGuardIrrelevantInput("친구가 게임 채팅에서 욕하고 놀려요", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("친구가 씨발이라고 욕했어요", false));
     }
