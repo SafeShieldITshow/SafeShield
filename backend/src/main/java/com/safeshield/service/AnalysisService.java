@@ -493,11 +493,15 @@ public class AnalysisService {
     }
 
     private boolean isPerpetratorPerspective(String text) {
+        boolean ownPhotoPostedVictimContext = hasOwnPhotoPostedVictimContext(text);
         if (isVictimPerspective(text) && !containsAny(text,
                 "저는 가해", "제가 가해", "내가 가해", "나는 가해", "본인이 가해",
                 "저는 가해자", "제가 가해자", "내가 가해자", "나는 가해자",
-                "제가 때렸", "내가 때렸", "제가 욕했", "내가 욕했", "제가 올렸", "내가 올렸",
+                "제가 때렸", "내가 때렸", "제가 욕했", "내가 욕했",
                 "제가 한 행동", "내가 한 행동", "제가 올린", "내가 올린")) {
+            return false;
+        }
+        if (ownPhotoPostedVictimContext && !hasExplicitPerpetratorAdmission(text)) {
             return false;
         }
         boolean directPhrase = containsAny(text,
@@ -518,12 +522,26 @@ public class AnalysisService {
         return directPhrase || (selfActor && harmfulAction);
     }
 
+    private boolean hasOwnPhotoPostedVictimContext(String text) {
+        return containsAny(text, "제 사진", "내 사진", "저의 사진", "나의 사진")
+                && containsAny(text, "sns", "인스타", "게시", "올렸", "올린", "올라왔", "유포", "공유", "퍼졌");
+    }
+
+    private boolean hasExplicitPerpetratorAdmission(String text) {
+        return containsAny(text,
+                "저는 가해", "제가 가해", "내가 가해", "나는 가해", "본인이 가해",
+                "저는 가해자", "제가 가해자", "내가 가해자", "나는 가해자",
+                "제가 친구 사진", "내가 친구 사진", "제가 상대 사진", "내가 상대 사진",
+                "허락 없이 올렸", "몰래 올렸", "장난으로 올렸",
+                "제가 한 행동", "내가 한 행동", "괴롭힌 건 저");
+    }
+
     private boolean isVictimPerspective(String text) {
         return containsAny(text,
                 "피해를 당", "피해 당", "제가 피해", "저는 피해", "내가 피해", "제가 당", "내가 당",
                 "맞아서", "맞았고", "맞았어요", "욕을 먹", "욕먹", "괴롭힘 당", "괴롭힘을 당",
                 "신고하려", "신고하고 싶", "사과 받고", "사과 받", "처벌받게", "상대가 저를", "친구가 저를",
-                "제 사진", "저한테", "저에게");
+                "제 사진", "내 사진", "저의 사진", "나의 사진", "저한테", "저에게");
     }
 
     private boolean isWitnessOrGuardianPerspective(String text) {

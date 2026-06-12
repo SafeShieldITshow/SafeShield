@@ -1561,6 +1561,7 @@ public class ChatService {
                 21. 프롬프트의 제목, 규칙, 상태값, 허용 인용 목록, 참고 법령 원문을 답변에 노출하지 마세요.
                 22. 피해를 말한 사람에게 "왜 그런 일이 생긴 것 같나요", "이유가 뭐라고 생각하나요"처럼 원인 추측을 요구하지 마세요. 관찰 가능한 사실만 확인하세요.
                 23. 아래 대화 메모는 맥락 유지용입니다. 그대로 출력하지 말고, 이미 확인한 관계·시점·증거·영향·요청 방향을 이어받으세요.
+                24. "내 사진", "제 사진", "저의 사진"이 SNS, 게시물, 유포, 공유, 올라옴과 함께 나오면 사용자가 자기 계정에 올린 것으로 단정하지 마세요. 학교폭력 상담 맥락에서는 상대가 사진을 올렸거나 퍼뜨린 피해 가능성을 먼저 보고, 누가 올렸는지 불명확하면 작성자·계정·게시 시간을 확인하세요. 사용자가 직접 자기 게시물이라고 명시하지 않는 한 "사진을 삭제하세요", "SNS 설정을 확인하세요"처럼 사용자가 게시자인 것처럼 안내하지 마세요.
 
                 # 답변 형식
 
@@ -1644,6 +1645,7 @@ public class ChatService {
     private static boolean isPerpetratorText(String text) {
         String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
         boolean victimContext = hasVictimContext(t);
+        boolean ownPhotoPostedVictimContext = hasOwnPhotoPostedVictimContext(t);
         boolean directPhrase = containsAny(t,
                 "제가 때렸", "내가 때렸", "제가 밀쳤", "내가 밀쳤",
                 "제가 욕했", "내가 욕했", "제가 욕을 했", "내가 욕을 했",
@@ -1655,6 +1657,7 @@ public class ChatService {
                 "제가 가해", "내가 가해", "나는 가해", "저는 가해", "본인이 가해",
                 "제가 가해자", "내가 가해자", "나는 가해자", "저는 가해자",
                 "가해자입니다", "가해를 했", "제가 한 행동", "내가 한 행동", "괴롭힌 건 저");
+        if (ownPhotoPostedVictimContext && !hasExplicitPerpetratorAdmission(t)) return false;
         if (directPhrase) return true;
         if (victimContext) return false;
         boolean selfActor = containsAny(t, "제가", "내가", "저도", "본인이");
@@ -1669,7 +1672,21 @@ public class ChatService {
                 "피해를 당", "피해 당", "제가 피해", "저는 피해", "내가 피해", "제가 당", "내가 당",
                 "맞아서", "맞았고", "맞았어요", "욕을 먹", "욕먹", "괴롭힘 당", "괴롭힘을 당",
                 "신고하려", "신고하고 싶", "사과 받고", "사과 받", "처벌받게", "상대가 저를", "친구가 저를",
-                "제 사진", "저한테", "저에게");
+                "제 사진", "내 사진", "저의 사진", "나의 사진", "저한테", "저에게");
+    }
+
+    private static boolean hasOwnPhotoPostedVictimContext(String text) {
+        return containsAny(text, "제 사진", "내 사진", "저의 사진", "나의 사진")
+                && containsAny(text, "sns", "인스타", "게시", "올렸", "올린", "올라왔", "유포", "공유", "퍼졌");
+    }
+
+    private static boolean hasExplicitPerpetratorAdmission(String text) {
+        return containsAny(text,
+                "저는 가해", "제가 가해", "내가 가해", "나는 가해", "본인이 가해",
+                "저는 가해자", "제가 가해자", "내가 가해자", "나는 가해자",
+                "제가 친구 사진", "내가 친구 사진", "제가 상대 사진", "내가 상대 사진",
+                "허락 없이 올렸", "몰래 올렸", "장난으로 올렸",
+                "제가 한 행동", "내가 한 행동", "괴롭힌 건 저");
     }
 
     private String buildWarmIntakePrompt(ReportReadiness readiness, String allowedCitations, String lawContext, List<Message> history) {
@@ -1711,6 +1728,7 @@ public class ChatService {
                 16. 사용자가 불완전하거나 왔다 갔다 말해도 바로 틀렸다고 하지 말고, 새로 나온 단서가 기존 판단을 어떻게 바꾸는지만 짧게 이어가세요.
                 17. "~니깐요", "그러니깐요", 같은 말을 쓰지 마세요. 같은 어미나 같은 단어를 연속해서 반복하지 마세요.
                 18. "확인 답변:"으로 들어온 내용은 그대로 반복하지 말고, 그 답변이 상담 판단에 어떤 의미가 있는지와 지금 할 수 있는 행동을 2~3문장으로 말하세요.
+                19. "내 사진", "제 사진", "저의 사진"이 SNS, 게시물, 유포, 공유, 올라옴과 함께 나오면 사용자가 자기 계정에 올린 것으로 단정하지 마세요. 학교폭력 상담 맥락에서는 상대가 사진을 올렸거나 퍼뜨린 피해 가능성을 먼저 보고, 누가 올렸는지 불명확하면 작성자·계정·게시 시간을 확인하세요. 사용자가 직접 자기 게시물이라고 명시하지 않는 한 "사진을 삭제하세요", "SNS 설정을 확인하세요"처럼 사용자가 게시자인 것처럼 안내하지 마세요.
 
                 """ + roleInstruction + """
 
@@ -1774,6 +1792,7 @@ public class ChatService {
                 16. 사용자가 피해 입장과 가해 입장을 섞어 말하면 한쪽으로 단정하지 말고, 같은 사안의 충돌인지 별도 사안인지 확인해야 한다고 짧게 설명하세요.
                 17. "~니깐요", "그러니깐요", 같은 말을 쓰지 마세요. 같은 어미나 같은 단어를 연속해서 반복하지 마세요.
                 18. "확인 답변:"으로 들어온 내용은 그대로 반복하지 말고, 그 답변이 상담 판단에 어떤 의미가 있는지와 지금 할 수 있는 행동을 2~3문장으로 말하세요.
+                19. "내 사진", "제 사진", "저의 사진"이 SNS, 게시물, 유포, 공유, 올라옴과 함께 나오면 사용자가 자기 계정에 올린 것으로 단정하지 마세요. 학교폭력 상담 맥락에서는 상대가 사진을 올렸거나 퍼뜨린 피해 가능성을 먼저 보고, 누가 올렸는지 불명확하면 작성자·계정·게시 시간을 확인하세요. 사용자가 직접 자기 게시물이라고 명시하지 않는 한 "사진을 삭제하세요", "SNS 설정을 확인하세요"처럼 사용자가 게시자인 것처럼 안내하지 마세요.
 
                 """ + roleInstruction + """
 
@@ -2031,6 +2050,7 @@ public class ChatService {
                 || reply.contains("왜 그런 일이 생긴 것 같")
                 || reply.contains("왜 괴롭힌다고 생각")
                 || reply.contains("괴롭히는 이유")
+                || containsDanglingQuestionLeadIn(reply)
                 || reply.contains("선생님이나 어른이 계신가요")
                 || reply.contains("채팅방에 참여하고 있는 친구들 중에 선생님")
                 || (reply.contains("채팅방") && (reply.contains("어른") || reply.contains("선생님"))
@@ -2044,6 +2064,7 @@ public class ChatService {
                 .filter(line -> !(line.contains("리포트 준비 상태") && line.contains("추가 확인 필요")))
                 .filter(line -> !line.contains("추가 확인 질문 없이"))
                 .filter(line -> !line.contains("추가 확인 필요가 아니므로"))
+                .filter(line -> !containsDanglingQuestionLeadIn(line))
                 .map(line -> line
                         .replace("사용자가", "말해준 내용이")
                         .replace("사용자는", "지금은")
@@ -2067,6 +2088,18 @@ public class ChatService {
             result.append(line).append("\n");
         }
         return result.toString().trim();
+    }
+
+    private static boolean containsDanglingQuestionLeadIn(String text) {
+        if (text == null || text.isBlank()) return false;
+        return containsAny(text,
+                "다시 한번 물어보겠습니다",
+                "다시 한 번 물어보겠습니다",
+                "물어보겠습니다",
+                "질문드리겠습니다",
+                "질문하겠습니다",
+                "확인하겠습니다")
+                && !text.contains("?");
     }
 
     private static Map<String, Set<String>> parseAllowedCitations(String lawContext) {

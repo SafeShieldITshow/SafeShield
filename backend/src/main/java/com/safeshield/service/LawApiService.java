@@ -181,7 +181,7 @@ public class LawApiService {
         Map<String, Set<String>> selected = new LinkedHashMap<>();
 
         addArticles(selected, "학교폭력예방법", "2");
-        if (containsAny(text, "제가", "내가", "가해", "사과", "처벌", "올렸", "때렸", "욕했")) {
+        if (isPerpetratorContext(text)) {
             addArticles(selected, "학교폭력예방법", "17");
         } else {
             addArticles(selected, "학교폭력예방법", "16");
@@ -268,6 +268,28 @@ public class LawApiService {
             if (text.contains(word)) return true;
         }
         return false;
+    }
+
+    private static boolean isPerpetratorContext(String text) {
+        if (hasOwnPhotoPostedVictimContext(text) && !hasExplicitPerpetratorAdmission(text)) return false;
+        return containsAny(text,
+                "가해", "사과", "처벌", "제가 때렸", "내가 때렸", "제가 욕했", "내가 욕했",
+                "제가 친구 사진", "내가 친구 사진", "제가 상대 사진", "내가 상대 사진",
+                "허락 없이 올렸", "몰래 올렸", "장난으로 올렸", "제가 한 행동", "내가 한 행동");
+    }
+
+    private static boolean hasOwnPhotoPostedVictimContext(String text) {
+        return containsAny(text, "제 사진", "내 사진", "저의 사진", "나의 사진")
+                && containsAny(text, "sns", "인스타", "게시", "올렸", "올린", "올라왔", "유포", "공유", "퍼졌");
+    }
+
+    private static boolean hasExplicitPerpetratorAdmission(String text) {
+        return containsAny(text,
+                "저는 가해", "제가 가해", "내가 가해", "나는 가해", "본인이 가해",
+                "저는 가해자", "제가 가해자", "내가 가해자", "나는 가해자",
+                "제가 친구 사진", "내가 친구 사진", "제가 상대 사진", "내가 상대 사진",
+                "허락 없이 올렸", "몰래 올렸", "장난으로 올렸",
+                "제가 한 행동", "내가 한 행동", "괴롭힌 건 저");
     }
 
     private void appendOrFetch(StringBuilder sb, String key, Set<String> articles) {

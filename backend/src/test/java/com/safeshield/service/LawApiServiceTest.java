@@ -51,4 +51,17 @@ class LawApiServiceTest {
         assertFalse(context.contains("제257조"));
         assertFalse(context.contains("제350조"));
     }
+
+    @Test
+    void ownPhotoSnsVictimContextUsesVictimProtectionArticle() {
+        LawApiService service = new LawApiService();
+
+        String context = service.getContextForCase(
+                "같은 반 친구들이 SNS에 내 사진을 올렸다고 했고 친구들이 볼 수 있는 범위로 올라왔습니다.",
+                List.of("사이버 폭력")
+        );
+
+        assertTrue(context.contains("제16조"));
+        assertFalse(context.contains("제17조"));
+    }
 }

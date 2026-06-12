@@ -281,6 +281,21 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void treatsOwnPhotoPostedOnSnsAsVictimContextUnlessUserClearlyAdmitsPosting() {
+        String text = "저는 피해를 당한 입장입니다. 같은 반 친구들이 오늘 SNS에 내 사진을 올렸다고 했고 " +
+                "친구들이 볼 수 있는 범위로 올라왔습니다. URL과 캡처가 있고 불안해서 증거 정리와 신고 절차를 알고 싶습니다. " +
+                "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.";
+
+        ReportReadiness readiness = analysisService.assessReportReadiness(text, 8);
+        var result = analysisService.analyze(text, readiness);
+
+        assertTrue(readiness.ready(), "내 사진이 SNS에 올라온 피해 문장도 충분한 사실이 있으면 리포트 준비가 되어야 합니다.");
+        assertFalse(readiness.status().contains("가해"), "내 사진이 올라왔다는 표현을 사용자가 직접 게시한 것으로 오판하면 안 됩니다.");
+        assertFalse(result.evidenceGuide().contains("사과·피해 회복 기록"));
+        assertTrue(result.evidenceGuide().contains("URL·작성자·게시시간 기록"));
+    }
+
+    @Test
     void directPerpetratorAdmissionOverridesEarlierVictimContext() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "처음에는 같은 반 친구가 저한테 욕을 해서 신고하려고 한다고 말했습니다. " +

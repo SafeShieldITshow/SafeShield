@@ -165,6 +165,7 @@ public class EvidenceGuideService {
     }
 
     private boolean isPerpetratorPerspective(String text) {
+        if (hasOwnPhotoPostedVictimContext(text) && !hasExplicitPerpetratorAdmission(text)) return false;
         boolean directPhrase = containsAny(text,
                 "제가 때렸", "내가 때렸", "제가 밀쳤", "내가 밀쳤",
                 "제가 욕했", "내가 욕했", "제가 욕을 했", "내가 욕을 했",
@@ -178,6 +179,19 @@ public class EvidenceGuideService {
                 "때렸", "밀쳤", "욕했", "욕을 했", "욕설을 했", "올렸", "게시", "댓글을 달",
                 "괴롭혔", "따돌", "놀렸", "빼앗", "강요");
         return directPhrase || (selfActor && harmfulAction);
+    }
+
+    private boolean hasOwnPhotoPostedVictimContext(String text) {
+        return containsAny(text, "제 사진", "내 사진", "저의 사진", "나의 사진")
+                && containsAny(text, "sns", "인스타", "게시", "올렸", "올린", "올라왔", "유포", "공유", "퍼졌");
+    }
+
+    private boolean hasExplicitPerpetratorAdmission(String text) {
+        return containsAny(text,
+                "저는 가해", "제가 가해", "내가 가해", "본인이 가해",
+                "제가 친구 사진", "내가 친구 사진", "제가 상대 사진", "내가 상대 사진",
+                "허락 없이 올렸", "몰래 올렸", "장난으로 올렸",
+                "제가 한 행동", "내가 한 행동", "괴롭힌 건 저");
     }
 
     private boolean containsAny(String text, String... words) {

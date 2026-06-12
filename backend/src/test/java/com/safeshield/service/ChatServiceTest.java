@@ -172,6 +172,17 @@ class ChatServiceTest {
     }
 
     @Test
+    void rejectsDanglingQuestionLeadInWithoutActualQuestion() {
+        String reply = """
+                게시물이나 사진이 친구들이 볼 수 있는 범위로 올라왔습니다.
+                보호자나 담임선생님께 얘기해 보는 것도 좋은 방법입니다.
+                이 상담에서 가장 필요한 도움이 무엇인지 다시 한번 물어보겠습니다.
+                """;
+
+        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
     void rejectsAwkwardRepeatedConversationStyle() {
         String reply = """
                 같은 반 학생이니깐요. 혼자 감당하지 않아도 된다는 걸 기억하세요.
