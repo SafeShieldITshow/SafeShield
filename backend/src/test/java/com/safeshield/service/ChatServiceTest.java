@@ -390,6 +390,48 @@ class ChatServiceTest {
     }
 
     @Test
+    void doesNotAskFinalSameCaseQuestionAsNormalConfirmationPrompt() {
+        ReportReadiness finalCheckMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "최종 확인만 남았습니다.",
+                List.of("사안 내용 최종 확인"),
+                List.of("구체적인 사건 내용 확인", "상대방과 학교 관계 확인", "시점 또는 반복성 단서 확인"),
+                true
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                finalCheckMissing,
+                "같은 반 친구들이 단톡방에서 계속 욕설과 비방을 했고 캡처가 있습니다. 불안해서 신고 절차를 알고 싶습니다.",
+                8
+        );
+
+        assertFalse(questions.stream().anyMatch(question -> question.contains("하나의 같은 사안")));
+    }
+
+    @Test
+    void doesNotRepeatSameQuestionFamilyAfterUserResponded() {
+        ReportReadiness timelineMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "시점을 확인해야 합니다.",
+                List.of("언제부터 몇 번 있었는지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+        List<Message> history = List.of(
+                transientMessage("user", "같은 반 친구들이 단톡방에서 계속 욕설과 비방을 하고 있습니다. 캡처가 있습니다."),
+                transientMessage("assistant", "확인을 위해 질문 하나 할게요. 언제부터 몇 번 있었고, 지금도 계속되고 있나요?"),
+                transientMessage("user", "잘 모르겠어요.")
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(timelineMissing, history);
+
+        assertFalse(questions.stream().anyMatch(question -> question.contains("언제부터")));
+        assertFalse(questions.stream().anyMatch(question -> question.contains("빈도")));
+    }
+
+    @Test
     void treatsWholeConversationContentAsEvidenceAnswer() {
         ReportReadiness evidenceMissing = new ReportReadiness(
                 false,

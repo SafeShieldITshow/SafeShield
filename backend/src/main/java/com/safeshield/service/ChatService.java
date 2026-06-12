@@ -484,20 +484,44 @@ public class ChatService {
             else if (missingInfo.contains("증거")) candidates.add(evidenceQuestion(text));
             else if (missingInfo.contains("피해 영향") || missingInfo.contains("회복")) candidates.add(impactQuestion(text));
             else if (missingInfo.contains("원하는 도움")) candidates.add(goalQuestion(text));
-            else if (missingInfo.contains("최종 확인")) candidates.add(finalCheckQuestion());
             else if (missingInfo.contains("조금 더")) candidates.addAll(deepDiveQuestions(text, userMessageCount));
         }
 
         boolean hadCandidates = !candidates.isEmpty();
-        candidates = new ArrayList<>(candidates.stream()
-                .filter(candidate -> !isConfirmationCandidateAnswered(candidate.id(), text))
-                .filter(candidate -> !wasCandidateAnsweredAfterQuestion(candidate, history))
-                .toList());
+        boolean hadAnsweredCandidate = candidates.stream()
+                .anyMatch(candidate -> isConfirmationCandidateAnswered(candidate.id(), text));
+        candidates = filterUsableCandidates(candidates, text, history);
 
-        if (!hadCandidates && candidates.isEmpty() && !hasAnsweredDeepDive(text)) {
-            candidates.add(genericDetailQuestion(text));
+        if (candidates.isEmpty() && shouldUseFallbackQuestion(hadCandidates, hadAnsweredCandidate, text, readiness)) {
+            List<ConfirmationCandidate> fallback = new ArrayList<>(deepDiveQuestions(text, userMessageCount));
+            fallback.add(genericDetailQuestion(text));
+            candidates = filterUsableCandidates(fallback, text, history);
         }
         return candidates.stream().distinct().toList();
+    }
+
+    private static List<ConfirmationCandidate> filterUsableCandidates(
+            List<ConfirmationCandidate> candidates,
+            String text,
+            List<Message> history
+    ) {
+        return new ArrayList<>(candidates.stream()
+                .filter(candidate -> !isConfirmationCandidateAnswered(candidate.id(), text))
+                .filter(candidate -> !wasCandidateAnsweredAfterQuestion(candidate, history))
+                .filter(candidate -> !wasCandidateQuestionAlreadyAsked(candidate, history))
+                .toList());
+    }
+
+    private static boolean shouldUseFallbackQuestion(
+            boolean hadCandidates,
+            boolean hadAnsweredCandidate,
+            String text,
+            ReportReadiness readiness
+    ) {
+        if (readiness == null || readiness.missingInfo().isEmpty()) return false;
+        if (hadAnsweredCandidate) return false;
+        if (hasAnsweredDeepDive(text)) return false;
+        return hadCandidates || readiness.missingInfo().stream().anyMatch(info -> info.contains("조금 더"));
     }
 
     private static boolean wasCandidateAnsweredAfterQuestion(ConfirmationCandidate candidate, List<Message> history) {
@@ -518,6 +542,75 @@ public class ChatService {
             }
         }
         return false;
+    }
+
+    private static boolean wasCandidateQuestionAlreadyAsked(ConfirmationCandidate candidate, List<Message> history) {
+        if (candidate == null || history == null || history.isEmpty()) return false;
+        String family = questionFamily(candidate.id());
+        boolean asked = false;
+        boolean userRespondedAfterAsk = false;
+        for (Message message : history) {
+            if (message == null) continue;
+            String role = message.getRole();
+            String content = message.getContent() == null ? "" : message.getContent().trim();
+            if ("assistant".equals(role) && looksLikeSameQuestion(content, candidate, family)) {
+                asked = true;
+                userRespondedAfterAsk = false;
+                continue;
+            }
+            if (asked && "user".equals(role) && !content.isBlank()) {
+                userRespondedAfterAsk = true;
+            }
+        }
+        return asked && userRespondedAfterAsk;
+    }
+
+    private static String questionFamily(String id) {
+        if (id == null || id.isBlank()) return "";
+        if (id.startsWith("incident")) return "incident";
+        if (id.startsWith("timeline")) return "timeline";
+        if (id.startsWith("evidence")) return "evidence";
+        if (id.startsWith("impact")) return "impact";
+        if (id.startsWith("goal")) return "goal";
+        if (id.startsWith("actor")) return "actor";
+        if (id.startsWith("physical")) return "physical";
+        return id;
+    }
+
+    private static boolean looksLikeSameQuestion(String content, ConfirmationCandidate candidate, String family) {
+        if (content == null || content.isBlank() || candidate == null) return false;
+        String question = candidate.question() == null ? "" : candidate.question().trim();
+        if (!question.isBlank() && content.contains(question)) return true;
+        if (!looksLikeQuestionTurn(content)) return false;
+        return switch (family) {
+            case "incident" -> hasAny(content, "실제로 있었던 행동", "온라인에 올라온 내용", "몸에 어떤 일");
+            case "relationship" -> hasAny(content, "상대와의 관계", "학교폭력 절차 기준", "같은 반", "같은 학교", "학교 밖");
+            case "timeline" -> hasAny(content, "언제부터", "몇 번", "어떤 빈도", "한 번인지", "지금도");
+            case "evidence" -> hasAny(content, "증거", "캡처", "원본", "대화 증거", "확인할 자료");
+            case "impact" -> hasAny(content, "영향", "걱정되는 부분", "불안", "등교", "보복");
+            case "goal" -> hasAny(content, "필요한 도움", "신고", "증거 정리", "안전 확보", "관계 정리");
+            case "chat_pattern" -> hasAny(content, "단톡방에서는", "괴롭힘이 어떤 방식", "한 명이 주도", "여러 명");
+            case "chat_support" -> hasAny(content, "알고 있는 어른", "학교 담당자", "보호자", "담임");
+            case "post_spread" -> hasAny(content, "공개 범위", "어느 범위", "친구들이 볼 수 있는 범위", "누가 볼 수");
+            case "post_trace" -> hasAny(content, "URL", "작성자 계정", "게시 시간", "확인 가능한");
+            case "physical" -> hasAny(content, "어느 부위", "목격자", "진료", "보건실", "통증");
+            case "more_context" -> hasAny(content, "가장 걱정되는 부분", "지금 가장 걱정");
+            case "final_check" -> hasAny(content, "하나의 같은 사안", "리포트를 생성");
+            default -> false;
+        };
+    }
+
+    private static boolean looksLikeQuestionTurn(String content) {
+        return content.contains("?")
+                || content.contains("확인을 위해 질문")
+                || content.contains("골라")
+                || content.contains("알려주세요")
+                || content.contains("있나요")
+                || content.contains("무엇인가요")
+                || content.contains("어디에 가깝")
+                || content.contains("어떤 방식")
+                || content.contains("어느 범위")
+                || content.contains("언제부터");
     }
 
     private static boolean isConfirmationCandidateAnswered(String id, String text) {
@@ -552,6 +645,7 @@ public class ChatService {
             case "physical_support" -> hasAny(text,
                     "목격자가 있습니다", "보건실이나 학교에 기록", "병원 진료를 받을 예정",
                     "진료나 목격자 확인은 없습니다");
+            case "more_context" -> hasImpactAnswer(text) || hasGoalAnswer(text);
             default -> false;
         };
     }

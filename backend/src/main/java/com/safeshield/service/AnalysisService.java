@@ -126,9 +126,6 @@ public class AnalysisService {
                 && hasEvidenceOrChannel
                 && hasImpactOrRecovery
                 && hasUserGoal;
-        if (coreFactsReady && enoughConversation && !hasFinalConfirmation) {
-            missing.add("사안 내용 최종 확인");
-        }
         if (relevantInput && !enoughConversation) {
             missing.add("상담 내용을 조금 더 들은 뒤 리포트 생성");
         }

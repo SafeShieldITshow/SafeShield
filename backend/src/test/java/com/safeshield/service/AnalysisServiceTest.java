@@ -347,13 +347,13 @@ class AnalysisServiceTest {
     }
 
     @Test
-    void asksFinalConfirmationWhenFirstMessageAlreadyHasAllFacts() {
+    void opensReportWhenCoreFactsAndConversationDepthAreEnough() {
         ReportReadiness first = analysisService.assessReportReadiness(
                 "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
                         "캡처와 URL이 있고 불안해서 증거 정리와 신고 절차를 알고 싶습니다.",
                 1
         );
-        ReportReadiness almost = analysisService.assessReportReadiness(
+        ReportReadiness enough = analysisService.assessReportReadiness(
                 "저는 피해를 당한 입장입니다. 같은 반 친구가 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
                         "캡처와 URL이 있고 불안해서 증거 정리와 신고 절차를 알고 싶습니다.",
                 8
@@ -367,9 +367,9 @@ class AnalysisServiceTest {
 
         assertFalse(first.ready(), "첫 메시지에 정보가 충분해도 바로 리포트를 열지 않습니다.");
         assertTrue(first.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
-        assertFalse(almost.ready(), "핵심 정보가 충분해도 최종 확인 전에는 리포트를 열지 않습니다.");
-        assertTrue(almost.missingInfo().contains("사안 내용 최종 확인"));
-        assertTrue(confirmed.ready(), "최종 확인 답변 후에는 리포트 생성이 가능해야 합니다.");
+        assertTrue(enough.ready(), "핵심 정보와 최소 대화량이 충분하면 별도 최종 확인 없이 리포트 생성이 가능해야 합니다.");
+        assertFalse(enough.missingInfo().contains("사안 내용 최종 확인"));
+        assertTrue(confirmed.ready(), "최종 확인 답변이 있어도 리포트 생성이 가능해야 합니다.");
     }
 
     @Test
