@@ -1109,9 +1109,10 @@ public class ChatService {
 
     private String getAiReply(List<Message> history) {
         String latestUserMessage = latestUserMessage(history);
+        String userContextText = combinedUserText(history);
         if (shouldGuardIrrelevantInput(latestUserMessage, hasConversationContext(history), isConversationalFollowUp(latestUserMessage, history))) {
             lastProvider = "guardrail";
-            if (isPerpetratorContext(combinedUserText(history))) {
+            if (isPerpetratorContext(userContextText)) {
                 return buildPerpetratorOffTopicReply();
             }
             return buildIrrelevantInputReply();
@@ -1127,7 +1128,7 @@ public class ChatService {
                         promptContext
                 );
                 lastProvider = "deepseek";
-                return adaptSensitiveConversationReply(reply, latestUserMessage, promptContext);
+                return adaptSensitiveReply(reply, latestUserMessage, userContextText, promptContext);
             } catch (Exception e) {
                 lastError = e;
                 deepSeekDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
@@ -1143,7 +1144,7 @@ public class ChatService {
                         promptContext
                 );
                 lastProvider = "gemini";
-                return adaptSensitiveConversationReply(reply, latestUserMessage, promptContext);
+                return adaptSensitiveReply(reply, latestUserMessage, userContextText, promptContext);
             } catch (Exception e) {
                 lastError = e;
                 geminiDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
@@ -1158,7 +1159,7 @@ public class ChatService {
                         promptContext
                 );
                 lastProvider = "groq";
-                return adaptSensitiveConversationReply(reply, latestUserMessage, promptContext);
+                return adaptSensitiveReply(reply, latestUserMessage, userContextText, promptContext);
             } catch (Exception e) {
                 lastError = e;
                 groqDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
@@ -1173,7 +1174,7 @@ public class ChatService {
                         promptContext
                 );
                 lastProvider = "claude";
-                return adaptSensitiveConversationReply(reply, latestUserMessage, promptContext);
+                return adaptSensitiveReply(reply, latestUserMessage, userContextText, promptContext);
             } catch (Exception e) {
                 lastError = e;
                 logProviderFailure("Claude", e);
@@ -1185,7 +1186,7 @@ public class ChatService {
             lastProvider = "law_fallback";
             System.err.println("[AI] 모든 외부 공급자 실패 후 법령 기반 fallback 응답 반환"
                     + (lastError == null ? "" : " (" + lastError.getClass().getSimpleName() + ")"));
-            return adaptSensitiveConversationReply(fallback, latestUserMessage, promptContext);
+            return adaptSensitiveReply(fallback, latestUserMessage, userContextText, promptContext);
         }
 
         lastProvider = "unavailable";
@@ -1195,14 +1196,34 @@ public class ChatService {
         );
     }
 
-    private String adaptSensitiveConversationReply(String reply, String latestUserMessage, PromptContext promptContext) {
-        if (reply == null || promptContext == null || promptContext.mode() != ReplyMode.CONVERSATION) return reply;
-        if (asksMaleVictimCanConsult(latestUserMessage)
-                && !containsAny(reply, "남자", "성별", "당연히 상담", "상담해도 됩니다")) {
-            return "남자여도 당연히 상담해도 됩니다. 원하지 않은 성적 접촉이나 말은 성별과 관계없이 도움을 요청할 수 있는 일입니다.\n"
-                    + reply;
+    private String adaptSensitiveReply(String reply, String latestUserMessage, String userContextText, PromptContext promptContext) {
+        if (reply == null || promptContext == null) return reply;
+        String adapted = adaptSexualViolenceWording(reply, userContextText);
+        boolean conversationMode = promptContext.mode() == ReplyMode.CONVERSATION;
+        boolean sexualContext = hasSexualViolationSignal(userContextText) || hasSexualViolationSignal(latestUserMessage);
+
+        if (conversationMode
+                && sexualContext
+                && !containsAny(adapted, "성폭력", "성추행", "성희롱", "성적 괴롭힘", "원하지 않은 성적 접촉")) {
+            adapted = "말씀하신 원하지 않은 접촉은 단순한 장난으로 넘길 일이 아니라 성폭력·성추행 맥락에서 도움을 요청할 수 있는 일입니다.\n"
+                    + adapted;
         }
-        return reply;
+        if (asksMaleVictimCanConsult(latestUserMessage)
+                && !containsAny(adapted, "남자", "성별", "당연히 상담", "상담해도 됩니다")) {
+            return "남자여도 당연히 상담해도 됩니다. 원하지 않은 성적 접촉이나 말은 성별과 관계없이 도움을 요청할 수 있는 일입니다.\n"
+                    + adapted;
+        }
+        return adapted;
+    }
+
+    static String adaptSexualViolenceWording(String reply, String userContextText) {
+        if (reply == null || reply.isBlank()) return reply;
+        if (!hasSexualViolationSignal(userContextText)) return reply;
+        if (hasPhysicalViolenceSignal(userContextText)) return reply;
+
+        return reply
+                .replace("신체폭력", "성폭력")
+                .replace("신체 폭력", "성폭력");
     }
 
     private static boolean asksMaleVictimCanConsult(String text) {

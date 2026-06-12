@@ -285,6 +285,27 @@ class ChatServiceTest {
     }
 
     @Test
+    void rewritesSexualContactReportAwayFromPhysicalViolenceLabel() {
+        String adapted = ChatService.adaptSexualViolenceWording(
+                "현재 판단: 이는 학교폭력의 '신체 폭력' 유형에 해당할 수 있습니다.",
+                "친구가 성적으로 불쾌하게 원하지 않는 신체 접촉을 했고 자꾸 만졌습니다."
+        );
+
+        assertTrue(adapted.contains("'성폭력' 유형"));
+        assertFalse(adapted.contains("신체 폭력"));
+    }
+
+    @Test
+    void keepsPhysicalViolenceLabelWhenPhysicalAssaultIsPresent() {
+        String adapted = ChatService.adaptSexualViolenceWording(
+                "현재 판단: 이는 학교폭력의 '신체 폭력' 유형에 해당할 수 있습니다.",
+                "친구에게 맞고 멍이 들었습니다."
+        );
+
+        assertTrue(adapted.contains("신체 폭력"));
+    }
+
+    @Test
     void buildsPerpetratorFollowUpQuestion() {
         ReportReadiness readiness = needsMoreContext();
 
