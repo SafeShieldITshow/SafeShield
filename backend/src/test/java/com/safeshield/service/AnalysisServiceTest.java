@@ -281,6 +281,23 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void sexualContactCaseBecomesReadyAfterCoreFactsWithoutExtraSurveyLoop() {
+        String text = "남자인데 이런 것도 상담해도 되나요? 어떻게 해야 할지 모르겠습니다. " +
+                "확인 답변: 원하지 않는 신체 접촉이 있었습니다. 말하기가 부끄럽지만 원하지 않는데 자꾸 만졌습니다. " +
+                "확인 답변: 상대는 같은 반 학생입니다. " +
+                "확인 답변: 최근 비슷한 일이 여러 번 반복됐습니다. 추가 설명: 한 달 정도 된 것 같고 또 그럴까 봐 학교 가기가 무섭습니다. " +
+                "확인 답변: 아직 확보한 증거는 없습니다. 추가 설명: 신체 접촉이라 캡처는 없고 그때 주변에 애들이 있었습니다. " +
+                "확인 답변: 학교나 담임에게 말하는 것이 걱정됩니다. 확인 답변: 보복이나 반복이 가장 걱정됩니다.";
+
+        ReportReadiness readiness = analysisService.assessReportReadiness(text, 5);
+        var result = analysisService.analyze(text, readiness);
+
+        assertTrue(readiness.ready(), "성폭력 핵심 사실이 확인되면 추가 설문 루프 없이 리포트 생성이 가능해야 합니다.");
+        assertTrue(result.violenceTypes().contains("성폭력"));
+        assertFalse(result.violenceTypes().contains("신체 폭력"), "원하지 않은 성적 접촉을 일반 신체폭력 선택지로 오분류하면 안 됩니다.");
+    }
+
+    @Test
     void treatsOwnPhotoPostedOnSnsAsVictimContextUnlessUserClearlyAdmitsPosting() {
         String text = "저는 피해를 당한 입장입니다. 같은 반 친구들이 오늘 SNS에 내 사진을 올렸다고 했고 " +
                 "친구들이 볼 수 있는 범위로 올라왔습니다. URL과 캡처가 있고 불안해서 증거 정리와 신고 절차를 알고 싶습니다. " +

@@ -86,11 +86,12 @@ public class AnalysisService {
         boolean relevantInput = isRelevantConsultationInput(t);
 
         boolean hasConcreteIncident = containsAny(t, "때렸", "맞았", "욕", "모욕", "비방", "사진", "게시", "댓글", "협박",
-                "따돌", "돈", "갈취", "성희롱", "성추행", "괴롭", "놀림", "밀쳤", "사과",
+                "따돌", "돈", "갈취", "성희롱", "성추행", "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는",
+                "괴롭", "놀림", "밀쳤", "사과",
                 "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는");
         boolean hasRelationshipAnswer = hasDefiniteSchoolRelationship(t) || hasConfirmedNonSchoolRelationship(t);
         boolean hasTimeOrRepeat = containsAny(t, "오늘", "어제", "며칠", "몇 번", "계속", "반복", "매일", "한 번", "지난",
-                "방금", "언제", "개월", "주일", "몇 주", "주 이상", "동안", "최근", "지속", "오래",
+                "방금", "언제", "개월", "주일", "몇 주", "주 이상", "한 달", "달 정도", "동안", "최근", "지속", "오래",
                 "현재까지는 한 번", "여러 번", "지금도 계속", "정확한 시점");
         boolean hasEvidenceOrChannel = containsAny(t, "캡처", "녹음", "사진", "진단", "병원", "목격", "sns", "카톡", "단톡",
                 "댓글", "게시", "메시지", "증거", "아직 확보한 증거는 없습니다", "증거는 없습니다");
@@ -190,7 +191,8 @@ public class AnalysisService {
         return containsAny(text,
                 "학교", "같은 반", "반 친구", "친구", "선배", "후배", "동급생", "학생", "담임", "선생", "학원",
                 "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
-                "sns", "카톡", "단톡", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "갈취", "스토킹",
+                "sns", "카톡", "단톡", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "성적으로",
+                "신체 접촉", "원하지 않는", "만졌", "만지는", "불쾌", "갈취", "스토킹",
                 "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담");
     }
 
@@ -211,7 +213,8 @@ public class AnalysisService {
         if (containsAny(t, "따돌", "왕따", "무시", "배제", "끼워주지", "혼자", "소외")) {
             types.add("따돌림");
         }
-        if (containsAny(t, "성추행", "성희롱", "성적", "몸을 만", "강제로 만", "수치심")) {
+        if (containsAny(t, "성추행", "성희롱", "성적", "성적으로", "신체 접촉", "몸을 만", "강제로 만",
+                "원하지 않는", "만졌", "만지는", "수치심", "불쾌")) {
             types.add("성폭력");
         }
         if (containsAny(t, "스토킹", "따라", "기다리", "집 앞", "계속 연락", "찾아와")) {
@@ -225,10 +228,10 @@ public class AnalysisService {
     }
 
     private int requiredUserMessageCount(String text, String role, List<String> types) {
-        int required = 7;
-        if ("가해 또는 연루".equals(role) || types.size() >= 2) required = 8;
-        if (containsAny(text, "단톡", "단체 채팅", "여러 명", "무리", "보복", "협박", "지금도", "아직도")) required = Math.max(required, 8);
-        if (containsAny(text, "성추행", "성희롱", "성적", "갈취", "스토킹", "흉기", "칼", "골절", "응급실")) required = Math.max(required, 9);
+        int required = types.contains("성폭력") ? 5 : 7;
+        if (!types.contains("성폭력") && ("가해 또는 연루".equals(role) || types.size() >= 2)) required = 8;
+        if (!types.contains("성폭력") && containsAny(text, "단톡", "단체 채팅", "여러 명", "무리", "보복", "협박", "지금도", "아직도")) required = Math.max(required, 8);
+        if (!types.contains("성폭력") && containsAny(text, "갈취", "스토킹", "흉기", "칼", "골절", "응급실")) required = Math.max(required, 9);
         return required;
     }
 

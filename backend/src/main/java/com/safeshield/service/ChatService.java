@@ -574,6 +574,7 @@ public class ChatService {
         if (id.startsWith("goal")) return "goal";
         if (id.startsWith("actor")) return "actor";
         if (id.startsWith("physical")) return "physical";
+        if (id.startsWith("sexual")) return "sexual";
         return id;
     }
 
@@ -594,6 +595,7 @@ public class ChatService {
             case "post_spread" -> hasAny(content, "공개 범위", "어느 범위", "친구들이 볼 수 있는 범위", "누가 볼 수");
             case "post_trace" -> hasAny(content, "URL", "작성자 계정", "게시 시간", "확인 가능한");
             case "physical" -> hasAny(content, "어느 부위", "목격자", "진료", "보건실", "통증");
+            case "sexual" -> hasAny(content, "원하지 않은 성적", "성적으로 불쾌", "신체 접촉", "접촉", "목격", "안전하게 말할");
             case "more_context" -> hasAny(content, "가장 걱정되는 부분", "지금 가장 걱정");
             case "final_check" -> hasAny(content, "하나의 같은 사안", "리포트를 생성");
             default -> false;
@@ -616,10 +618,10 @@ public class ChatService {
     private static boolean isConfirmationCandidateAnswered(String id, String text) {
         if (id == null) return false;
         return switch (id) {
-            case "incident", "incident_post", "incident_physical" -> hasIncidentAnswer(text);
+            case "incident", "incident_post", "incident_physical", "incident_sexual" -> hasIncidentAnswer(text);
             case "relationship" -> hasRelationshipAnswer(text);
             case "timeline", "timeline_cyber" -> hasTimelineAnswer(text);
-            case "evidence", "evidence_chat", "evidence_physical", "evidence_actor" -> hasEvidenceAnswer(text);
+            case "evidence", "evidence_chat", "evidence_physical", "evidence_actor", "evidence_sexual" -> hasEvidenceAnswer(text);
             case "impact" -> hasImpactAnswer(text);
             case "goal" -> hasGoalAnswer(text);
             case "final_check" -> hasFinalCheckAnswer(text);
@@ -645,6 +647,10 @@ public class ChatService {
             case "physical_support" -> hasAny(text,
                     "목격자가 있습니다", "보건실이나 학교에 기록", "병원 진료를 받을 예정",
                     "진료나 목격자 확인은 없습니다");
+            case "sexual_support" -> hasAny(text,
+                    "보호자에게 말할 수", "상담교사나 담임", "117 상담", "누구에게 말해야 할지 어렵");
+            case "sexual_context" -> hasAny(text,
+                    "장소를 기억", "시간대를 기억", "주변에 있던 사람", "자세히 정리하기 어렵");
             case "more_context" -> hasImpactAnswer(text) || hasGoalAnswer(text);
             default -> false;
         };
@@ -654,7 +660,8 @@ public class ChatService {
         return hasAny(text,
                 "욕설", "비방", "모욕", "조롱", "사진", "영상", "게시물", "댓글",
                 "공유", "유포", "맞거나", "가격", "밀치", "넘어뜨", "상처", "멍",
-                "따돌림", "배제", "괴롭힘", "때리거나 밀치는 신체 폭력");
+                "따돌림", "배제", "괴롭힘", "때리거나 밀치는 신체 폭력",
+                "신체 접촉", "원하지 않는", "만졌", "만지는", "성적으로", "불쾌", "성추행", "성희롱");
     }
 
     private static boolean hasRelationshipAnswer(String text) {
@@ -676,7 +683,7 @@ public class ChatService {
                 "대화 전체", "내용 전체", "전체 내용", "전체가 있습니다", "원본", "전체 맥락",
                 "상처 사진", "진단서", "진료 기록", "목격자", "아직 확보한 증거는 없습니다",
                 "아직 정리한 자료는 없습니다", "대화나 게시물 원본", "삭제나 수정한 내역",
-                "상담 기록");
+                "상담 기록", "주변에", "본 사람", "애들이 있", "친구들이 있", "장소", "시간");
     }
 
     private static boolean hasImpactAnswer(String text) {
@@ -721,7 +728,25 @@ public class ChatService {
                 "답변: 공개 게시물", "답변: 다른 사람에게 공유", "추가 설명:");
     }
 
+    private static boolean hasSexualViolationSignal(String text) {
+        return hasAny(text, "성추행", "성희롱", "성적", "성적으로", "신체 접촉",
+                "원하지 않는", "원치 않는", "몸을 만", "만졌", "만지는", "불쾌", "수치심");
+    }
+
+    private static boolean hasPhysicalViolenceSignal(String text) {
+        return hasAny(text, "맞았", "맞고", "맞거나", "때렸", "폭행", "가격", "밀쳤", "밀침",
+                "밀쳐", "넘어뜨", "멍", "상처", "통증", "다쳤", "출혈", "골절");
+    }
+
     private static ConfirmationCandidate incidentQuestion(String text) {
+        if (hasSexualViolationSignal(text)) {
+            return candidate("incident_sexual", "성적으로 불쾌했던 일이 어떤 방식이었나요? 원하지 않은 신체 접촉, 성적인 말, 사진·촬영·유포 중 가까운 것을 골라주세요.",
+                    option("원치 않는 접촉", "확인 답변: 원하지 않는 신체 접촉이 있었습니다."),
+                    option("성적인 말", "확인 답변: 성적인 말이나 농담 때문에 불쾌했습니다."),
+                    option("사진·촬영·유포", "확인 답변: 사진이나 촬영, 유포와 관련된 일이 있었습니다."),
+                    option("반복 접근", "확인 답변: 원하지 않는데 반복적으로 다가오거나 접촉했습니다."),
+                    option("직접 입력", "확인 답변: "));
+        }
         if (hasAny(text, "sns", "인스타", "게시", "댓글", "사진", "영상")) {
             return candidate("incident_post", "온라인에 올라온 내용이 정확히 무엇인가요? 사진, 글, 댓글, 공유 중 해당하는 것을 골라주세요.",
                     option("사진·영상", "확인 답변: 사진이나 영상이 올라왔습니다."),
@@ -730,7 +755,7 @@ public class ChatService {
                     option("공유·유포", "확인 답변: 다른 사람에게 공유되거나 퍼졌습니다."),
                     option("직접 입력", "확인 답변: "));
         }
-        if (hasAny(text, "멍", "상처", "맞", "때", "밀")) {
+        if (hasPhysicalViolenceSignal(text)) {
             return candidate("incident_physical", "몸에 어떤 일이 있었나요? 맞음, 밀침, 넘어짐, 상처 중 가까운 것을 골라주세요.",
                     option("맞음", "확인 답변: 맞거나 가격당한 일이 있었습니다."),
                     option("밀침", "확인 답변: 밀치거나 넘어뜨리는 행동이 있었습니다."),
@@ -773,6 +798,14 @@ public class ChatService {
     }
 
     private static ConfirmationCandidate evidenceQuestion(String text) {
+        if (hasSexualViolationSignal(text)) {
+            return candidate("evidence_sexual", "지금 남길 수 있는 단서는 무엇인가요? 당시 장소·시간, 주변에 있던 사람, 이후 메시지, 상담 기록 중 가까운 것을 골라주세요.",
+                    option("장소·시간", "확인 답변: 당시 장소와 대략적인 시간을 기억하고 있습니다."),
+                    option("주변 사람", "확인 답변: 주변에 있던 사람이 있었습니다."),
+                    option("메시지·연락", "확인 답변: 이후 메시지나 연락 기록이 있습니다."),
+                    option("아직 없음", "확인 답변: 아직 확보한 증거는 없습니다."),
+                    option("직접 입력", "확인 답변: "));
+        }
         if (hasAny(text, "단톡", "단체 채팅", "채팅방", "카톡", "메시지")) {
             return candidate("evidence_chat", "대화 증거에는 무엇이 남아 있나요? 리포트에는 참여자, 시간, 앞뒤 맥락이 중요합니다.",
                     option("참여자+시간", "확인 답변: 참여자 목록과 보낸 시간이 보이는 캡처가 있습니다."),
@@ -781,7 +814,7 @@ public class ChatService {
                     option("아직 없음", "확인 답변: 아직 확보한 증거는 없습니다."),
                     option("직접 입력", "확인 답변: "));
         }
-        if (hasAny(text, "멍", "상처", "맞", "때", "밀", "병원", "진단")) {
+        if (hasPhysicalViolenceSignal(text) || hasAny(text, "병원", "진단")) {
             return candidate("evidence_physical", "신체 피해를 확인할 자료가 무엇인가요? 사진, 진료 기록, 목격자 중 해당하는 것을 골라주세요.",
                     option("상처 사진", "확인 답변: 멍이나 상처 사진이 있습니다."),
                     option("진료 기록", "확인 답변: 병원 진단서나 진료 기록이 있습니다."),
@@ -860,7 +893,8 @@ public class ChatService {
         boolean groupChat = hasAny(text, "단톡", "단체 채팅", "채팅방");
         boolean post = hasAny(text, "sns", "인스타", "게시", "댓글", "유포", "온라인")
                 || (hasAny(text, "사진", "영상") && hasAny(text, "올렸", "올라", "퍼졌", "공유", "단톡", "채팅방"));
-        boolean physical = hasAny(text, "멍", "상처", "맞", "때렸", "밀쳤", "밀쳐", "병원", "진단");
+        boolean sexual = hasSexualViolationSignal(text);
+        boolean physical = hasPhysicalViolenceSignal(text) || hasAny(text, "병원", "진단");
 
         if (actor) {
             if (!hasAny(text, "중단", "그만", "삭제", "수정", "남아", "남아 있", "확인하지 못")) {
@@ -877,6 +911,26 @@ public class ChatService {
                         option("보호자와 상의", "확인 답변: 보호자와 먼저 상의하겠습니다."),
                         option("회복 방법 모름", "확인 답변: 어떤 방식으로 피해 회복을 해야 할지 모르겠습니다."),
                         option("이미 상담함", "확인 답변: 보호자나 담임에게 이미 상담했습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            return questions.isEmpty() ? List.of(genericDetailQuestion(text)) : questions;
+        }
+
+        if (sexual) {
+            if (!hasAny(text, "담임", "선생", "보호자", "부모", "117", "상담", "말했", "알렸")) {
+                questions.add(candidate("sexual_support", "이 일을 안전하게 말할 수 있는 어른이나 상담 창구가 있나요? 보호자, 상담교사, 담임, 117 중 편한 쪽부터 생각해도 됩니다.",
+                        option("보호자", "확인 답변: 보호자에게 말할 수 있습니다."),
+                        option("상담교사·담임", "확인 답변: 상담교사나 담임에게 말할 수 있습니다."),
+                        option("117", "확인 답변: 117 상담을 먼저 이용하고 싶습니다."),
+                        option("아직 어려움", "확인 답변: 아직 누구에게 말해야 할지 어렵습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            if (!hasAny(text, "장소", "시간", "목격", "주변", "기억", "메시지", "연락")) {
+                questions.add(candidate("sexual_context", "기억나는 범위에서 장소, 시간대, 주변에 있던 사람 중 말할 수 있는 게 있나요?",
+                        option("장소 기억", "확인 답변: 장소를 기억하고 있습니다."),
+                        option("시간대 기억", "확인 답변: 대략적인 시간대를 기억하고 있습니다."),
+                        option("주변 사람", "확인 답변: 주변에 있던 사람이 있었습니다."),
+                        option("아직 정리 어려움", "확인 답변: 아직 자세히 정리하기 어렵습니다."),
                         option("직접 입력", "확인 답변: ")));
             }
             return questions.isEmpty() ? List.of(genericDetailQuestion(text)) : questions;
@@ -946,7 +1000,7 @@ public class ChatService {
     }
 
     private static ConfirmationCandidate genericDetailQuestion(String text) {
-        return candidate("more_context", "확인을 위해 질문 하나 할게요. 지금 가장 걱정되는 부분은 무엇인가요?",
+        return candidate("more_context", "지금 가장 걱정되는 부분은 무엇인가요?",
                 option("보복", "확인 답변: 보복이나 반복이 가장 걱정됩니다."),
                 option("증거 부족", "확인 답변: 증거가 충분한지 걱정됩니다."),
                 option("학교에 말하기", "확인 답변: 학교나 담임에게 말하는 것이 걱정됩니다."),
@@ -1073,7 +1127,7 @@ public class ChatService {
                         promptContext
                 );
                 lastProvider = "deepseek";
-                return reply;
+                return adaptSensitiveConversationReply(reply, latestUserMessage, promptContext);
             } catch (Exception e) {
                 lastError = e;
                 deepSeekDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
@@ -1089,7 +1143,7 @@ public class ChatService {
                         promptContext
                 );
                 lastProvider = "gemini";
-                return reply;
+                return adaptSensitiveConversationReply(reply, latestUserMessage, promptContext);
             } catch (Exception e) {
                 lastError = e;
                 geminiDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
@@ -1104,7 +1158,7 @@ public class ChatService {
                         promptContext
                 );
                 lastProvider = "groq";
-                return reply;
+                return adaptSensitiveConversationReply(reply, latestUserMessage, promptContext);
             } catch (Exception e) {
                 lastError = e;
                 groqDisabledUntil = System.currentTimeMillis() + cooldownFor(e);
@@ -1119,7 +1173,7 @@ public class ChatService {
                         promptContext
                 );
                 lastProvider = "claude";
-                return reply;
+                return adaptSensitiveConversationReply(reply, latestUserMessage, promptContext);
             } catch (Exception e) {
                 lastError = e;
                 logProviderFailure("Claude", e);
@@ -1131,7 +1185,7 @@ public class ChatService {
             lastProvider = "law_fallback";
             System.err.println("[AI] 모든 외부 공급자 실패 후 법령 기반 fallback 응답 반환"
                     + (lastError == null ? "" : " (" + lastError.getClass().getSimpleName() + ")"));
-            return fallback;
+            return adaptSensitiveConversationReply(fallback, latestUserMessage, promptContext);
         }
 
         lastProvider = "unavailable";
@@ -1139,6 +1193,21 @@ public class ChatService {
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "AI 상담 서비스에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요."
         );
+    }
+
+    private String adaptSensitiveConversationReply(String reply, String latestUserMessage, PromptContext promptContext) {
+        if (reply == null || promptContext == null || promptContext.mode() != ReplyMode.CONVERSATION) return reply;
+        if (asksMaleVictimCanConsult(latestUserMessage)
+                && !containsAny(reply, "남자", "성별", "당연히 상담", "상담해도 됩니다")) {
+            return "남자여도 당연히 상담해도 됩니다. 원하지 않은 성적 접촉이나 말은 성별과 관계없이 도움을 요청할 수 있는 일입니다.\n"
+                    + reply;
+        }
+        return reply;
+    }
+
+    private static boolean asksMaleVictimCanConsult(String text) {
+        return containsAny(text, "남자인데", "남자도", "남학생인데", "남자 학생")
+                && containsAny(text, "상담", "말해도", "도움", "되나요", "괜찮");
     }
 
     private String buildFallbackReply(List<Message> history, PromptContext promptContext) {
@@ -1200,6 +1269,20 @@ public class ChatService {
                 .trim();
         ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessageCount(history));
         boolean perpetratorContext = isPerpetratorContext(combined);
+
+        if (asksMaleVictimCanConsult(latest)) {
+            return """
+                    남자여도 당연히 상담해도 됩니다. 원하지 않은 성적 접촉이나 말은 성별과 관계없이 도움을 요청할 수 있는 일입니다.
+                    지금은 자세한 표현을 억지로 하지 않아도 되고, 안전하게 말할 수 있는 범위에서 어떤 일이 있었는지만 조금씩 정리하면 됩니다.
+                    """.trim();
+        }
+
+        if (hasSexualViolationSignal(latest)) {
+            return """
+                    말하기 부끄럽고 불편할 수 있지만, 원하지 않은 성적 접촉은 혼자 넘길 일이 아닙니다.
+                    지금은 상대를 직접 찾아가 따지기보다, 기억나는 시간·장소·주변에 있던 사람을 짧게 적어두고 믿을 수 있는 어른이나 117 상담으로 안전하게 연결하는 쪽이 좋습니다.
+                    """.trim();
+        }
 
         if (isPhysicalViolenceSignal(latest)) {
             return buildPhysicalViolenceFallbackReply(latest, readiness);
@@ -1270,6 +1353,9 @@ public class ChatService {
 
     private String buildConfirmationFallbackReply(String latest, ReportReadiness readiness) {
         String t = latest == null ? "" : latest;
+        if (hasSexualViolationSignal(t)) {
+            return "원하지 않은 신체 접촉이었다는 점이 상담 기록에 반영됩니다. 자세한 표현을 억지로 하지 않아도 되고, 기억나는 시간·장소·주변에 있던 사람을 짧게 남겨두는 것이 도움이 됩니다.";
+        }
         if (containsAny(t, "같은 반", "같은 학교", "선후배", "학원 관계")) {
             return "상대와의 관계가 확인됐습니다. 같은 공간에서 계속 마주칠 수 있는 관계라서, 이후 대응은 혼자 직접 부딪히기보다 보호자나 담임을 통해 정리하는 쪽이 안전합니다.";
         }
@@ -1376,7 +1462,8 @@ public class ChatService {
                 "학교", "같은 반", "반 친구", "친구", "선배", "후배", "학생", "담임", "선생", "학원",
                 "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
                 "괴롭", "괴롭힘", "놀림", "놀렸", "놀려", "비하", "무시", "소외", "패드립",
-                "sns", "카톡", "단톡", "채팅", "채팅방", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "갈취", "스토킹",
+                "sns", "카톡", "단톡", "채팅", "채팅방", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱",
+                "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는", "불쾌", "갈취", "스토킹",
                 "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담", "확인 질문");
     }
 
@@ -1720,7 +1807,8 @@ public class ChatService {
     }
 
     private boolean containsSevereNewIncident(String text) {
-        return containsAny(text, "또 맞", "또 때", "때렸", "맞았", "출혈", "골절", "응급실", "흉기", "칼", "성추행", "성폭행", "자살", "자해", "죽고 싶", "보복", "협박");
+        return containsAny(text, "또 맞", "또 때", "때렸", "맞았", "출혈", "골절", "응급실", "흉기", "칼",
+                "성추행", "성폭행", "성적으로", "원하지 않는", "만졌", "자살", "자해", "죽고 싶", "보복", "협박");
     }
 
     private boolean isPhysicalViolenceSignal(String text) {
@@ -1731,7 +1819,8 @@ public class ChatService {
         return containsAny(text,
                 "학교", "같은 반", "반 친구", "친구", "선배", "후배", "학생", "담임", "선생", "학원",
                 "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
-                "sns", "카톡", "단톡", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "갈취", "스토킹",
+                "sns", "카톡", "단톡", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "성적으로",
+                "신체 접촉", "원하지 않는", "만졌", "불쾌", "갈취", "스토킹",
                 "가해", "피해", "캡처", "url", "진단", "병원", "목격", "사과", "삭제", "보호자");
     }
 
@@ -1809,7 +1898,7 @@ public class ChatService {
                 # 답변 방식
                 1. 첫 문장은 사용자의 감정이나 부담을 먼저 받아주세요.
                 2. 사용자가 말한 내용을 복사하지 말고, 핵심만 1문장으로 부드럽게 정리하세요.
-                3. 지금 바로 할 수 있는 작은 행동 1~2개를 알려주세요.
+                3. 지금 바로 할 수 있는 행동은 직전 입력에 맞게 1개만 말하세요. 매번 같은 안전 확인 문장이나 "작은 행동 2가지" 형식을 반복하지 마세요.
                 4. 필요한 확인은 마지막에 자연스러운 질문 1개만 하세요. 관계, 시점, 증거, 영향, 원하는 도움 중 이미 말한 내용은 다시 묻지 마세요.
                 5. 선생님이나 어른이 채팅방에 있는지 묻지 마세요. 단체 채팅방 사안에서 필요한 관계 확인은 '같은 학교/같은 반/선배·후배/학원 관계인지'입니다.
                 6. '관련 법률', '증거 정보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
@@ -1826,6 +1915,8 @@ public class ChatService {
                 17. "~니깐요", "그러니깐요", 같은 말을 쓰지 마세요. 같은 어미나 같은 단어를 연속해서 반복하지 마세요.
                 18. "확인 답변:"으로 들어온 내용은 그대로 반복하지 말고, 그 답변이 상담 판단에 어떤 의미가 있는지와 지금 할 수 있는 행동을 2~3문장으로 말하세요.
                 19. "내 사진", "제 사진", "저의 사진"이 SNS, 게시물, 유포, 공유, 올라옴과 함께 나오면 사용자가 자기 계정에 올린 것으로 단정하지 마세요. 학교폭력 상담 맥락에서는 상대가 사진을 올렸거나 퍼뜨린 피해 가능성을 먼저 보고, 누가 올렸는지 불명확하면 작성자·계정·게시 시간을 확인하세요. 사용자가 직접 자기 게시물이라고 명시하지 않는 한 "사진을 삭제하세요", "SNS 설정을 확인하세요"처럼 사용자가 게시자인 것처럼 안내하지 마세요.
+                20. "남자인데 이런 것도 상담해도 되나요"처럼 성별 때문에 망설이는 말이 나오면, 남성 피해도 상담해도 된다고 먼저 분명히 안심시켜 주세요.
+                21. 성적으로 불쾌한 말이나 원하지 않은 접촉은 신체 폭력의 "맞음, 밀침, 넘어짐, 상처" 선택지로 돌리지 말고 성폭력/성추행 맥락으로 이어가세요.
 
                 """ + roleInstruction + """
 
@@ -1890,6 +1981,9 @@ public class ChatService {
                 17. "~니깐요", "그러니깐요", 같은 말을 쓰지 마세요. 같은 어미나 같은 단어를 연속해서 반복하지 마세요.
                 18. "확인 답변:"으로 들어온 내용은 그대로 반복하지 말고, 그 답변이 상담 판단에 어떤 의미가 있는지와 지금 할 수 있는 행동을 2~3문장으로 말하세요.
                 19. "내 사진", "제 사진", "저의 사진"이 SNS, 게시물, 유포, 공유, 올라옴과 함께 나오면 사용자가 자기 계정에 올린 것으로 단정하지 마세요. 학교폭력 상담 맥락에서는 상대가 사진을 올렸거나 퍼뜨린 피해 가능성을 먼저 보고, 누가 올렸는지 불명확하면 작성자·계정·게시 시간을 확인하세요. 사용자가 직접 자기 게시물이라고 명시하지 않는 한 "사진을 삭제하세요", "SNS 설정을 확인하세요"처럼 사용자가 게시자인 것처럼 안내하지 마세요.
+                20. "남자인데 이런 것도 상담해도 되나요"처럼 성별 때문에 망설이는 말이 나오면, 남성 피해도 상담해도 된다고 먼저 분명히 안심시켜 주세요.
+                21. "지금 당장 할 수 있는 작은 행동 2가지", "상담 내용을 다시 한번 확인" 같은 고정 문구를 반복하지 마세요.
+                22. 성적으로 불쾌한 말이나 원하지 않은 접촉은 신체 폭력의 "맞음, 밀침, 넘어짐, 상처" 선택지로 돌리지 말고 성폭력/성추행 맥락으로 이어가세요.
 
                 """ + roleInstruction + """
 
@@ -2148,6 +2242,11 @@ public class ChatService {
                 || reply.contains("왜 괴롭힌다고 생각")
                 || reply.contains("괴롭히는 이유")
                 || containsDanglingQuestionLeadIn(reply)
+                || reply.contains("지금 당장 할 수 있는 작은 행동 2가지")
+                || reply.contains("상담 내용을 다시 한번 확인")
+                || reply.contains("상담 내용을 다시 한 번 확인")
+                || reply.contains("어떤 부분이 특히 어려운지 다시")
+                || reply.contains("맞음, 밀침, 넘어짐, 상처")
                 || reply.contains("선생님이나 어른이 계신가요")
                 || reply.contains("채팅방에 참여하고 있는 친구들 중에 선생님")
                 || (reply.contains("채팅방") && (reply.contains("어른") || reply.contains("선생님"))
@@ -2462,11 +2561,11 @@ public class ChatService {
     private List<String> detectTypes(String text) {
         String t = text.toLowerCase(Locale.ROOT);
         List<String> types = new ArrayList<>();
-        if (containsAny(t, "맞", "때", "폭행", "멍", "상처", "병원")) types.add("신체 폭력");
+        if (hasPhysicalViolenceSignal(t) || containsAny(t, "폭행", "병원")) types.add("신체 폭력");
         if (containsAny(t, "욕", "협박", "모욕", "놀림", "비하")) types.add("언어 폭력");
         if (containsAny(t, "sns", "카톡", "단톡", "dm", "게시", "댓글", "사진")) types.add("사이버 폭력");
         if (containsAny(t, "따돌", "왕따", "무시", "소외")) types.add("따돌림");
-        if (containsAny(t, "성추행", "성희롱", "성적")) types.add("성폭력");
+        if (containsAny(t, "성추행", "성희롱", "성적", "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는", "불쾌", "수치심")) types.add("성폭력");
         if (containsAny(t, "돈", "빼앗", "갈취", "강요")) types.add("갈취");
         return types;
     }

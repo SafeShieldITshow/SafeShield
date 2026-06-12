@@ -183,6 +183,19 @@ class ChatServiceTest {
     }
 
     @Test
+    void rejectsRepeatedSmallActionTemplateAndWrongPhysicalOptions() {
+        String repeated = """
+                지금 당장 할 수 있는 작은 행동 2가지를 알려드릴게요.
+                지금 상황에서 안전하게 지내고 있는지 확인해 보세요.
+                상담 내용을 다시 한번 확인해 보세요.
+                """;
+        String wrongOptions = "맞음, 밀침, 넘어짐, 상처 중 가까운 것을 골라주세요.";
+
+        assertFalse(ChatService.isGeneratedConversationReplyValid(repeated, LAW_CONTEXT));
+        assertFalse(ChatService.isGeneratedConversationReplyValid(wrongOptions, LAW_CONTEXT));
+    }
+
+    @Test
     void rejectsAwkwardRepeatedConversationStyle() {
         String reply = """
                 같은 반 학생이니깐요. 혼자 감당하지 않아도 된다는 걸 기억하세요.
@@ -248,6 +261,27 @@ class ChatServiceTest {
         );
 
         assertTrue(questions.get(0).contains("어느 부위"));
+    }
+
+    @Test
+    void buildsSexualViolenceSpecificQuestionInsteadOfPhysicalOptions() {
+        ReportReadiness evidenceMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "증거를 확인해야 합니다.",
+                List.of("남아 있는 증거가 무엇인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        List<String> evidenceQuestions = ChatService.previewConfirmationQuestions(
+                evidenceMissing,
+                "확인 답변: 원하지 않는 신체 접촉이 있었습니다. 그때 너무 무서웠습니다.",
+                4
+        );
+
+        assertTrue(evidenceQuestions.get(0).contains("지금 남길 수 있는 단서"));
+        assertFalse(evidenceQuestions.get(0).contains("신체 피해"));
     }
 
     @Test
