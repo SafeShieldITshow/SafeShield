@@ -306,6 +306,39 @@ class ChatServiceTest {
     }
 
     @Test
+    void routesChatContextToChatQuestionInsteadOfGenericIncidentSurvey() {
+        ReportReadiness incidentMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "무슨 일이 있었는지 확인해야 합니다.",
+                List.of("무슨 일이 있었는지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                incidentMissing,
+                "친구들이 단체 채팅방에서 계속 욕하고 놀립니다.",
+                3
+        );
+
+        assertTrue(questions.get(0).contains("단톡방에서는"));
+        assertFalse(questions.get(0).contains("말, 게시물, 신체 접촉"));
+    }
+
+    @Test
+    void rewritesVictimPhotoAdviceAwayFromSelfPostingAssumption() {
+        String adapted = ChatService.adaptCaseDomainWording(
+                "그럼, 지금 할 수 있는 작은 행동은 sns에 올린 사진을 삭제하고, sns의 설정을 확인해 보는 거예요.",
+                "친구가 제 사진을 SNS에 올렸고 친구들이 볼 수 있는 범위로 올라왔습니다."
+        );
+
+        assertTrue(adapted.contains("게시된 사진의 URL"));
+        assertTrue(adapted.contains("누가 올렸는지"));
+        assertFalse(adapted.contains("sns에 올린 사진을 삭제"));
+    }
+
+    @Test
     void buildsPerpetratorFollowUpQuestion() {
         ReportReadiness readiness = needsMoreContext();
 

@@ -46,6 +46,18 @@ public class ChatService {
         CONVERSATION
     }
 
+    private enum CaseDomain {
+        PERPETRATOR,
+        SEXUAL,
+        PHYSICAL,
+        CYBER_CHAT,
+        CYBER_POST,
+        SOCIAL_EXCLUSION,
+        EXTORTION,
+        STALKING,
+        GENERAL
+    }
+
     private static final int AI_HISTORY_LIMIT = 18;
     private static final int GUEST_HISTORY_LIMIT = 24;
     private static final int MEMORY_RECENT_USER_LIMIT = 8;
@@ -506,10 +518,52 @@ public class ChatService {
             List<Message> history
     ) {
         return new ArrayList<>(candidates.stream()
+                .filter(candidate -> isCandidateCompatibleWithContext(candidate, text))
                 .filter(candidate -> !isConfirmationCandidateAnswered(candidate.id(), text))
                 .filter(candidate -> !wasCandidateAnsweredAfterQuestion(candidate, history))
                 .filter(candidate -> !wasCandidateQuestionAlreadyAsked(candidate, history))
                 .toList());
+    }
+
+    private static boolean isCandidateCompatibleWithContext(ConfirmationCandidate candidate, String text) {
+        if (candidate == null || candidate.id() == null) return false;
+        String id = candidate.id();
+        CaseDomain domain = primaryCaseDomain(text);
+
+        if (id.startsWith("actor") || id.endsWith("_actor")) {
+            return domain == CaseDomain.PERPETRATOR;
+        }
+        if (id.contains("sexual")) {
+            return domain == CaseDomain.SEXUAL;
+        }
+        if (id.contains("physical")) {
+            return domain == CaseDomain.PHYSICAL;
+        }
+        if (id.startsWith("chat_") || id.equals("evidence_chat")) {
+            return domain == CaseDomain.CYBER_CHAT || hasChatSignal(text);
+        }
+        if (id.startsWith("post_") || id.equals("incident_post")) {
+            return domain == CaseDomain.CYBER_POST || hasPostSignal(text);
+        }
+
+        if (domain == CaseDomain.SEXUAL) {
+            return !candidateMentionsPhysicalViolenceOptions(candidate);
+        }
+        if (domain == CaseDomain.CYBER_POST && id.equals("incident")) {
+            return false;
+        }
+        if (domain == CaseDomain.CYBER_CHAT && id.equals("incident")) {
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean candidateMentionsPhysicalViolenceOptions(ConfirmationCandidate candidate) {
+        String text = (candidate.question() == null ? "" : candidate.question()) + " " +
+                candidate.options().stream()
+                        .map(option -> option.getOrDefault("label", "") + " " + option.getOrDefault("message", ""))
+                        .collect(Collectors.joining(" "));
+        return hasAny(text, "맞음", "밀침", "넘어짐", "상처", "신체 폭력", "때리거나 밀치는");
     }
 
     private static boolean shouldUseFallbackQuestion(
@@ -728,6 +782,19 @@ public class ChatService {
                 "답변: 공개 게시물", "답변: 다른 사람에게 공유", "추가 설명:");
     }
 
+    private static CaseDomain primaryCaseDomain(String text) {
+        String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        if (isPerpetratorText(t)) return CaseDomain.PERPETRATOR;
+        if (hasSexualViolationSignal(t)) return CaseDomain.SEXUAL;
+        if (hasPhysicalViolenceSignal(t)) return CaseDomain.PHYSICAL;
+        if (hasChatSignal(t)) return CaseDomain.CYBER_CHAT;
+        if (hasPostSignal(t)) return CaseDomain.CYBER_POST;
+        if (hasSocialExclusionSignal(t)) return CaseDomain.SOCIAL_EXCLUSION;
+        if (hasExtortionSignal(t)) return CaseDomain.EXTORTION;
+        if (hasStalkingSignal(t)) return CaseDomain.STALKING;
+        return CaseDomain.GENERAL;
+    }
+
     private static boolean hasSexualViolationSignal(String text) {
         return hasAny(text, "성추행", "성희롱", "성적", "성적으로", "신체 접촉",
                 "원하지 않는", "원치 않는", "몸을 만", "만졌", "만지는", "불쾌", "수치심");
@@ -736,6 +803,27 @@ public class ChatService {
     private static boolean hasPhysicalViolenceSignal(String text) {
         return hasAny(text, "맞았", "맞고", "맞거나", "때렸", "폭행", "가격", "밀쳤", "밀침",
                 "밀쳐", "넘어뜨", "멍", "상처", "통증", "다쳤", "출혈", "골절");
+    }
+
+    private static boolean hasChatSignal(String text) {
+        return hasAny(text, "단톡", "단체 채팅", "채팅방", "카톡", "메시지", "dm", "디엠");
+    }
+
+    private static boolean hasPostSignal(String text) {
+        return hasAny(text, "sns", "인스타", "게시", "댓글", "사진 올", "사진이 올라", "사진 올라",
+                "영상", "유포", "공유", "퍼졌", "온라인");
+    }
+
+    private static boolean hasSocialExclusionSignal(String text) {
+        return hasAny(text, "따돌", "왕따", "무시", "배제", "끼워주지", "소외", "혼자");
+    }
+
+    private static boolean hasExtortionSignal(String text) {
+        return hasAny(text, "돈", "갈취", "빼앗", "내놔", "물건", "강요", "심부름");
+    }
+
+    private static boolean hasStalkingSignal(String text) {
+        return hasAny(text, "스토킹", "따라", "기다리", "집 앞", "계속 연락", "찾아와");
     }
 
     private static ConfirmationCandidate incidentQuestion(String text) {
@@ -1198,7 +1286,7 @@ public class ChatService {
 
     private String adaptSensitiveReply(String reply, String latestUserMessage, String userContextText, PromptContext promptContext) {
         if (reply == null || promptContext == null) return reply;
-        String adapted = adaptSexualViolenceWording(reply, userContextText);
+        String adapted = adaptCaseDomainWording(reply, userContextText);
         boolean conversationMode = promptContext.mode() == ReplyMode.CONVERSATION;
         boolean sexualContext = hasSexualViolationSignal(userContextText) || hasSexualViolationSignal(latestUserMessage);
 
@@ -1216,14 +1304,40 @@ public class ChatService {
         return adapted;
     }
 
+    static String adaptCaseDomainWording(String reply, String userContextText) {
+        String adapted = adaptSexualViolenceWording(reply, userContextText);
+        adapted = adaptVictimPhotoWording(adapted, userContextText);
+        return adapted;
+    }
+
     static String adaptSexualViolenceWording(String reply, String userContextText) {
         if (reply == null || reply.isBlank()) return reply;
         if (!hasSexualViolationSignal(userContextText)) return reply;
-        if (hasPhysicalViolenceSignal(userContextText)) return reply;
+        if (hasPhysicalViolenceSignal(userContextText) && !reply.contains("성폭력")) {
+            return reply
+                    .replace("신체폭력", "성폭력 또는 신체폭력")
+                    .replace("신체 폭력", "성폭력 또는 신체 폭력");
+        }
 
         return reply
                 .replace("신체폭력", "성폭력")
                 .replace("신체 폭력", "성폭력");
+    }
+
+    static String adaptVictimPhotoWording(String reply, String userContextText) {
+        if (reply == null || reply.isBlank()) return reply;
+        String t = userContextText == null ? "" : userContextText.toLowerCase(Locale.ROOT);
+        if (!hasOwnPhotoPostedVictimContext(t) || hasExplicitPerpetratorAdmission(t)) return reply;
+
+        return reply
+                .replace("sns에 올린 사진을 삭제하고, sns의 설정을 확인해 보는 거예요.",
+                        "게시된 사진의 URL·작성자 계정·게시 시간을 캡처하고, 누가 올렸는지와 공개 범위를 확인해 보세요.")
+                .replace("SNS에 올린 사진을 삭제하고, SNS의 설정을 확인해 보는 거예요.",
+                        "게시된 사진의 URL·작성자 계정·게시 시간을 캡처하고, 누가 올렸는지와 공개 범위를 확인해 보세요.")
+                .replace("사진을 삭제하고, SNS 설정을 확인해 보세요.",
+                        "게시 화면과 작성자 정보를 캡처하고, 공개 범위와 게시자를 확인해 보세요.")
+                .replace("사진을 삭제하고 SNS 설정을 확인해 보세요.",
+                        "게시 화면과 작성자 정보를 캡처하고, 공개 범위와 게시자를 확인해 보세요.");
     }
 
     private static boolean asksMaleVictimCanConsult(String text) {
@@ -1938,6 +2052,7 @@ public class ChatService {
                 19. "내 사진", "제 사진", "저의 사진"이 SNS, 게시물, 유포, 공유, 올라옴과 함께 나오면 사용자가 자기 계정에 올린 것으로 단정하지 마세요. 학교폭력 상담 맥락에서는 상대가 사진을 올렸거나 퍼뜨린 피해 가능성을 먼저 보고, 누가 올렸는지 불명확하면 작성자·계정·게시 시간을 확인하세요. 사용자가 직접 자기 게시물이라고 명시하지 않는 한 "사진을 삭제하세요", "SNS 설정을 확인하세요"처럼 사용자가 게시자인 것처럼 안내하지 마세요.
                 20. "남자인데 이런 것도 상담해도 되나요"처럼 성별 때문에 망설이는 말이 나오면, 남성 피해도 상담해도 된다고 먼저 분명히 안심시켜 주세요.
                 21. 성적으로 불쾌한 말이나 원하지 않은 접촉은 신체 폭력의 "맞음, 밀침, 넘어짐, 상처" 선택지로 돌리지 말고 성폭력/성추행 맥락으로 이어가세요.
+                22. 답변 전에 먼저 주된 상담 유형을 하나 정하세요. 성폭력, 신체 폭력, 사이버 폭력, 따돌림, 스토킹, 갈취, 가해·연루 중 현재 맥락과 맞지 않는 유형명·선택지·행동 지침은 쓰지 마세요.
 
                 """ + roleInstruction + """
 
@@ -2005,6 +2120,7 @@ public class ChatService {
                 20. "남자인데 이런 것도 상담해도 되나요"처럼 성별 때문에 망설이는 말이 나오면, 남성 피해도 상담해도 된다고 먼저 분명히 안심시켜 주세요.
                 21. "지금 당장 할 수 있는 작은 행동 2가지", "상담 내용을 다시 한번 확인" 같은 고정 문구를 반복하지 마세요.
                 22. 성적으로 불쾌한 말이나 원하지 않은 접촉은 신체 폭력의 "맞음, 밀침, 넘어짐, 상처" 선택지로 돌리지 말고 성폭력/성추행 맥락으로 이어가세요.
+                23. 답변 전에 먼저 주된 상담 유형을 하나 정하세요. 성폭력, 신체 폭력, 사이버 폭력, 따돌림, 스토킹, 갈취, 가해·연루 중 현재 맥락과 맞지 않는 유형명·선택지·행동 지침은 쓰지 마세요.
 
                 """ + roleInstruction + """
 
