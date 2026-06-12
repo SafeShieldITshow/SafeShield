@@ -317,6 +317,7 @@ class ChatServiceTest {
     void doesNotTreatConfirmationAnswerAsIrrelevantInput() {
         assertFalse(ChatService.shouldGuardIrrelevantInput("확인 답변: 몇 주 이상 지속됐습니다.", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("추가 설명: 내용 전체가 있습니다.", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("답변: 친구들이 볼 수 있는 범위로 올라왔습니다.", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("확인 답변: 똥싸기", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("추가 설명: 똥싸기", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("확인 답변: ㅁㄴㅇㄹ", false));
@@ -372,6 +373,20 @@ class ChatServiceTest {
         List<String> questions = ChatService.previewConfirmationQuestions(evidenceMissing, history);
 
         assertFalse(questions.stream().anyMatch(question -> question.contains("대화 증거에는 무엇이 남아 있나요")));
+    }
+
+    @Test
+    void treatsShortAnswerPrefixAsConfirmationAnswerForPostSpread() {
+        ReportReadiness moreContext = needsMoreContext();
+        List<Message> history = List.of(
+                transientMessage("user", "같은 반 친구들이 SNS에 내 사진을 올렸다고 했고 URL과 캡처가 있습니다."),
+                transientMessage("assistant", "확인을 위해 질문 하나 할게요. 게시물은 어느 범위로 보이나요?"),
+                transientMessage("user", "답변: 친구들이 볼 수 있는 범위로 올라왔습니다.")
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(moreContext, history);
+
+        assertFalse(questions.stream().anyMatch(question -> question.contains("공개 범위")));
     }
 
     @Test

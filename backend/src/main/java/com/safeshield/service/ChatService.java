@@ -623,7 +623,8 @@ public class ChatService {
                 "확인 답변: 한 명이 주도", "확인 답변: 보호자에게 알렸",
                 "확인 답변: 담임이나 학교에 알렸", "확인 답변: 공개 게시물",
                 "확인 답변: 게시물 url", "확인 답변: 팔이나 다리",
-                "확인 답변: 목격자가 있습니다", "추가 설명:");
+                "확인 답변: 목격자가 있습니다", "답변: 친구들이 볼 수 있는 범위",
+                "답변: 공개 게시물", "답변: 다른 사람에게 공유", "추가 설명:");
     }
 
     private static ConfirmationCandidate incidentQuestion(String text) {
@@ -1244,6 +1245,7 @@ public class ChatService {
         String t = text == null ? "" : text.trim();
         return t.startsWith("확인 답변:")
                 || t.startsWith("확인답변:")
+                || t.startsWith("답변:")
                 || t.startsWith("추가 설명:")
                 || t.startsWith("추가설명:");
     }
@@ -1252,6 +1254,7 @@ public class ChatService {
         String t = text == null ? "" : text.trim();
         if (t.startsWith("확인 답변:")) return t.substring("확인 답변:".length()).trim();
         if (t.startsWith("확인답변:")) return t.substring("확인답변:".length()).trim();
+        if (t.startsWith("답변:")) return t.substring("답변:".length()).trim();
         if (t.startsWith("추가 설명:")) return t.substring("추가 설명:".length()).trim();
         if (t.startsWith("추가설명:")) return t.substring("추가설명:".length()).trim();
         return t;
