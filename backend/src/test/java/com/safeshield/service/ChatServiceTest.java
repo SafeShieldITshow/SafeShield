@@ -520,6 +520,43 @@ class ChatServiceTest {
     }
 
     @Test
+    void treatsUnknownSuspectAsAnsweredIdentityState() {
+        ReportReadiness relationshipMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "상대 관계를 확인해야 합니다.",
+                List.of("상대가 학교 관계자인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+        List<Message> history = List.of(
+                transientMessage("user", "SNS에 제 사진과 비방 글이 올라왔습니다. 캡처는 있습니다."),
+                transientMessage("assistant", "확인을 위해 질문 하나 할게요. 상대와의 관계를 학교폭력 절차 기준으로 확인해야 합니다."),
+                transientMessage("user", "용의자 특정이 어렵고 누가 올렸는지 모르겠습니다.")
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(relationshipMissing, history);
+
+        assertFalse(questions.stream().anyMatch(question -> question.contains("상대와의 관계")));
+        assertFalse(questions.stream().anyMatch(question -> question.contains("학교폭력 절차 기준")));
+    }
+
+    @Test
+    void doesNotAskPostTraceAgainWhenAuthorCannotBeIdentified() {
+        ReportReadiness moreContext = needsMoreContext();
+        List<Message> history = List.of(
+                transientMessage("user", "SNS에 제 사진과 비방 글이 올라왔습니다. 친구들이 볼 수 있는 범위로 퍼졌습니다."),
+                transientMessage("assistant", "확인을 위해 질문 하나 할게요. 게시물의 URL, 작성자 계정, 게시 시간 중 확인 가능한 게 있나요?"),
+                transientMessage("user", "작성자 특정이 어렵고 계정 주인을 모르겠습니다.")
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(moreContext, history);
+
+        assertFalse(questions.stream().anyMatch(question -> question.contains("작성자 계정")));
+        assertFalse(questions.stream().anyMatch(question -> question.contains("게시 시간")));
+    }
+
+    @Test
     void treatsWholeConversationContentAsEvidenceAnswer() {
         ReportReadiness evidenceMissing = new ReportReadiness(
                 false,

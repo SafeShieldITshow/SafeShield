@@ -639,7 +639,8 @@ public class ChatService {
         if (!looksLikeQuestionTurn(content)) return false;
         return switch (family) {
             case "incident" -> hasAny(content, "실제로 있었던 행동", "온라인에 올라온 내용", "몸에 어떤 일");
-            case "relationship" -> hasAny(content, "상대와의 관계", "학교폭력 절차 기준", "같은 반", "같은 학교", "학교 밖");
+            case "relationship" -> hasAny(content, "상대와의 관계", "학교폭력 절차 기준", "같은 반", "같은 학교", "학교 밖",
+                    "상대가 누구", "누가 했", "누구인지", "용의자", "특정");
             case "timeline" -> hasAny(content, "언제부터", "몇 번", "어떤 빈도", "한 번인지", "지금도");
             case "evidence" -> hasAny(content, "증거", "캡처", "원본", "대화 증거", "확인할 자료");
             case "impact" -> hasAny(content, "영향", "걱정되는 부분", "불안", "등교", "보복");
@@ -647,7 +648,8 @@ public class ChatService {
             case "chat_pattern" -> hasAny(content, "단톡방에서는", "괴롭힘이 어떤 방식", "한 명이 주도", "여러 명");
             case "chat_support" -> hasAny(content, "알고 있는 어른", "학교 담당자", "보호자", "담임");
             case "post_spread" -> hasAny(content, "공개 범위", "어느 범위", "친구들이 볼 수 있는 범위", "누가 볼 수");
-            case "post_trace" -> hasAny(content, "URL", "작성자 계정", "게시 시간", "확인 가능한");
+            case "post_trace" -> hasAny(content, "URL", "작성자 계정", "게시 시간", "확인 가능한",
+                    "누가 올렸", "작성자가 누구", "계정 주인", "용의자", "특정");
             case "physical" -> hasAny(content, "어느 부위", "목격자", "진료", "보건실", "통증");
             case "sexual" -> hasAny(content, "원하지 않은 성적", "성적으로 불쾌", "신체 접촉", "접촉", "목격", "안전하게 말할");
             case "more_context" -> hasAny(content, "가장 걱정되는 부분", "지금 가장 걱정");
@@ -695,7 +697,8 @@ public class ChatService {
             case "post_spread" -> hasAny(text,
                     "공개 게시물", "친구들이 볼 수 있는 범위", "댓글이나 추가 조롱", "공유되거나 퍼졌");
             case "post_trace" -> hasAny(text,
-                    "게시물 url", "링크가 있습니다", "작성자 계정", "게시 시간이 보이는", "캡처만 있습니다");
+                    "게시물 url", "링크가 있습니다", "작성자 계정", "게시 시간이 보이는", "캡처만 있습니다")
+                    || hasUnknownActorSignal(text);
             case "physical_injury" -> hasAny(text,
                     "팔이나 다리", "얼굴이나 머리", "몸통", "통증이 계속");
             case "physical_support" -> hasAny(text,
@@ -721,7 +724,8 @@ public class ChatService {
     private static boolean hasRelationshipAnswer(String text) {
         return hasAny(text,
                 "같은 반", "같은 학교", "선후배", "학원 관계", "학교 관계자가 아닙니다",
-                "학교 밖", "상대가 학교 관계자인지는 아직 모르겠습니다");
+                "학교 밖", "상대가 학교 관계자인지는 아직 모르겠습니다")
+                || hasUnknownActorSignal(text);
     }
 
     private static boolean hasTimelineAnswer(String text) {
@@ -768,6 +772,15 @@ public class ChatService {
         return hasAny(text,
                 "같은 사안에서 서로 충돌", "같은 사건 안의 충돌", "별도 사안", "새 상담으로 분리",
                 "피해를 당한 입장이고 가해한 내용은 아닙니다", "제가 한 행동도 있는 사안");
+    }
+
+    private static boolean hasUnknownActorSignal(String text) {
+        return hasAny(text,
+                "용의자 특정", "가해자 특정", "상대 특정", "작성자 특정", "계정 특정",
+                "특정이 어렵", "특정하기 어렵", "특정할 수 없", "특정 못", "특정 안",
+                "누군지 모르", "누구인지 모르", "누가 했는지 모르", "누가 올렸는지 모르",
+                "작성자를 모르", "작성자 모름", "계정 주인을 모르", "계정 모름", "익명",
+                "모르는 계정", "모르는 사람", "알 수 없", "확인 어렵");
     }
 
     private static boolean hasAnsweredDeepDive(String text) {
@@ -1052,7 +1065,8 @@ public class ChatService {
                         option("공유됨", "확인 답변: 다른 사람에게 공유되거나 퍼졌습니다."),
                         option("직접 입력", "확인 답변: ")));
             }
-            if (!hasAny(text, "URL", "링크", "작성자", "게시 시간", "게시글 번호", "계정")) {
+            if (!hasAny(text, "URL", "링크", "작성자", "게시 시간", "게시글 번호", "계정")
+                    && !hasUnknownActorSignal(text)) {
                 questions.add(candidate("post_trace", "게시물의 URL, 작성자 계정, 게시 시간 중 확인 가능한 게 있나요?",
                         option("URL 있음", "확인 답변: 게시물 URL이나 링크가 있습니다."),
                         option("작성자 계정", "확인 답변: 작성자 계정 정보를 알고 있습니다."),
@@ -1488,6 +1502,9 @@ public class ChatService {
 
     private String buildConfirmationFallbackReply(String latest, ReportReadiness readiness) {
         String t = latest == null ? "" : latest;
+        if (hasUnknownActorSignal(t)) {
+            return "상대를 지금 특정하기 어렵다는 점도 상담 기록에 반영됩니다. 이 경우 같은 질문을 반복하기보다, 게시물 URL·계정 화면·시간·댓글 흐름처럼 남아 있는 단서부터 보관하는 쪽이 중요합니다.";
+        }
         if (hasSexualViolationSignal(t)) {
             return "원하지 않은 신체 접촉이었다는 점이 상담 기록에 반영됩니다. 자세한 표현을 억지로 하지 않아도 되고, 기억나는 시간·장소·주변에 있던 사람을 짧게 남겨두는 것이 도움이 됩니다.";
         }
@@ -1599,7 +1616,8 @@ public class ChatService {
                 "괴롭", "괴롭힘", "놀림", "놀렸", "놀려", "비하", "무시", "소외", "패드립",
                 "sns", "카톡", "단톡", "채팅", "채팅방", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱",
                 "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는", "불쾌", "갈취", "스토킹",
-                "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담", "확인 질문");
+                "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담", "확인 질문",
+                "용의자", "특정", "누군지", "누구인지", "작성자", "계정");
     }
 
     private static boolean isConsultationMetaQuestion(String text) {

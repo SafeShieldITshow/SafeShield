@@ -89,7 +89,9 @@ public class AnalysisService {
                 "따돌", "돈", "갈취", "성희롱", "성추행", "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는",
                 "괴롭", "놀림", "밀쳤", "사과",
                 "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는");
-        boolean hasRelationshipAnswer = hasDefiniteSchoolRelationship(t) || hasConfirmedNonSchoolRelationship(t);
+        boolean hasRelationshipAnswer = hasDefiniteSchoolRelationship(t)
+                || hasConfirmedNonSchoolRelationship(t)
+                || hasUnknownActorSignal(t);
         boolean hasTimeOrRepeat = containsAny(t, "오늘", "어제", "며칠", "몇 번", "계속", "반복", "매일", "한 번", "지난",
                 "방금", "언제", "개월", "주일", "몇 주", "주 이상", "한 달", "달 정도", "동안", "최근", "지속", "오래",
                 "현재까지는 한 번", "여러 번", "지금도 계속", "정확한 시점");
@@ -107,7 +109,7 @@ public class AnalysisService {
         if (!hasUserGoal) missing.add("원하는 도움이 무엇인지");
 
         if (hasConcreteIncident) facts.add("구체적인 사건 내용 확인");
-        if (hasRelationshipAnswer) facts.add("상대방과 학교 관계 확인");
+        if (hasRelationshipAnswer) facts.add(hasUnknownActorSignal(t) ? "상대방 특정 불명확 상태 확인" : "상대방과 학교 관계 확인");
         if (hasTimeOrRepeat) facts.add("시점 또는 반복성 단서 확인");
         if (hasEvidenceOrChannel) facts.add("증거 또는 발생 경로 단서 확인");
         if (hasImpactOrRecovery) facts.add("피해 영향 또는 회복 노력 확인");
@@ -564,6 +566,15 @@ public class AnalysisService {
         return containsAny(text, "학교 밖", "학교 관계자가 아닙", "학교 관계자는 아닙", "학교 관계 없음");
     }
 
+    private boolean hasUnknownActorSignal(String text) {
+        return containsAny(text,
+                "용의자 특정", "가해자 특정", "상대 특정", "작성자 특정", "계정 특정",
+                "특정이 어렵", "특정하기 어렵", "특정할 수 없", "특정 못", "특정 안",
+                "누군지 모르", "누구인지 모르", "누가 했는지 모르", "누가 올렸는지 모르",
+                "작성자를 모르", "작성자 모름", "계정 주인을 모르", "계정 모름", "익명",
+                "모르는 계정", "모르는 사람", "알 수 없", "확인 어렵");
+    }
+
     private List<String> buildKeyFindings(String text, List<String> types, ReportReadiness readiness) {
         CaseFacts facts = analyzeCaseFacts(text, types, readiness);
         List<String> findings = new ArrayList<>();
@@ -669,7 +680,9 @@ public class AnalysisService {
 
     private String buildCaseSnapshot(String text, List<String> types, ReportReadiness readiness) {
         String t = normalize(text);
-        String actor = hasDefiniteSchoolRelationship(t) ? "학교 또는 학원 관계의 상대" : "상대";
+        String actor = hasDefiniteSchoolRelationship(t)
+                ? "학교 또는 학원 관계의 상대"
+                : hasUnknownActorSignal(t) ? "현재 특정하기 어려운 상대" : "상대";
         String channel = detectChannel(t);
         String conduct = detectConductSummary(t, types);
         String pattern = containsAny(t, "지금도", "아직도", "계속", "반복", "매일", "여러 번", "몇 번")
@@ -741,6 +754,8 @@ public class AnalysisService {
         String relationship;
         if (hasDefiniteSchoolRelationship(t)) {
             relationship = "학교 또는 학원 관계가 확인되어 학교폭력 절차와 연결해 검토할 수 있습니다.";
+        } else if (hasUnknownActorSignal(t)) {
+            relationship = "상대를 현재 특정하기 어렵다고 확인되어, 학교 관계와 가해자 특정에는 한계가 있습니다.";
         } else if (hasConfirmedNonSchoolRelationship(t)) {
             relationship = "상대가 학교 관계자가 아닌 것으로 확인되어 학교폭력 해당성은 낮게 봅니다.";
         } else {

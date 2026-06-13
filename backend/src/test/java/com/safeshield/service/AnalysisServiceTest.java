@@ -313,6 +313,20 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void treatsUnknownSuspectAsConfirmedLimitationInsteadOfMissingRelationship() {
+        String text = "SNS에 제 사진과 비방 글이 올라왔고 친구들이 볼 수 있는 범위로 퍼졌습니다. " +
+                "오늘 확인했고 캡처와 URL은 있지만 용의자 특정이 어렵고 누가 올렸는지 모르겠습니다. " +
+                "불안해서 증거 정리와 신고 절차를 알고 싶습니다.";
+
+        ReportReadiness readiness = analysisService.assessReportReadiness(text, 8);
+        var result = analysisService.analyze(text, readiness);
+
+        assertTrue(readiness.ready(), "특정 불가는 답변된 제한사항으로 처리하고 같은 관계 질문을 반복하지 않아야 합니다.");
+        assertFalse(readiness.missingInfo().contains("상대가 학교 관계자인지"));
+        assertTrue(result.keyFindings().stream().anyMatch(item -> item.contains("특정하기 어렵")));
+    }
+
+    @Test
     void directPerpetratorAdmissionOverridesEarlierVictimContext() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "처음에는 같은 반 친구가 저한테 욕을 해서 신고하려고 한다고 말했습니다. " +
