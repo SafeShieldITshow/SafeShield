@@ -127,6 +127,27 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void differentiatesSameConductByVictimImpactAndSafetyConcern() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var lowImpact = analysisService.analyze(
+                "같은 반 친구들이 단톡방에서 욕설과 비방을 여러 번 했고 캡처가 있습니다. " +
+                        "현재 크게 불편한 점은 없고 증거 정리 방법만 알고 싶습니다.",
+                readiness
+        );
+        var highImpact = analysisService.analyze(
+                "같은 반 친구들이 단톡방에서 욕설과 비방을 여러 번 했고 캡처가 있습니다. " +
+                        "불안해서 등교가 힘들고 보복이나 반복이 걱정되어 안전하게 보호받고 싶습니다.",
+                readiness
+        );
+
+        assertTrue(highImpact.riskScore() >= lowImpact.riskScore() + 0.8,
+                "행위가 같아도 피해 영향과 안전 우려가 크면 위험도에 뚜렷하게 반영되어야 합니다.");
+        assertTrue(highImpact.keyFindings().stream().anyMatch(item -> item.contains("피해 영향:")));
+        assertTrue(highImpact.keyFindings().stream().anyMatch(item -> item.contains("가중·완화 단서:")));
+    }
+
+    @Test
     void keepsOneOffMinorVerbalCaseLowWhenNoImpactAndResolved() {
         ReportReadiness readiness = readySchoolViolence();
 
@@ -271,10 +292,10 @@ class AnalysisServiceTest {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "같은 반 친구들이 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
                         "캡처가 있고 불안해서 등교가 힘듭니다. 보복 없이 멈추게 하고 싶습니다.",
-                5
+                4
         );
 
-        assertFalse(readiness.ready(), "핵심 정보가 모였어도 5턴 이하에서 리포트를 너무 빨리 열면 안 됩니다.");
+        assertFalse(readiness.ready(), "핵심 정보가 모였어도 4턴 이하에서 리포트를 너무 빨리 열면 안 됩니다.");
         assertTrue(readiness.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
     }
 
@@ -283,10 +304,24 @@ class AnalysisServiceTest {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "같은 반 친구들이 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
                         "캡처가 있고 불안해서 등교가 힘듭니다. 보복 없이 멈추게 하고 싶습니다.",
-                6
+                5
         );
 
         assertTrue(readiness.ready(), "핵심 정보가 있고 최소 대화량을 채우면 리포트 생성이 가능해야 합니다.");
+    }
+
+    @Test
+    void treatsSafetyImpactAsImplicitHelpGoal() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "친구들이 단체 채팅방에서 계속 욕하고 놀립니다. " +
+                        "확인 답변: 상대는 같은 학교 학생입니다. " +
+                        "확인 답변: 대화 전체가 보이는 캡처가 있습니다. " +
+                        "확인 답변: 며칠 동안 반복됐고 지금도 계속됩니다. " +
+                        "확인 답변: 불안하고 학교 가기가 힘듭니다.",
+                5
+        );
+
+        assertTrue(readiness.ready(), "불안·등교 어려움 같은 안전 영향은 별도 목표 질문 없이도 도움 요청으로 반영해야 합니다.");
     }
 
     @Test

@@ -134,7 +134,7 @@ public class AnalysisService {
                 && hasEvidenceOrChannel
                 && hasImpactOrRecovery
                 && hasUserGoal;
-        int minimumCoreMessages = 6;
+        int minimumCoreMessages = 5;
         boolean enoughConversation = userMessageCount >= requiredUserMessages
                 || (coreFactsReady && userMessageCount >= minimumCoreMessages);
         if (relevantInput && !enoughConversation) {
@@ -187,7 +187,9 @@ public class AnalysisService {
     private boolean hasUserGoal(String text) {
         return containsAny(text,
                 "어떻게", "뭘 해야", "도와", "신고", "리포트", "증거", "처벌", "조치", "멈추", "사과",
-                "화해", "보호", "상담", "알려", "대처", "해결", "피해 회복", "재발 방지", "부모님", "담임");
+                "화해", "보호", "상담", "알려", "대처", "해결", "피해 회복", "재발 방지", "부모님", "담임",
+                "불안", "두려", "무서", "등교", "학교 가기", "보복", "반복이 걱정", "재발", "안전",
+                "힘들", "괴롭");
     }
 
     private boolean hasFinalConfirmation(String text) {
@@ -280,16 +282,16 @@ public class AnalysisService {
         boolean noMeaningfulImpact = hasNoMeaningfulImpact(t);
         boolean minorContext = containsAny(t, "별거 아니", "사소", "가벼운", "오해", "장난", "실수", "기분만", "기분이 상한 정도");
 
-        if (repeated) score += 0.6;
-        if (longTerm) score += 0.4;
-        if (ongoing) score += 0.3;
+        if (repeated) score += 0.75;
+        if (longTerm) score += 0.55;
+        if (ongoing) score += 0.5;
         if (oneOff && !repeated && !ongoing) score -= 0.3;
-        if (publicSpread) score += 0.4;
-        if (identityExposure) score += 0.35;
-        if (directThreat) score += 0.8;
-        if (weaponOrGroup) score += 0.5;
-        if (distress) score += 0.45;
-        if (severeDistress) score += 0.8;
+        if (publicSpread) score += 0.65;
+        if (identityExposure) score += 0.55;
+        if (directThreat) score += 1.0;
+        if (weaponOrGroup) score += 0.65;
+        if (distress) score += 0.75;
+        if (severeDistress) score += 1.0;
         if (resolved && !ongoing && !repeated) score -= 0.4;
         if (mildExpression) score -= 0.8;
         if (noMeaningfulImpact) score -= 0.5;
@@ -359,6 +361,12 @@ public class AnalysisService {
             cap = publicSpread || identityExposure ? 5.0 : 4.2;
         } else if (verbalOrCyberOnly && !severeSignal) {
             cap = 5.8;
+            if (repeated) cap = Math.max(cap, 6.4);
+            if (ongoing || longTerm) cap = Math.max(cap, 6.8);
+            if (publicSpread && identityExposure) cap = Math.max(cap, 6.7);
+            if (distress) cap = Math.max(cap, 7.0);
+            if (containsAny(t, "보복", "학교 못", "등교 못")) cap = Math.max(cap, 7.2);
+            cap = Math.min(cap, 7.4);
         } else if (physicalType && oneOff && injuryScore <= 0.5 && !directThreat && !weaponOrGroup) {
             cap = 5.3;
         } else if (physicalType && injuryScore <= 0.5 && !directThreat && !weaponOrGroup && (repeated || longTerm || ongoing)) {
@@ -633,10 +641,47 @@ public class AnalysisService {
         findings.add(types.isEmpty() ? "행위 유형: 명확한 학교폭력 유형은 아직 확인되지 않았습니다." : "행위 유형: " + String.join(", ", types));
         findings.add("발생 양상: " + facts.incidentPattern());
         findings.add("증거 수준: " + facts.evidenceLevel());
+        findings.add("피해 영향: " + buildImpactSummary(text));
+        findings.add("가중·완화 단서: " + buildRiskModifierSummary(text, types));
         findings.add("맞춤 판단: " + buildPersonalizedJudgment(text, types, readiness));
         findings.add("판단 신뢰도: " + facts.confidenceLevel() + " - " + facts.confidenceReason());
         findings.add("예상 조치 근거: " + buildMeasureBasis(text, types, readiness));
-        return findings.stream().distinct().limit(10).toList();
+        return findings.stream().distinct().limit(12).toList();
+    }
+
+    private String buildImpactSummary(String text) {
+        String t = normalize(text);
+        List<String> impacts = new ArrayList<>();
+        if (containsAny(t, "불안", "두려", "무서")) impacts.add("불안·두려움");
+        if (containsAny(t, "등교", "학교 못", "학교 가기")) impacts.add("등교·생활 영향");
+        if (containsAny(t, "보복", "반복이 걱정", "또 그럴", "재발")) impacts.add("보복·재발 우려");
+        if (containsAny(t, "잠을 못", "스트레스", "울", "괴롭", "힘들")) impacts.add("정서적 고통");
+        if (containsAny(t, "멍", "상처", "통증", "병원", "진단", "치료")) impacts.add("신체 피해 또는 진료 필요");
+        if (hasNoMeaningfulImpact(t)) impacts.add("현재 생활 영향은 낮다고 진술");
+        if (impacts.isEmpty()) return "구체적 영향은 아직 제한적으로 확인됐습니다.";
+        return String.join(", ", impacts);
+    }
+
+    private String buildRiskModifierSummary(String text, List<String> types) {
+        String t = normalize(text);
+        List<String> aggravating = new ArrayList<>();
+        List<String> mitigating = new ArrayList<>();
+
+        if (containsAny(t, "계속", "반복", "여러 번", "매일", "지금도", "아직도")) aggravating.add("반복·지속");
+        if (containsAny(t, "공개", "퍼졌", "유포", "공유", "여러 명", "단체", "댓글")) aggravating.add("확산·집단성");
+        if (containsAny(t, "사진", "영상", "얼굴", "신상", "이름", "학교명")) aggravating.add("신원·이미지 노출");
+        if (containsAny(t, "협박", "보복", "죽이", "때리겠", "찾아가")) aggravating.add("위협·보복 우려");
+        if (types.contains("성폭력")) aggravating.add("성적 침해");
+        if (types.contains("신체 폭력") && containsAny(t, "진단", "병원", "치료", "출혈", "골절")) aggravating.add("상해·진료 단서");
+
+        if (containsAny(t, "한 번", "처음", "1번")) mitigating.add("1회성 진술");
+        if (containsAny(t, "삭제", "사과", "멈췄", "그만뒀", "해결")) mitigating.add("중단·회복 단서");
+        if (hasNoMeaningfulImpact(t)) mitigating.add("영향 낮음 진술");
+        if (containsAny(t, "증거는 없습니다", "아직 확보한 증거는 없습니다", "아직 없음")) mitigating.add("증거 부족");
+
+        String aggravatingText = aggravating.isEmpty() ? "뚜렷한 가중 단서 없음" : String.join(", ", aggravating);
+        String mitigatingText = mitigating.isEmpty() ? "뚜렷한 완화 단서 없음" : String.join(", ", mitigating);
+        return "가중: " + aggravatingText + " / 완화: " + mitigatingText;
     }
 
     private String buildMeasureBasis(String text, List<String> types, ReportReadiness readiness) {
