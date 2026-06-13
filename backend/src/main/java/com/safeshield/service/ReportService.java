@@ -60,6 +60,43 @@ public class ReportService {
                 .reduce("", (a, b) -> a + " " + b)
                 .trim();
 
+        return saveReport(user, session, userText, userMessages.size(), title, true);
+    }
+
+    public Map<String, Object> generateOrUpdateForSession(User user, Session session, String title) {
+        if (session == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "리포트를 만들 상담 세션이 없습니다.");
+        }
+        requireOwner(user, session);
+
+        List<Message> userMessages = messageRepository.findBySessionOrderByCreatedAtAsc(session).stream()
+                .filter(m -> "user".equals(m.getRole()))
+                .toList();
+        if (userMessages.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "분석할 상담 내용이 없습니다.");
+        }
+
+        String userText = userMessages.stream()
+                .map(Message::getContent)
+                .reduce("", (a, b) -> a + " " + b)
+                .trim();
+
+        return saveReport(user, session, userText, userMessages.size(), title, true);
+    }
+
+    public Map<String, Object> generateTemporary(List<Message> messages, String title) {
+        List<Message> userMessages = messages == null ? List.of() : messages.stream()
+                .filter(m -> "user".equals(m.getRole()))
+                .toList();
+        if (userMessages.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "분석할 상담 내용이 없습니다.");
+        }
+
+        String userText = userMessages.stream()
+                .map(Message::getContent)
+                .reduce("", (a, b) -> a + " " + b)
+                .trim();
+
         ReportReadiness readiness = analysisService.assessReportReadiness(userText, userMessages.size());
         if (!readiness.ready()) {
             throw new ResponseStatusException(
@@ -70,9 +107,27 @@ public class ReportService {
 
         AnalysisResult analysis = analysisService.analyze(userText, readiness);
         Report report = new Report();
+        applyAnalysis(report, analysis, title);
+        Map<String, Object> map = toMap(report);
+        map.put("temporary", true);
+        return map;
+    }
+
+    private Map<String, Object> saveReport(User user, Session session, String userText, int userMessageCount, String title, boolean updateExisting) {
+        ReportReadiness readiness = analysisService.assessReportReadiness(userText, userMessageCount);
+        if (!readiness.ready()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    readiness.reason() + " 부족한 정보: " + String.join(", ", readiness.missingInfo())
+            );
+        }
+
+        AnalysisResult analysis = analysisService.analyze(userText, readiness);
+        List<Report> reports = updateExisting ? reportRepository.findBySessionOrderByCreatedAtAsc(session) : List.of();
+        Report report = reports.isEmpty() ? new Report() : reports.get(reports.size() - 1);
         report.setUser(user);
         report.setSession(session);
-        applyAnalysis(report, analysis, title);
+        applyAnalysis(report, analysis, reports.isEmpty() ? title : generatedOrBlankTitle(report));
 
         reportRepository.save(report);
         return toMap(report);

@@ -126,7 +126,7 @@ function App() {
             <Route path="/login" element={<SShieldLogin />} />
             <Route path="/oauth2/callback" element={<OAuth2Callback />} />
             <Route path="/chat" element={<SShieldChat />} />
-            <Route path="/result" element={<ProtectedRoute><SShieldResult /></ProtectedRoute>} />
+            <Route path="/result" element={<SShieldResult />} />
             <Route path="/mypage" element={<ProtectedRoute><SShieldMypage /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

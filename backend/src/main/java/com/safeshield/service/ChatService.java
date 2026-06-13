@@ -211,14 +211,25 @@ public class ChatService {
         aiMessage.setContent(reply);
         messageRepository.save(aiMessage);
 
-        boolean reportUpdated = reportService.refreshReportsForSession(user, session);
+        Map<String, Object> report = null;
+        boolean reportGenerated = false;
+        boolean reportUpdated;
+        if (readiness.ready() && confirmationPrompts.isEmpty()) {
+            report = reportService.generateOrUpdateForSession(user, session, "");
+            reportGenerated = true;
+            reportUpdated = true;
+        } else {
+            reportUpdated = reportService.refreshReportsForSession(user, session);
+        }
         long userMessageCount = messageRepository.countBySessionAndRole(session, "user");
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("session_id", session.getId());
         response.put("reply", reply);
         response.put("user_message_count", userMessageCount);
         response.put("new_session_started", newSessionStarted);
+        response.put("report_generated", reportGenerated);
         response.put("report_updated", reportUpdated);
+        response.put("report", report);
         response.put("report_ready", readiness.ready());
         response.put("report_status", readiness.status());
         response.put("report_reason", readiness.reason());
@@ -256,12 +267,21 @@ public class ChatService {
         }
         List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
         String reply = connectReplyToConfirmation(getAiReply(history), confirmationPrompts);
+        Map<String, Object> report = null;
+        boolean reportGenerated = false;
+        if (readiness.ready() && confirmationPrompts.isEmpty()) {
+            report = reportService.generateTemporary(history, "");
+            reportGenerated = true;
+        }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("session_id", null);
         response.put("reply", reply);
         response.put("user_message_count", userMessageCount(history));
         response.put("new_session_started", false);
+        response.put("report_generated", reportGenerated);
+        response.put("report_updated", false);
+        response.put("report", report);
         response.put("report_ready", readiness.ready());
         response.put("report_status", readiness.status());
         response.put("report_reason", readiness.reason());

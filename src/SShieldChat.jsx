@@ -15,6 +15,7 @@ const CONVERSATION_STOPPED_MARKERS = [
     '**대화가 중단되었습니다.**',
     '대화가 중단되었습니다.',
 ];
+const TEMP_REPORT_STORAGE_KEY = 'ss_temp_report';
 
 const initialMessage = () => ({
     id: 'welcome',
@@ -47,6 +48,15 @@ const normalizeConfirmationPrompts = (prompts = []) => (Array.isArray(prompts) ?
 const clearConfirmationPrompts = (items) => items.map((message) => (
     message.confirmationPrompts?.length ? { ...message, confirmationPrompts: [] } : message
 ));
+
+const storeTemporaryReport = (report) => {
+    if (!report) return;
+    try {
+        sessionStorage.setItem(TEMP_REPORT_STORAGE_KEY, JSON.stringify(report));
+    } catch {
+        // 임시 리포트 저장 실패 시에도 현재 화면 상태로는 이동할 수 있게 둔다.
+    }
+};
 
 const isStoppedMessage = (text = '') => CONVERSATION_STOPPED_MARKERS.some((marker) => (
     String(text).includes(marker)
@@ -309,6 +319,7 @@ const SShieldChat = () => {
     const [pendingKeys, setPendingKeys] = useState(() => new Set());
     const [confirmationDrafts, setConfirmationDrafts] = useState({});
     const [showReport, setShowReport] = useState(false);
+    const [readyReport, setReadyReport] = useState(null);
     const [generatingReport, setGeneratingReport] = useState(false);
     const [isSessionLoading, setIsSessionLoading] = useState(false);
     const [isSessionsLoading, setIsSessionsLoading] = useState(false);
@@ -333,6 +344,16 @@ const SShieldChat = () => {
     const requireLoginForSavedFeature = () => {
         alert('상담 기록과 리포트는 로그인 후 이용할 수 있습니다.');
         navigate('/login');
+    };
+
+    const openReport = (report) => {
+        if (!report) return;
+        if (report.id && !report.temporary) {
+            navigate(`/result?id=${report.id}`, { state: { report } });
+            return;
+        }
+        storeTemporaryReport(report);
+        navigate('/result?temporary=1', { state: { report } });
     };
 
     const activateConversation = useCallback((id, key = `session:${id}`) => {
@@ -370,6 +391,7 @@ const SShieldChat = () => {
             activateConversation(null, draftKey);
             setMessages([initialMessage()]);
             setShowReport(false);
+            setReadyReport(null);
             return;
         }
         const loadSequence = ++messageLoadSequenceRef.current;
@@ -377,6 +399,7 @@ const SShieldChat = () => {
         setIsSessionLoading(true);
         setConfirmationDrafts({});
         setShowReport(false);
+        setReadyReport(null);
         shouldAutoScrollRef.current = true;
         if (typingTimerRef.current) {
             clearInterval(typingTimerRef.current);
@@ -398,6 +421,7 @@ const SShieldChat = () => {
             activateConversation(null, draftKey);
             setMessages([initialMessage()]);
             setShowReport(false);
+            setReadyReport(null);
         } finally {
             if (loadSequence === messageLoadSequenceRef.current) {
                 setIsSessionLoading(false);
@@ -538,6 +562,7 @@ const SShieldChat = () => {
             activateConversation(null, targetKey);
             setIsSessionLoading(false);
             setShowReport(false);
+            setReadyReport(null);
             setConversationStopped(false);
         }
         setMessages((prev) => [
@@ -561,9 +586,14 @@ const SShieldChat = () => {
                     activateConversation(data.session_id);
                 }
                 const stopped = Boolean(data.conversation_stopped) || isStoppedMessage(data.reply);
+                const generatedReport = data.report || null;
                 setConversationStopped(stopped);
-                setShowReport(!stopped && !guestSend && Boolean(data.report_ready));
-                appendTypingReply(data.reply, data.confirmation_prompts);
+                setReadyReport(generatedReport);
+                setShowReport(!stopped && Boolean(data.report_ready || generatedReport));
+                const replyText = data.report_generated && generatedReport
+                    ? `${data.reply}\n\n리포트가 생성되었습니다. 아래 리포트 보기 버튼으로 확인할 수 있습니다.`
+                    : data.reply;
+                appendTypingReply(replyText, data.confirmation_prompts);
             }
             if (!guestSend) loadSessions();
         } catch (e) {
@@ -587,11 +617,20 @@ const SShieldChat = () => {
     };
 
     const handleGenerateReport = async () => {
+        if (readyReport) {
+            openReport(readyReport);
+            return;
+        }
+        if (isGuest) {
+            alert('임시 리포트를 생성하지 못했습니다. 상담을 한 번 더 이어가거나 로그인 후 다시 시도해 주세요.');
+            return;
+        }
         if (!sessionId || isChatLocked) return;
         setGeneratingReport(true);
         try {
             const report = await api.post('/reports/generate', { sessionId, title: '' });
-            navigate(`/result?id=${report.id}`);
+            setReadyReport(report);
+            openReport(report);
         } catch (e) {
             alert(e.message);
         } finally {
@@ -685,6 +724,7 @@ const SShieldChat = () => {
         setConfirmationDrafts({});
         shouldAutoScrollRef.current = true;
         setShowReport(false);
+        setReadyReport(null);
         setMessages([initialMessage()]);
         setInput('');
         setConversationStopped(false);
@@ -898,7 +938,11 @@ const SShieldChat = () => {
 
                     {showReport && (
                         <div className="chat-cta">
-                            <p>핵심 정보가 확인되었습니다. 분석 리포트를 생성해 확인해 보세요.</p>
+                            <p>
+                                {readyReport
+                                    ? '분석 리포트가 생성되었습니다. 바로 확인해 보세요.'
+                                    : '핵심 정보가 확인되었습니다. 분석 리포트를 생성해 확인해 보세요.'}
+                            </p>
                             <button className="chat-cta-btn" onClick={handleGenerateReport} disabled={generatingReport || isChatLocked}>
                                 {generatingReport ? '생성 중...' : '리포트 보기'}
                             </button>

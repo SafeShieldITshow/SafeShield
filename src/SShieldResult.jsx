@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import './SShieldResult.css';
-import { api, clearSession } from './api.js';
+import { api, clearSession, hasToken } from './api.js';
 import SessionHistory from './SessionHistory.jsx';
 
 const EVIDENCE_MAP = {
@@ -58,6 +58,16 @@ const EVIDENCE_MAP = {
 
 const DEFAULT_EVIDENCE_KEYS = ['음성 녹음', '메시지 캡처', '일지 작성', '목격자 진술'];
 const MEASURES = ['서면사과', '접촉금지', '학교봉사', '사회봉사', '특별교육', '출석정지', '학급교체', '전학', '퇴학'];
+const TEMP_REPORT_STORAGE_KEY = 'ss_temp_report';
+
+const readTemporaryReport = () => {
+    try {
+        const raw = sessionStorage.getItem(TEMP_REPORT_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch {
+        return null;
+    }
+};
 
 const EVIDENCE_GROUPS = {
     '메시지 캡처': 'capture',
@@ -175,7 +185,9 @@ const SShieldResult = () => {
     const [error, setError] = useState('');
     const [params] = useSearchParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const reportId = params.get('id');
+    const temporaryMode = params.get('temporary') === '1';
 
     useEffect(() => {
         const id = reportId;
@@ -193,6 +205,31 @@ const SShieldResult = () => {
                 desc: EVIDENCE_MAP[key]?.desc ?? fallbackDesc,
             })));
         };
+
+        const temporaryReport = location.state?.report || (temporaryMode ? readTemporaryReport() : null);
+        if (temporaryReport) {
+            applyReport({ ...temporaryReport, temporary: true });
+            setError('');
+            setLoading(false);
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        if (!hasToken()) {
+            setReport(null);
+            setError('저장된 리포트를 보려면 로그인이 필요합니다. 임시 상담에서는 채팅에서 생성된 리포트 보기 버튼으로 확인해 주세요.');
+            setEvidenceItems(DEFAULT_EVIDENCE_KEYS.map((key, index) => ({
+                id: `e${index}`,
+                icon: EVIDENCE_MAP[key]?.icon ?? '증거',
+                title: key,
+                desc: EVIDENCE_MAP[key]?.desc ?? '',
+            })));
+            setLoading(false);
+            return () => {
+                cancelled = true;
+            };
+        }
 
         const loadReport = (initial = false) => {
             const request = id ? api.get(`/reports/${id}`) : api.get('/reports/latest');
@@ -228,7 +265,7 @@ const SShieldResult = () => {
             cancelled = true;
             window.clearInterval(timer);
         };
-    }, [reportId]);
+    }, [reportId, temporaryMode, location.state]);
 
     const toggleCheck = (id) => setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
     const checkedCount = Object.values(checked).filter(Boolean).length;
