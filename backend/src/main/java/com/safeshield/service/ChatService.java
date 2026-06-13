@@ -591,6 +591,7 @@ public class ChatService {
     ) {
         if (readiness == null || readiness.ready()) return List.of();
         String text = combinedText == null ? "" : combinedText;
+        if (isGreetingOnly(text)) return List.of();
         if (needsRealityCheck(text)) return List.of(realityCheckQuestion());
         List<ConfirmationCandidate> candidates = new ArrayList<>();
 
@@ -1059,11 +1060,11 @@ public class ChatService {
                     option("위협 동반", "확인 답변: 신체 행동과 함께 위협이 있었습니다."),
                     option("직접 입력", "확인 답변: "));
         }
-        return candidate("incident", "실제로 있었던 행동을 조금 더 구체적으로 알려주세요. 말, 게시물, 신체 접촉, 따돌림 중 어디에 가까운가요?",
-                option("욕설·비방", "확인 답변: 상대가 욕설이나 비방을 했습니다."),
-                option("사진·게시물", "확인 답변: 사진이나 게시물이 올라왔습니다."),
-                option("신체 폭력", "확인 답변: 때리거나 밀치는 신체 폭력이 있었습니다."),
-                option("따돌림", "확인 답변: 따돌림이나 배제가 있었습니다."),
+        return candidate("incident", "친구가 실제로 어떤 행동을 했는지 사실만 한 문장으로 적어주세요. 학교폭력 유형은 제가 판단하겠습니다.",
+                option("욕하거나 놀림", "확인 답변: 친구가 욕하거나 놀렸습니다."),
+                option("사진·글을 올림", "확인 답변: 친구가 사진이나 글을 올렸습니다."),
+                option("때리거나 밀침", "확인 답변: 친구가 때리거나 밀쳤습니다."),
+                option("따돌리거나 제외", "확인 답변: 친구가 따돌리거나 같이하지 못하게 했습니다."),
                 option("직접 입력", "확인 답변: "));
     }
 
@@ -1414,6 +1415,10 @@ public class ChatService {
     private String getAiReply(List<Message> history) {
         String latestUserMessage = latestUserMessage(history);
         String userContextText = combinedUserText(history);
+        if (isGreetingOnly(latestUserMessage)) {
+            lastProvider = "local_greeting";
+            return buildGreetingReply();
+        }
         if (shouldGuardIrrelevantInput(latestUserMessage, hasConversationContext(history), isConversationalFollowUp(latestUserMessage, history))) {
             lastProvider = "guardrail";
             if (isPerpetratorContext(userContextText)) {
@@ -1621,6 +1626,10 @@ public class ChatService {
         ReportReadiness readiness = assessReadiness(history);
         boolean perpetratorContext = isPerpetratorContext(combined);
 
+        if (isGreetingOnly(latest)) {
+            return buildGreetingReply();
+        }
+
         if (hasBodilyWasteIncidentSignal(latest) && !hasRealityCheckAnswer(combined)) {
             return """
                     말해준 내용은 표현이 매우 특이해서, 실제로 있었던 일인지 비유나 장난 표현인지 먼저 확인해야 합니다.
@@ -1749,6 +1758,10 @@ public class ChatService {
         return "방금 답변은 상담 기록에 반영했습니다. 필요한 내용은 이어지는 대화 안에서 자연스럽게 더 보완하면 됩니다.";
     }
 
+    private String buildGreetingReply() {
+        return "안녕하세요. 어떤 일이 있었는지 편하게 적어 주세요. 학교폭력 유형과 필요한 확인 내용은 제가 정리하겠습니다.";
+    }
+
     private String buildPhysicalViolenceFallbackReply(String latest, ReportReadiness readiness) {
         String t = latest == null ? "" : latest;
         if (containsAny(t, "멍", "상처", "다쳤", "통증", "맞", "폭행", "밀쳤")) {
@@ -1820,6 +1833,7 @@ public class ChatService {
         if (t.isBlank()) return false;
         if (t.length() <= 1) return true;
         if (isConsultationMetaQuestion(t)) return false;
+        if (isGreetingOnly(t)) return false;
         if (hasConsultationSignal(t)) return false;
         if (isExplicitNonsenseOrSmallTalk(t)) return true;
         if (isAcknowledgement(t) || isEmotionalConversation(t)) return false;
@@ -1827,8 +1841,15 @@ public class ChatService {
         return true;
     }
 
+    private static boolean isGreetingOnly(String text) {
+        String compact = text == null ? "" : text.trim().toLowerCase(Locale.ROOT)
+                .replaceAll("[\\s\\p{Punct}~!！。]+", "");
+        return compact.matches("^(안녕|안녕하세요|안녕하세용|안녕하십니까|하이|하이요|헬로|ㅎㅇ|hi|hello)$");
+    }
+
     private static boolean isExplicitOffTopicNonsense(String text) {
         String t = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+        if (isGreetingOnly(t)) return false;
         return !t.isBlank() && !hasConsultationSignal(t) && isExplicitNonsenseOrSmallTalk(t);
     }
 
@@ -2105,6 +2126,7 @@ public class ChatService {
                 5. 제3자가 사건을 평가하는 보고서 말투가 아니라, 지금 대화 중인 사람에게 직접 건네는 상담 말투로 쓰세요.
                 5-0. '사용자', '피해자', '가해자' 같은 라벨로 상대를 부르지 말고, 필요하면 '지금 상황', '이 경우', '말해준 내용'처럼 표현하세요.
                 5-1. 유형명은 신체 폭력, 언어 폭력, 사이버 폭력, 따돌림, 성폭력, 스토킹, 갈취 중 필요한 것만 사용하세요.
+                5-2. 사용자에게 학교폭력 유형을 고르게 하지 마세요. 사용자가 말한 실제 행동을 근거로 유형은 상담 AI가 판단하고, 부족하면 행동 사실만 확인하세요.
                 6. 법령명과 조문 번호는 아래 '허용 인용 목록'에서 현재 상황과 직접 관련된 항목만 최대 2개 골라 글자 그대로 복사하세요.
                 7. 허용 인용 목록에 없는 법령, 조문, 조문명은 절대 쓰지 마세요. 특히 정보통신망법을 임의로 인용하지 마세요.
                 8. 법률 설명은 참고 법령 내용의 범위를 벗어나 단정하지 말고, "적용 가능성이 있습니다", "확인이 필요합니다"처럼 말하세요.
@@ -2296,6 +2318,7 @@ public class ChatService {
                 20. "남자인데 이런 것도 상담해도 되나요"처럼 성별 때문에 망설이는 말이 나오면, 남성 피해도 상담해도 된다고 먼저 분명히 안심시켜 주세요.
                 21. 성적으로 불쾌한 말이나 원하지 않은 접촉은 신체 폭력의 "맞음, 밀침, 넘어짐, 상처" 선택지로 돌리지 말고 성폭력/성추행 맥락으로 이어가세요.
                 22. 답변 전에 먼저 주된 상담 유형을 하나 정하세요. 성폭력, 신체 폭력, 사이버 폭력, 따돌림, 스토킹, 갈취, 가해·연루 중 현재 맥락과 맞지 않는 유형명·선택지·행동 지침은 쓰지 마세요.
+                23. 사용자에게 "어떤 유형인지"를 고르게 하지 마세요. 실제 행동을 듣고 유형은 상담 AI가 판단하세요.
 
                 """ + roleInstruction + """
 
@@ -2364,6 +2387,7 @@ public class ChatService {
                 21. "지금 당장 할 수 있는 작은 행동 2가지", "상담 내용을 다시 한번 확인" 같은 고정 문구를 반복하지 마세요.
                 22. 성적으로 불쾌한 말이나 원하지 않은 접촉은 신체 폭력의 "맞음, 밀침, 넘어짐, 상처" 선택지로 돌리지 말고 성폭력/성추행 맥락으로 이어가세요.
                 23. 답변 전에 먼저 주된 상담 유형을 하나 정하세요. 성폭력, 신체 폭력, 사이버 폭력, 따돌림, 스토킹, 갈취, 가해·연루 중 현재 맥락과 맞지 않는 유형명·선택지·행동 지침은 쓰지 마세요.
+                24. 사용자에게 "어떤 유형인지"를 고르게 하지 마세요. 실제 행동을 듣고 유형은 상담 AI가 판단하세요.
 
                 """ + roleInstruction + """
 
@@ -2519,7 +2543,7 @@ public class ChatService {
 
     private static String questionFamilyFromAssistantText(String content) {
         if (content == null || content.isBlank() || !looksLikeQuestionTurn(content)) return "";
-        if (hasAny(content, "실제로 있었던 행동", "온라인에 올라온 내용", "몸에 어떤 일", "어떤 유형")) return "incident";
+        if (hasAny(content, "실제로 있었던 행동", "실제로 어떤 행동", "온라인에 올라온 내용", "몸에 어떤 일", "어떤 유형", "유형은 제가 판단")) return "incident";
         if (hasAny(content, "상대와의 관계", "학교폭력 절차 기준", "같은 반", "같은 학교", "학교 밖", "학교 관계")) return "relationship";
         if (hasAny(content, "언제부터", "몇 번", "어떤 빈도", "한 번인지", "지금도", "반복됐나요")) return "timeline";
         if (hasAny(content, "남아 있는 증거", "증거는 무엇", "캡처", "URL", "작성자 계정", "게시 시간", "확인 가능한 게")) return "evidence";

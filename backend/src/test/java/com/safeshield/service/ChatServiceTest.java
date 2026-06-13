@@ -361,6 +361,47 @@ class ChatServiceTest {
     }
 
     @Test
+    void asksForConductFactsInsteadOfMakingUserClassifyViolenceType() {
+        ReportReadiness incidentMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "무슨 일이 있었는지 확인해야 합니다.",
+                List.of("무슨 일이 있었는지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                incidentMissing,
+                "친구가 이상한 일을 했어요.",
+                1
+        );
+
+        assertTrue(questions.get(0).contains("학교폭력 유형은 제가 판단"));
+        assertFalse(questions.get(0).contains("말, 게시물, 신체 접촉"));
+    }
+
+    @Test
+    void doesNotShowConfirmationQuestionForGreetingOnly() {
+        ReportReadiness incidentMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "무슨 일이 있었는지 확인해야 합니다.",
+                List.of("무슨 일이 있었는지"),
+                List.of(),
+                true
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                incidentMissing,
+                "안녕하세요",
+                1
+        );
+
+        assertTrue(questions.isEmpty());
+    }
+
+    @Test
     void rewritesVictimPhotoAdviceAwayFromSelfPostingAssumption() {
         String adapted = ChatService.adaptCaseDomainWording(
                 "그럼, 지금 할 수 있는 작은 행동은 sns에 올린 사진을 삭제하고, sns의 설정을 확인해 보는 거예요.",
@@ -447,6 +488,9 @@ class ChatServiceTest {
         assertTrue(ChatService.shouldGuardIrrelevantInput("응가", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("똥", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("밥 필요해", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("안녕하세요", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("안녕하세요!", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("ㅎㅇ", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("확인 답변: 씨발 또 쌀까봐 걱정된다고요", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("추가 설명: 또 그럴까봐 걱정됩니다.", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("어떤 확인이 필요한가요?", false));
