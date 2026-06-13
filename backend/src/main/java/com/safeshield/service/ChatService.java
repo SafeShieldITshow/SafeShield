@@ -405,7 +405,11 @@ public class ChatService {
         if (trimmed.isBlank()) {
             trimmed = "말해준 내용은 상담 기록에 반영했습니다.";
         }
-        if (trimmed.contains("아래 확인 카드") || trimmed.contains("아래 선택지")) return trimmed;
+        if (trimmed.contains("아래 확인 카드")
+                || trimmed.contains("아래 선택지")
+                || (trimmed.contains("아래에") && trimmed.contains("띄워둘게요"))) {
+            return trimmed;
+        }
         String question = firstConfirmationQuestion(prompts);
         if (question.isBlank() || trimmed.contains(question)) return trimmed;
         return trimmed + "\n\n아래에 이어서 확인할 내용을 하나만 띄워둘게요.";
@@ -593,6 +597,10 @@ public class ChatService {
         if (hasRoleConflict(text) && !hasRoleConflictAnswer(text)) {
             candidates.add(roleConflictQuestion());
             return candidates;
+        }
+
+        if (needsSexualIncidentDetail(text)) {
+            candidates.add(incidentQuestion(text));
         }
 
         for (String missingInfo : readiness.missingInfo()) {
@@ -801,7 +809,8 @@ public class ChatService {
     private static boolean isConfirmationCandidateAnswered(String id, String text) {
         if (id == null) return false;
         return switch (id) {
-            case "incident", "incident_post", "incident_physical", "incident_sexual" -> hasIncidentAnswer(text);
+            case "incident", "incident_post", "incident_physical" -> hasIncidentAnswer(text);
+            case "incident_sexual" -> hasSexualIncidentAnswer(text);
             case "reality_check" -> hasRealityCheckAnswer(text);
             case "relationship" -> hasRelationshipAnswer(text);
             case "timeline", "timeline_cyber" -> hasTimelineAnswer(text);
@@ -848,6 +857,17 @@ public class ChatService {
                 "따돌림", "배제", "괴롭힘", "때리거나 밀치는 신체 폭력",
                 "신체 접촉", "신체 폭력", "원하지 않는", "만졌", "만지는", "성적으로", "불쾌",
                 "성추행", "성희롱", "배설물", "똥을", "오줌", "소변", "대변");
+    }
+
+    private static boolean needsSexualIncidentDetail(String text) {
+        return hasSexualViolationSignal(text) && !hasSexualIncidentAnswer(text);
+    }
+
+    private static boolean hasSexualIncidentAnswer(String text) {
+        return hasAny(text,
+                "신체 접촉", "원하지 않는", "원치 않는", "만졌", "만지는", "접촉",
+                "성적인 말", "성적인 농담", "성희롱", "성추행", "사진", "촬영", "유포",
+                "반복적으로 다가", "반복 접근", "몸을 만", "강제로");
     }
 
     private static boolean hasRelationshipAnswer(String text) {

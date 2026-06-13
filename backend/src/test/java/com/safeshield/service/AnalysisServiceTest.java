@@ -231,6 +231,7 @@ class AnalysisServiceTest {
         var result = analysisService.analyze(text, readiness);
 
         assertTrue(readiness.schoolViolenceLikely(), "사건 맥락이 있는 배설물 진술은 무관 입력으로 보지 않아야 합니다.");
+        assertFalse(readiness.status().contains("목격자"), "목격자가 있다는 증거 설명을 목격자 관점으로 오판하면 안 됩니다.");
         assertTrue(result.violenceTypes().contains("신체 폭력"), "신체적 모욕이나 위해 가능성이 있는 행위로 분류해야 합니다.");
     }
 

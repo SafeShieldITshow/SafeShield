@@ -481,6 +481,16 @@ class ChatServiceTest {
     }
 
     @Test
+    void doesNotAppendConversationHintWhenReplyAlreadyPointsToCard() {
+        String reply = ChatService.connectReplyToConfirmation(
+                "말해준 내용은 표현이 매우 특이해서 실제 사건인지 먼저 확인해야 합니다.\n아래에 실제 사건 여부를 확인할 선택지를 띄워둘게요.",
+                List.of(Map.of("question", "말해준 내용이 실제로 있었던 일인지, 비유나 장난 표현인지 먼저 확인할게요."))
+        );
+
+        assertFalse(reply.contains("아래에 실제 사건 여부를 확인할 선택지를 띄워둘게요.\n\n아래에 이어서 확인할 내용을 하나만 띄워둘게요."));
+    }
+
+    @Test
     void asksRealityCheckForImplausibleBodilyWasteIncident() {
         ReportReadiness incidentMissing = new ReportReadiness(
                 false,
@@ -498,6 +508,46 @@ class ChatServiceTest {
         );
 
         assertTrue(questions.get(0).contains("실제로 있었던 일인지"));
+    }
+
+    @Test
+    void asksSexualIncidentDetailBeforeRelationshipWhenConductIsVague() {
+        ReportReadiness relationshipMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "상대와의 관계를 확인해야 합니다.",
+                List.of("상대가 학교 관계자인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                relationshipMissing,
+                "친구한테 성적으로 불쾌한 걸 당했어요. 남자인데 상담해도 되나요?",
+                1
+        );
+
+        assertTrue(questions.get(0).contains("성적으로 불쾌했던 일이 어떤 방식"));
+    }
+
+    @Test
+    void asksRelationshipAfterSexualConductIsSpecified() {
+        ReportReadiness relationshipMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "상대와의 관계를 확인해야 합니다.",
+                List.of("상대가 학교 관계자인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                relationshipMissing,
+                "친구한테 성적으로 불쾌한 일을 당했고 원하지 않는 신체 접촉이 있었습니다.",
+                2
+        );
+
+        assertTrue(questions.get(0).contains("상대와의 관계"));
     }
 
     @Test

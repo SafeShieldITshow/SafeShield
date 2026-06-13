@@ -151,12 +151,6 @@ const riskClass = (score) => {
     return 'low';
 };
 
-const riskGuide = (score) => {
-    if (score >= 7) return '빠른 보호자·학교 공유와 안전 조치가 우선입니다.';
-    if (score >= 4) return '증거 정리와 상담 연결을 같이 진행하는 단계입니다.';
-    return '사실관계를 더 확인하면서 차분히 정리할 수 있는 단계입니다.';
-};
-
 const detailValue = (details = [], label) => {
     const prefix = `${label}:`;
     const item = details.find((detail) => String(detail).startsWith(prefix));
