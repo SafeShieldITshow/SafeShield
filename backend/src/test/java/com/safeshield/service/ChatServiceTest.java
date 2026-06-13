@@ -183,6 +183,16 @@ class ChatServiceTest {
     }
 
     @Test
+    void rejectsChoiceLessFollowUpQuestionInsideConversationReply() {
+        String reply = """
+                게시물의 URL이나 링크가 있다는 것은 중요한 증거가 될 수 있습니다.
+                혹시 이 게시물이 올라온 SNS 계정의 주인이 누구인지 짐작 가는 부분이 있으신가요?
+                """;
+
+        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
     void rejectsRepeatedSmallActionTemplateAndWrongPhysicalOptions() {
         String repeated = """
                 지금 당장 할 수 있는 작은 행동 2가지를 알려드릴게요.
@@ -539,6 +549,30 @@ class ChatServiceTest {
 
         assertFalse(questions.stream().anyMatch(question -> question.contains("상대와의 관계")));
         assertFalse(questions.stream().anyMatch(question -> question.contains("학교폭력 절차 기준")));
+    }
+
+    @Test
+    void treatsUnknownSchoolRelationshipAsAnsweredRelationshipState() {
+        ReportReadiness relationshipMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "상대 관계를 확인해야 합니다.",
+                List.of("상대가 학교 관계자인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        assertTrue(ChatService.previewConfirmationQuestions(
+                relationshipMissing,
+                "SNS에 제 사진과 비방 글이 올라왔습니다. 확인 답변: 상대가 학교 관계자인지는 아직 모르겠습니다.",
+                3
+        ).isEmpty());
+
+        assertTrue(ChatService.previewConfirmationQuestions(
+                relationshipMissing,
+                "SNS에 제 사진과 비방 글이 올라왔습니다. 상대는 안 좋게 지내던 친구입니다.",
+                3
+        ).isEmpty());
     }
 
     @Test

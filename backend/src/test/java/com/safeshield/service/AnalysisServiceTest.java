@@ -315,15 +315,48 @@ class AnalysisServiceTest {
     @Test
     void treatsUnknownSuspectAsConfirmedLimitationInsteadOfMissingRelationship() {
         String text = "SNS에 제 사진과 비방 글이 올라왔고 친구들이 볼 수 있는 범위로 퍼졌습니다. " +
-                "오늘 확인했고 캡처와 URL은 있지만 용의자 특정이 어렵고 누가 올렸는지 모르겠습니다. " +
+                "며칠 동안 반복됐고 캡처와 URL은 있지만 용의자 특정이 어렵고 누가 올렸는지 모르겠습니다. " +
                 "불안해서 증거 정리와 신고 절차를 알고 싶습니다.";
 
         ReportReadiness readiness = analysisService.assessReportReadiness(text, 8);
         var result = analysisService.analyze(text, readiness);
 
-        assertTrue(readiness.ready(), "특정 불가는 답변된 제한사항으로 처리하고 같은 관계 질문을 반복하지 않아야 합니다.");
+        assertTrue(readiness.ready(), "특정 불가는 답변된 제한사항으로 처리하고 같은 관계 질문을 반복하지 않아야 합니다. missing=" + readiness.missingInfo());
         assertFalse(readiness.missingInfo().contains("상대가 학교 관계자인지"));
-        assertTrue(result.keyFindings().stream().anyMatch(item -> item.contains("특정하기 어렵")));
+        assertTrue(result.keyFindings().stream().anyMatch(item -> item.contains("학교 관계") && item.contains("불명확")));
+    }
+
+    @Test
+    void snsPhotoReportOpensWhenSchoolRelationshipIsUnknownButCoreFactsAreComplete() {
+        String text = "SNS에 제 사진과 비방 글이 올라왔습니다. " +
+                "확인 답변: 상대가 학교 관계자인지는 아직 모르겠습니다. " +
+                "확인 답변: 며칠 동안 반복됐습니다. " +
+                "확인 답변: 불안하거나 두려운 영향이 있습니다. " +
+                "확인 답변: 보복이나 반복을 막고 안전하게 보호받고 싶습니다. " +
+                "확인 답변: 상대와 어떻게 거리를 둬야 할지 알고 싶습니다. " +
+                "확인 답변: 댓글이나 추가 조롱이 붙었습니다. " +
+                "확인 답변: 공개 게시물로 올라왔습니다. " +
+                "확인 답변: 다른 사람에게 공유되거나 퍼졌습니다. " +
+                "확인 답변: 게시물 URL이나 링크가 있습니다.";
+
+        ReportReadiness readiness = analysisService.assessReportReadiness(text, 7);
+        var result = analysisService.analyze(text, readiness);
+
+        assertTrue(readiness.ready(), "학교 관계가 아직 불명확해도 핵심 사실이 모두 확인되면 제한사항이 있는 리포트를 생성해야 합니다.");
+        assertFalse(readiness.missingInfo().contains("상대가 학교 관계자인지"));
+        assertTrue(readiness.status().contains("학교폭력 해당성 낮음"));
+        assertTrue(result.keyFindings().stream().anyMatch(item -> item.contains("학교 관계") && item.contains("불명확")));
+    }
+
+    @Test
+    void unclearFriendRelationshipIsAConfirmedLimitation() {
+        String text = "SNS에 제 사진과 비방 글이 올라왔습니다. 며칠 동안 반복됐고 URL과 캡처가 있습니다. " +
+                "불안해서 증거 정리와 신고 절차를 알고 싶습니다. 상대는 안 좋게 지내던 친구입니다.";
+
+        ReportReadiness readiness = analysisService.assessReportReadiness(text, 7);
+
+        assertTrue(readiness.ready(), "관계 설명을 했으면 학교 관계가 확정되지 않아도 같은 질문을 반복하지 않고 리포트를 생성해야 합니다.");
+        assertFalse(readiness.missingInfo().contains("상대가 학교 관계자인지"));
     }
 
     @Test

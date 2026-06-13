@@ -91,7 +91,9 @@ public class AnalysisService {
                 "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는");
         boolean hasRelationshipAnswer = hasDefiniteSchoolRelationship(t)
                 || hasConfirmedNonSchoolRelationship(t)
-                || hasUnknownActorSignal(t);
+                || hasUnknownActorSignal(t)
+                || hasUnknownSchoolRelationshipSignal(t)
+                || hasUnclearPersonalRelationshipSignal(t);
         boolean hasTimeOrRepeat = containsAny(t, "오늘", "어제", "며칠", "몇 번", "계속", "반복", "매일", "한 번", "지난",
                 "방금", "언제", "개월", "주일", "몇 주", "주 이상", "한 달", "달 정도", "동안", "최근", "지속", "오래",
                 "현재까지는 한 번", "여러 번", "지금도 계속", "정확한 시점");
@@ -109,7 +111,9 @@ public class AnalysisService {
         if (!hasUserGoal) missing.add("원하는 도움이 무엇인지");
 
         if (hasConcreteIncident) facts.add("구체적인 사건 내용 확인");
-        if (hasRelationshipAnswer) facts.add(hasUnknownActorSignal(t) ? "상대방 특정 불명확 상태 확인" : "상대방과 학교 관계 확인");
+        if (hasRelationshipAnswer) facts.add(hasUnknownActorSignal(t) || hasUnknownSchoolRelationshipSignal(t)
+                ? "상대방 특정 또는 학교 관계 불명확 상태 확인"
+                : "상대방과 학교 관계 확인");
         if (hasTimeOrRepeat) facts.add("시점 또는 반복성 단서 확인");
         if (hasEvidenceOrChannel) facts.add("증거 또는 발생 경로 단서 확인");
         if (hasImpactOrRecovery) facts.add("피해 영향 또는 회복 노력 확인");
@@ -121,7 +125,6 @@ public class AnalysisService {
         List<String> violenceTypes = detectViolenceTypes(t);
         boolean hasViolenceType = !violenceTypes.isEmpty();
         int requiredUserMessages = requiredUserMessageCount(t, role, violenceTypes);
-        boolean enoughConversation = userMessageCount >= requiredUserMessages;
         boolean coreFactsReady = relevantInput
                 && hasConcreteIncident
                 && hasRelationshipAnswer
@@ -129,6 +132,8 @@ public class AnalysisService {
                 && hasEvidenceOrChannel
                 && hasImpactOrRecovery
                 && hasUserGoal;
+        boolean enoughConversation = userMessageCount >= requiredUserMessages
+                || (coreFactsReady && userMessageCount >= 7);
         if (relevantInput && !enoughConversation) {
             missing.add("상담 내용을 조금 더 들은 뒤 리포트 생성");
         }
@@ -575,6 +580,20 @@ public class AnalysisService {
                 "모르는 계정", "모르는 사람", "알 수 없", "확인 어렵");
     }
 
+    private boolean hasUnknownSchoolRelationshipSignal(String text) {
+        return containsAny(text,
+                "학교 관계자인지는 아직 모르", "학교 관계인지 아직 모르", "학교 관계자인지 모르",
+                "학교 관계 여부는 모르", "학교 관계는 모르", "학교 관계가 불명확",
+                "학교 관계는 아직 모름", "학교 관계자인지는 아직 모르겠습니다");
+    }
+
+    private boolean hasUnclearPersonalRelationshipSignal(String text) {
+        return containsAny(text,
+                "안 좋게 지내던 친구", "사이가 안 좋은 친구", "사이가 좋지 않은 친구",
+                "알던 친구", "아는 친구", "친구입니다", "친구인 것 같습니다",
+                "예전에 알던 사람", "아는 사람입니다");
+    }
+
     private List<String> buildKeyFindings(String text, List<String> types, ReportReadiness readiness) {
         CaseFacts facts = analyzeCaseFacts(text, types, readiness);
         List<String> findings = new ArrayList<>();
@@ -682,7 +701,9 @@ public class AnalysisService {
         String t = normalize(text);
         String actor = hasDefiniteSchoolRelationship(t)
                 ? "학교 또는 학원 관계의 상대"
-                : hasUnknownActorSignal(t) ? "현재 특정하기 어려운 상대" : "상대";
+                : (hasUnknownActorSignal(t) || hasUnknownSchoolRelationshipSignal(t))
+                ? "현재 학교 관계나 신원이 불명확한 상대"
+                : hasUnclearPersonalRelationshipSignal(t) ? "개인적으로 알고 지내던 상대" : "상대";
         String channel = detectChannel(t);
         String conduct = detectConductSummary(t, types);
         String pattern = containsAny(t, "지금도", "아직도", "계속", "반복", "매일", "여러 번", "몇 번")
@@ -754,8 +775,10 @@ public class AnalysisService {
         String relationship;
         if (hasDefiniteSchoolRelationship(t)) {
             relationship = "학교 또는 학원 관계가 확인되어 학교폭력 절차와 연결해 검토할 수 있습니다.";
-        } else if (hasUnknownActorSignal(t)) {
-            relationship = "상대를 현재 특정하기 어렵다고 확인되어, 학교 관계와 가해자 특정에는 한계가 있습니다.";
+        } else if (hasUnknownActorSignal(t) || hasUnknownSchoolRelationshipSignal(t)) {
+            relationship = "상대의 학교 관계나 신원이 아직 불명확하다고 확인되어, 학교폭력 절차 적용 여부에는 한계가 있습니다.";
+        } else if (hasUnclearPersonalRelationshipSignal(t)) {
+            relationship = "개인적으로 알고 지내던 상대라는 단서는 있으나, 학교 관계는 별도로 확인되지 않아 판단에 한계가 있습니다.";
         } else if (hasConfirmedNonSchoolRelationship(t)) {
             relationship = "상대가 학교 관계자가 아닌 것으로 확인되어 학교폭력 해당성은 낮게 봅니다.";
         } else {

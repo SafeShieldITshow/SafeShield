@@ -745,7 +745,9 @@ public class ChatService {
         return hasAny(text,
                 "같은 반", "같은 학교", "선후배", "학원 관계", "학교 관계자가 아닙니다",
                 "학교 밖", "상대가 학교 관계자인지는 아직 모르겠습니다")
-                || hasUnknownActorSignal(text);
+                || hasUnknownActorSignal(text)
+                || hasUnknownSchoolRelationshipSignal(text)
+                || hasUnclearPersonalRelationshipSignal(text);
     }
 
     private static boolean hasTimelineAnswer(String text) {
@@ -801,6 +803,20 @@ public class ChatService {
                 "누군지 모르", "누구인지 모르", "누가 했는지 모르", "누가 올렸는지 모르",
                 "작성자를 모르", "작성자 모름", "계정 주인을 모르", "계정 모름", "익명",
                 "모르는 계정", "모르는 사람", "알 수 없", "확인 어렵");
+    }
+
+    private static boolean hasUnknownSchoolRelationshipSignal(String text) {
+        return hasAny(text,
+                "학교 관계자인지는 아직 모르", "학교 관계인지 아직 모르", "학교 관계자인지 모르",
+                "학교 관계 여부는 모르", "학교 관계는 모르", "학교 관계가 불명확",
+                "학교 관계는 아직 모름", "학교 관계자인지는 아직 모르겠습니다");
+    }
+
+    private static boolean hasUnclearPersonalRelationshipSignal(String text) {
+        return hasAny(text,
+                "안 좋게 지내던 친구", "사이가 안 좋은 친구", "사이가 좋지 않은 친구",
+                "알던 친구", "아는 친구", "친구입니다", "친구인 것 같습니다",
+                "예전에 알던 사람", "아는 사람입니다");
     }
 
     private static boolean hasAnsweredDeepDive(String text) {
@@ -2072,7 +2088,7 @@ public class ChatService {
                 1. 첫 문장은 사용자의 감정이나 부담을 먼저 받아주세요.
                 2. 사용자가 말한 내용을 복사하지 말고, 핵심만 1문장으로 부드럽게 정리하세요.
                 3. 지금 바로 할 수 있는 행동은 직전 입력에 맞게 1개만 말하세요. 매번 같은 안전 확인 문장이나 "작은 행동 2가지" 형식을 반복하지 마세요.
-                4. 필요한 확인은 마지막에 자연스러운 질문 1개만 하세요. 관계, 시점, 증거, 영향, 원하는 도움 중 이미 말한 내용은 다시 묻지 마세요.
+                4. 답변 본문에서는 새 질문을 직접 만들지 마세요. 필요한 확인은 화면의 선택·주관식 확인 카드에만 맡기고, 이미 말한 내용은 다시 묻지 마세요.
                 5. 선생님이나 어른이 채팅방에 있는지 묻지 마세요. 단체 채팅방 사안에서 필요한 관계 확인은 '같은 학교/같은 반/선배·후배/학원 관계인지'입니다.
                 6. '관련 법률', '증거 정보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
                 7. 리포트는 충분히 확인한 뒤 만들겠다고 설명하고, 준비 완료라고 말하지 마세요.
@@ -2139,7 +2155,7 @@ public class ChatService {
                 1. '관련 법률', '증거 확보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
                 2. 2~5문장으로 답하고, 필요할 때만 짧은 목록 2개 이하를 쓰세요.
                 3. 사용자의 직전 말을 그대로 복사하지 말고, 새로 반영할 의미만 짚으세요.
-                4. 답변 끝에는 필요한 경우 자연스러운 확인 질문 1개만 하세요. 이미 답한 내용은 다시 묻지 마세요.
+                4. 답변 끝에서 새 질문을 직접 만들지 마세요. 필요한 확인은 화면의 선택·주관식 확인 카드에만 맡기고, 이미 답한 내용은 다시 묻지 마세요.
                 5. 확인 질문 UI가 따로 제공되므로 '❓ 확인 질문' 섹션은 쓰지 마세요.
                 6. 법령명과 조문은 사용자가 직접 묻지 않았으면 쓰지 마세요.
                 7. 모든 문장은 자연스러운 한국어로 쓰고, AI, SNS, URL, DM, CCTV, PDF, ID, IP 외 외국어 단어는 쓰지 마세요.
@@ -2292,6 +2308,7 @@ public class ChatService {
         if (!usesAllowedCharacters(reply)) return false;
         if (hasUnnaturalConversationStyle(reply)) return false;
         if (hasUnsafePhysicalViolenceAdvice(reply)) return false;
+        if (hasUncontrolledQuestion(reply)) return false;
 
         Map<String, Set<String>> allowed = parseAllowedCitations(lawContext);
         for (String marker : KNOWN_LAW_MARKERS) {
@@ -2325,6 +2342,15 @@ public class ChatService {
             if (!compacted.add(normalized)) return true;
         }
         return false;
+    }
+
+    private static boolean hasUncontrolledQuestion(String reply) {
+        String text = reply == null ? "" : reply.trim();
+        if (text.contains("?")) return true;
+        return containsAny(text,
+                "있으신가요", "있나요", "인가요", "인가요.", "되나요", "될까요",
+                "알려주실 수", "말해주실 수", "이야기해주실 수", "말씀해주실 수",
+                "말해 줄 수", "이야기해 줄 수");
     }
 
     private static boolean hasUnsafePhysicalViolenceAdvice(String reply) {
