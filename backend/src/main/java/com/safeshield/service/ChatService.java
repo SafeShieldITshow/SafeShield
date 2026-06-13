@@ -1550,6 +1550,8 @@ public class ChatService {
         String t = userContextText == null ? "" : userContextText.toLowerCase(Locale.ROOT);
         if (!hasOwnPhotoPostedVictimContext(t) || hasExplicitPerpetratorAdmission(t)) return reply;
 
+        String capturePost = "게시물 URL·작성자 계정·게시 시간을 캡처하고 공개 범위를 확인";
+        String capturePhoto = "게시된 사진의 URL·작성자 계정·게시 시간을 캡처하고, 누가 올렸는지와 공개 범위를 확인";
         return reply
                 .replace("sns에 올린 사진을 삭제하고, sns의 설정을 확인해 보는 거예요.",
                         "게시된 사진의 URL·작성자 계정·게시 시간을 캡처하고, 누가 올렸는지와 공개 범위를 확인해 보세요.")
@@ -1558,7 +1560,19 @@ public class ChatService {
                 .replace("사진을 삭제하고, SNS 설정을 확인해 보세요.",
                         "게시 화면과 작성자 정보를 캡처하고, 공개 범위와 게시자를 확인해 보세요.")
                 .replace("사진을 삭제하고 SNS 설정을 확인해 보세요.",
-                        "게시 화면과 작성자 정보를 캡처하고, 공개 범위와 게시자를 확인해 보세요.");
+                        "게시 화면과 작성자 정보를 캡처하고, 공개 범위와 게시자를 확인해 보세요.")
+                .replace("SNS에 올린 글을 삭제하는 것", capturePost + "하는 것")
+                .replace("sns에 올린 글을 삭제하는 것", capturePost + "하는 것")
+                .replace("SNS에 올린 게시물을 삭제하는 것", capturePost + "하는 것")
+                .replace("sns에 올린 게시물을 삭제하는 것", capturePost + "하는 것")
+                .replace("SNS에 올린 사진을 삭제하는 것", capturePhoto + "하는 것")
+                .replace("sns에 올린 사진을 삭제하는 것", capturePhoto + "하는 것")
+                .replace("SNS에 올린 글을 삭제", capturePost)
+                .replace("sns에 올린 글을 삭제", capturePost)
+                .replace("SNS에 올린 게시물을 삭제", capturePost)
+                .replace("sns에 올린 게시물을 삭제", capturePost)
+                .replace("SNS에 올린 사진을 삭제", capturePhoto)
+                .replace("sns에 올린 사진을 삭제", capturePhoto);
     }
 
     private static boolean asksMaleVictimCanConsult(String text) {

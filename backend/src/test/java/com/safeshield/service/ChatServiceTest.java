@@ -414,6 +414,18 @@ class ChatServiceTest {
     }
 
     @Test
+    void rewritesVictimPhotoPostDeletionAdvice() {
+        String adapted = ChatService.adaptCaseDomainWording(
+                "현재 할 수 있는 행동은 먼저 SNS에 올린 글을 삭제하는 것입니다.",
+                "친구가 제 사진과 비방 글을 SNS에 올렸어요."
+        );
+
+        assertTrue(adapted.contains("게시물 URL"));
+        assertTrue(adapted.contains("작성자 계정"));
+        assertFalse(adapted.contains("SNS에 올린 글을 삭제"));
+    }
+
+    @Test
     void buildsPerpetratorFollowUpQuestion() {
         ReportReadiness readiness = needsMoreContext();
 
