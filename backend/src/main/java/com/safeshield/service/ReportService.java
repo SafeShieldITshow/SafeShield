@@ -191,8 +191,16 @@ public class ReportService {
 
     private String normalizeTitle(String title, AnalysisResult analysis) {
         if (title != null && !title.isBlank()) return title.trim();
-        String primaryType = analysis.violenceTypes().isEmpty() ? "상담" : analysis.violenceTypes().get(0);
+        String primaryType = selectPrimaryType(analysis.violenceTypes());
         return analysis.assessmentStatus() + " - " + primaryType;
+    }
+
+    private String selectPrimaryType(List<String> violenceTypes) {
+        if (violenceTypes == null || violenceTypes.isEmpty()) return "상담";
+        for (String preferred : List.of("성폭력", "신체 폭력", "사이버 폭력", "갈취", "스토킹", "따돌림", "언어 폭력")) {
+            if (violenceTypes.contains(preferred)) return preferred;
+        }
+        return violenceTypes.get(0);
     }
 
     private String generatedOrBlankTitle(Report report) {
