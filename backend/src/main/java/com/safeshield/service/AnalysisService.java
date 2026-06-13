@@ -52,7 +52,7 @@ public class AnalysisService {
     private AnalysisResult analyzeWithReadiness(String text, ReportReadiness readiness) {
         List<String> violenceTypes = detectViolenceTypes(text);
         double riskScore = calculateRiskScore(violenceTypes, text);
-        if (!readiness.schoolViolenceLikely()) {
+        if (!readiness.schoolViolenceLikely() && !violenceTypes.contains("성폭력")) {
             riskScore = Math.min(riskScore, 4.5);
         }
         List<String> matchedLaws = violenceTypes.isEmpty() ? List.of() : lawDataService.getMatchedLaws(violenceTypes);
@@ -132,8 +132,9 @@ public class AnalysisService {
                 && hasEvidenceOrChannel
                 && hasImpactOrRecovery
                 && hasUserGoal;
+        int minimumCoreMessages = violenceTypes.contains("성폭력") ? 5 : 4;
         boolean enoughConversation = userMessageCount >= requiredUserMessages
-                || (coreFactsReady && userMessageCount >= 7);
+                || (coreFactsReady && userMessageCount >= minimumCoreMessages);
         if (relevantInput && !enoughConversation) {
             missing.add("상담 내용을 조금 더 들은 뒤 리포트 생성");
         }
@@ -257,7 +258,7 @@ public class AnalysisService {
         if (violenceTypes.size() > 1) score += Math.min(1.0, (violenceTypes.size() - 1) * 0.35);
 
         boolean oneOff = containsAny(t, "한 번", "1번", "처음", "처음으로");
-        boolean repeated = containsAny(t, "계속", "매일", "반복", "여러 번", "지속", "몇 번", "또");
+        boolean repeated = containsAny(t, "계속", "매일", "반복", "여러 번", "지속", "몇 번", "또", "자꾸");
         boolean longTerm = containsAny(t, "몇 달", "몇 개월", "몇 주", "개월", "학기", "작년부터");
         boolean ongoing = containsAny(t, "아직도", "지금도", "계속하고", "멈추지", "또 올");
         boolean publicSpread = containsAny(t, "공개", "퍼졌", "유포", "공유", "단톡", "단체", "여러 명", "댓글", "게시");
@@ -299,6 +300,22 @@ public class AnalysisService {
 
         if (violenceTypes.contains("성폭력") && containsAny(t, "사진", "영상", "촬영", "유포", "온라인", "dm", "디엠")) {
             score += 0.8;
+        }
+        if (violenceTypes.contains("성폭력")) {
+            double sexualFloor = 6.0;
+            if (containsAny(t, "원하지 않는", "강제로", "신체 접촉", "몸을 만", "만졌", "만지는", "성추행")) {
+                sexualFloor = Math.max(sexualFloor, 7.0);
+            }
+            if (repeated || ongoing || longTerm) {
+                sexualFloor = Math.max(sexualFloor, 7.2);
+            }
+            if (distress) {
+                sexualFloor = Math.max(sexualFloor, 7.0);
+            }
+            if (containsAny(t, "사진", "영상", "촬영", "유포", "온라인", "dm", "디엠")) {
+                sexualFloor = Math.max(sexualFloor, 7.5);
+            }
+            score = Math.max(score, sexualFloor);
         }
         if (violenceTypes.contains("갈취") && containsAny(t, "돈", "송금", "계좌", "만원", "물건")) {
             score += 0.4;

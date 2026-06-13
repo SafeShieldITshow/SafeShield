@@ -295,6 +295,24 @@ class AnalysisServiceTest {
         assertTrue(readiness.ready(), "성폭력 핵심 사실이 확인되면 추가 설문 루프 없이 리포트 생성이 가능해야 합니다.");
         assertTrue(result.violenceTypes().contains("성폭력"));
         assertFalse(result.violenceTypes().contains("신체 폭력"), "원하지 않은 성적 접촉을 일반 신체폭력 선택지로 오분류하면 안 됩니다.");
+        assertTrue(result.riskScore() >= 7.0, "원하지 않은 성적 접촉과 반복·불안 단서가 있으면 위험도를 낮게 산정하면 안 됩니다.");
+    }
+
+    @Test
+    void sexualViolenceRiskIsNotCappedByLowSchoolApplicability() {
+        String text = "원하지 않는 성적 신체 접촉이 있었고 너무 불안해서 어떻게 해야 할지 알고 싶습니다. " +
+                "확인 답변: 상대는 학교 관계자가 아닙니다. " +
+                "확인 답변: 최근 비슷한 일이 여러 번 반복됐습니다. " +
+                "확인 답변: 아직 확보한 증거는 없습니다. " +
+                "확인 답변: 보호받고 싶습니다.";
+
+        ReportReadiness readiness = analysisService.assessReportReadiness(text, 5);
+        var result = analysisService.analyze(text, readiness);
+
+        assertTrue(readiness.ready());
+        assertTrue(readiness.status().contains("학교폭력 해당성 낮음"));
+        assertTrue(result.violenceTypes().contains("성폭력"));
+        assertTrue(result.riskScore() >= 7.0, "학교폭력 절차 해당성이 낮아도 성폭력 피해 위험도는 낮게 제한하면 안 됩니다.");
     }
 
     @Test
@@ -447,6 +465,21 @@ class AnalysisServiceTest {
 
         assertFalse(readiness.ready(), "핵심 정보가 있어도 사용자 답변 2개만으로는 리포트를 열지 않습니다.");
         assertTrue(readiness.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
+    }
+
+    @Test
+    void opensLowApplicabilityReportWhenPhysicalCoreFactsAreCompleteInFourTurns() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "학교에서 맞았고 멍이 들었는데 어떻게 해야 하나요? " +
+                        "확인 답변: 상대는 학교 관계자가 아닙니다. " +
+                        "확인 답변: 정확한 시점이나 횟수는 아직 기억나지 않습니다. " +
+                        "확인 답변: 병원 진단서나 진료 기록이 있습니다.",
+                4
+        );
+
+        assertTrue(readiness.ready(), "핵심 정보가 다 찼으면 더 이상 임의 턴 수 때문에 멈추면 안 됩니다.");
+        assertFalse(readiness.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
+        assertTrue(readiness.status().contains("학교폭력 해당성 낮음"));
     }
 
     @Test
