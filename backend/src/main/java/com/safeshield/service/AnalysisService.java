@@ -84,11 +84,13 @@ public class AnalysisService {
         List<String> missing = new ArrayList<>();
         List<String> facts = new ArrayList<>();
         boolean relevantInput = isRelevantConsultationInput(t);
+        boolean bodilyWasteIncident = hasBodilyWasteIncidentSignal(t);
 
         boolean hasConcreteIncident = containsAny(t, "때렸", "맞았", "욕", "모욕", "비방", "사진", "게시", "댓글", "협박",
                 "따돌", "돈", "갈취", "성희롱", "성추행", "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는",
                 "괴롭", "놀림", "밀쳤", "사과",
-                "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는");
+                "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는")
+                || bodilyWasteIncident;
         boolean hasRelationshipAnswer = hasDefiniteSchoolRelationship(t)
                 || hasConfirmedNonSchoolRelationship(t)
                 || hasUnknownActorSignal(t)
@@ -209,7 +211,8 @@ public class AnalysisService {
         List<String> types = new ArrayList<>();
         boolean mildExpressionOnly = isMildExpressionOrMisunderstanding(t);
 
-        if (containsAny(t, "때렸", "맞았", "폭행", "밀쳤", "발로", "주먹", "상처", "멍", "상해", "다쳤")) {
+        if (containsAny(t, "때렸", "맞았", "폭행", "밀쳤", "발로", "주먹", "상처", "멍", "상해", "다쳤")
+                || hasBodilyWasteIncidentSignal(t)) {
             types.add("신체 폭력");
         }
         if (!mildExpressionOnly && containsAny(t, "욕", "협박", "모욕", "비하", "비방", "놀림", "죽이", "꺼져", "소문", "명예훼손")) {
@@ -781,6 +784,9 @@ public class AnalysisService {
     }
 
     private String detectConductSummary(String text, List<String> types) {
+        if (types.contains("신체 폭력") && hasBodilyWasteIncidentSignal(text)) {
+            return "배설물 등 신체적 모욕이나 위해가 될 수 있는 행위";
+        }
         if (types.contains("신체 폭력") && containsAny(text, "때렸", "맞았", "밀쳤", "밀쳐", "멍", "상처")) {
             return "때리거나 밀치는 신체 폭력";
         }
@@ -866,5 +872,14 @@ public class AnalysisService {
 
     private String normalize(String text) {
         return text == null ? "" : text.toLowerCase(Locale.ROOT);
+    }
+
+    private boolean hasBodilyWasteIncidentSignal(String text) {
+        String t = normalize(text);
+        boolean bodilyWaste = containsAny(t, "얼굴에 똥", "몸에 똥", "똥을 쌌", "똥을 싸", "똥 싸질",
+                "배설물", "대변", "소변", "오줌", "침을 뱉", "침 뱉");
+        boolean eventContext = containsAny(t, "친구", "같은 반", "학생", "상대", "제 얼굴", "내 얼굴", "얼굴에",
+                "몸에", "목격", "도망", "신고", "학교");
+        return bodilyWaste && eventContext;
     }
 }

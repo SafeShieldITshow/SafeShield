@@ -236,7 +236,7 @@ public class ChatService {
         response.put("report_generated", reportGenerated);
         response.put("report_updated", reportUpdated);
         response.put("report", report);
-        response.put("report_ready", readiness.ready());
+        response.put("report_ready", readiness.ready() && confirmationPrompts.isEmpty());
         response.put("report_status", readiness.status());
         response.put("report_reason", readiness.reason());
         response.put("missing_info", readiness.missingInfo());
@@ -295,7 +295,7 @@ public class ChatService {
         response.put("report_generated", reportGenerated);
         response.put("report_updated", reportUpdated);
         response.put("report", report);
-        response.put("report_ready", readiness.ready());
+        response.put("report_ready", readiness.ready() && confirmationPrompts.isEmpty());
         response.put("report_status", readiness.status());
         response.put("report_reason", readiness.reason());
         response.put("missing_info", readiness.missingInfo());
@@ -350,12 +350,13 @@ public class ChatService {
 
     private Map<String, Object> readinessToMap(ReportReadiness readiness, List<Message> history) {
         boolean stopped = isConversationStopped(history);
+        List<Map<String, Object>> prompts = stopped ? List.of() : confirmationPrompts(readiness, history);
         return Map.of(
-                "ready", stopped ? false : readiness.ready(),
+                "ready", !stopped && readiness.ready() && prompts.isEmpty(),
                 "status", stopped ? "대화 중단" : readiness.status(),
                 "reason", stopped ? "학교폭력 상담과 무관한 입력으로 상담이 중단되었습니다." : readiness.reason(),
                 "missing_info", stopped ? List.of() : readiness.missingInfo(),
-                "confirmation_prompts", stopped ? List.of() : confirmationPrompts(readiness, history),
+                "confirmation_prompts", prompts,
                 "school_violence_likely", !stopped && readiness.schoolViolenceLikely(),
                 "conversation_stopped", stopped
         );
@@ -378,8 +379,9 @@ public class ChatService {
     }
 
     private List<Map<String, Object>> confirmationPrompts(ReportReadiness readiness, List<Message> history) {
-        if (readiness.ready() || readiness.missingInfo().isEmpty()) return List.of();
         String combined = combinedUserText(history);
+        if (needsRealityCheck(combined)) return List.of(confirmationPrompt(realityCheckQuestion()));
+        if (readiness.ready() || readiness.missingInfo().isEmpty()) return List.of();
         return confirmationCandidates(readiness, combined, userMessageCount(history), history).stream()
                 .limit(1)
                 .map(ChatService::confirmationPrompt)
@@ -406,7 +408,7 @@ public class ChatService {
         if (trimmed.contains("아래 확인 카드") || trimmed.contains("아래 선택지")) return trimmed;
         String question = firstConfirmationQuestion(prompts);
         if (question.isBlank() || trimmed.contains(question)) return trimmed;
-        return trimmed + "\n\n확인을 위해 질문 하나 할게요. " + question;
+        return trimmed + "\n\n아래에 이어서 확인할 내용을 하나만 띄워둘게요.";
     }
 
     private static String appendReportSummary(
@@ -519,6 +521,9 @@ public class ChatService {
         if (id.startsWith("incident")) {
             return "방금 말한 일을 어떤 유형으로 볼지 정확히 잡기 위한 확인입니다.";
         }
+        if (id.startsWith("reality_check")) {
+            return "표현이 특이하거나 비유일 수 있어 실제 사건인지 먼저 확인하기 위한 것입니다.";
+        }
         if (id.startsWith("relationship")) {
             return "학교폭력 절차 적용 가능성을 보려면 상대와의 학교 관계가 필요합니다.";
         }
@@ -556,6 +561,9 @@ public class ChatService {
         if (id != null && id.startsWith("final_check")) {
             return "맞으면 첫 선택지를 누르고, 빠진 내용이 있으면 직접 입력으로 보완해 주세요.";
         }
+        if (id != null && id.startsWith("reality_check")) {
+            return "실제 사건이면 첫 선택지를 누르고, 비유나 장난 표현이면 그에 맞는 선택지를 골라주세요.";
+        }
         return "해당하는 항목은 여러 개 선택할 수 있고, 선택지에 없으면 직접 입력으로 적어주세요.";
     }
 
@@ -579,6 +587,7 @@ public class ChatService {
     ) {
         if (readiness == null || readiness.ready()) return List.of();
         String text = combinedText == null ? "" : combinedText;
+        if (needsRealityCheck(text)) return List.of(realityCheckQuestion());
         List<ConfirmationCandidate> candidates = new ArrayList<>();
 
         if (hasRoleConflict(text) && !hasRoleConflictAnswer(text)) {
@@ -590,6 +599,8 @@ public class ChatService {
             String info = missingInfo == null ? "" : missingInfo;
             if (containsAny(info, "무슨 일", "사건 내용", "사안 내용", "행동", "구체")) {
                 candidates.add(incidentQuestion(text));
+            } else if (containsAny(info, "실제 사건", "실제 여부", "비유", "농담")) {
+                candidates.add(realityCheckQuestion());
             } else if (containsAny(info, "학교 관계", "상대", "관계")) {
                 candidates.add(relationshipQuestion(text));
             } else if (containsAny(info, "언제", "시점", "횟수", "반복", "기간", "빈도")) {
@@ -737,6 +748,7 @@ public class ChatService {
     private static String questionFamily(String id) {
         if (id == null || id.isBlank()) return "";
         if (id.startsWith("incident")) return "incident";
+        if (id.startsWith("reality_check")) return "reality_check";
         if (id.startsWith("timeline")) return "timeline";
         if (id.startsWith("evidence")) return "evidence";
         if (id.startsWith("impact")) return "impact";
@@ -790,6 +802,7 @@ public class ChatService {
         if (id == null) return false;
         return switch (id) {
             case "incident", "incident_post", "incident_physical", "incident_sexual" -> hasIncidentAnswer(text);
+            case "reality_check" -> hasRealityCheckAnswer(text);
             case "relationship" -> hasRelationshipAnswer(text);
             case "timeline", "timeline_cyber" -> hasTimelineAnswer(text);
             case "evidence", "evidence_chat", "evidence_physical", "evidence_actor", "evidence_sexual" -> hasEvidenceAnswer(text);
@@ -833,7 +846,8 @@ public class ChatService {
                 "욕설", "비방", "모욕", "조롱", "사진", "영상", "게시물", "댓글",
                 "공유", "유포", "맞거나", "가격", "밀치", "넘어뜨", "상처", "멍",
                 "따돌림", "배제", "괴롭힘", "때리거나 밀치는 신체 폭력",
-                "신체 접촉", "원하지 않는", "만졌", "만지는", "성적으로", "불쾌", "성추행", "성희롱");
+                "신체 접촉", "신체 폭력", "원하지 않는", "만졌", "만지는", "성적으로", "불쾌",
+                "성추행", "성희롱", "배설물", "똥을", "오줌", "소변", "대변");
     }
 
     private static boolean hasRelationshipAnswer(String text) {
@@ -865,6 +879,7 @@ public class ChatService {
     private static boolean hasImpactAnswer(String text) {
         return hasAny(text,
                 "불안", "두려", "등교", "생활에 영향", "보복", "반복이 걱정",
+                "걱정", "재발", "또 그럴", "다시 그럴", "또 쌀",
                 "크게 불편한 점", "생활 영향은 없습니다", "보호자나 담임에게 일부 알렸",
                 "문제 행동을 중단", "게시물이나 댓글을 삭제", "피해 회복 조치를 하지 못",
                 "멍", "상처", "통증", "아프", "병원", "진단서", "진료 기록", "진료",
@@ -935,7 +950,7 @@ public class ChatService {
         String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
         if (isPerpetratorText(t)) return CaseDomain.PERPETRATOR;
         if (hasSexualViolationSignal(t)) return CaseDomain.SEXUAL;
-        if (hasPhysicalViolenceSignal(t)) return CaseDomain.PHYSICAL;
+        if (hasPhysicalViolenceSignal(t) || hasBodilyWasteIncidentSignal(t)) return CaseDomain.PHYSICAL;
         if (hasChatSignal(t)) return CaseDomain.CYBER_CHAT;
         if (hasPostSignal(t)) return CaseDomain.CYBER_POST;
         if (hasSocialExclusionSignal(t)) return CaseDomain.SOCIAL_EXCLUSION;
@@ -952,6 +967,30 @@ public class ChatService {
     private static boolean hasPhysicalViolenceSignal(String text) {
         return hasAny(text, "맞았", "맞고", "맞거나", "때렸", "폭행", "가격", "밀쳤", "밀침",
                 "밀쳐", "넘어뜨", "멍", "상처", "통증", "다쳤", "출혈", "골절");
+    }
+
+    private static boolean hasBodilyWasteIncidentSignal(String text) {
+        String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        return containsAny(t, "얼굴에 똥", "몸에 똥", "똥을 쌌", "똥을 싸", "똥 싸질", "배설물",
+                "대변", "소변", "오줌", "침을 뱉", "침 뱉");
+    }
+
+    private static boolean needsRealityCheck(String text) {
+        return hasBodilyWasteIncidentSignal(text) && !hasRealityCheckAnswer(text);
+    }
+
+    private static boolean hasRealityCheckAnswer(String text) {
+        String body = confirmationAnswerBody(text).toLowerCase(Locale.ROOT);
+        return containsAny(body,
+                "실제로 있었던 일입니다", "실제로 있었", "실제 사건", "실제 행동", "진짜 있었",
+                "비유나 농담", "비유입니다", "농담입니다", "장난 표현", "장난이었습니다",
+                "실제는 아닙니다", "실제로는 아닙니다");
+    }
+
+    private static boolean hasNonRealEventAnswer(String text) {
+        String body = confirmationAnswerBody(text).toLowerCase(Locale.ROOT);
+        return containsAny(body, "비유나 농담", "비유입니다", "농담입니다", "장난 표현",
+                "장난이었습니다", "실제는 아닙니다", "실제로는 아닙니다");
     }
 
     private static boolean hasChatSignal(String text) {
@@ -1114,6 +1153,13 @@ public class ChatService {
         return candidate("final_check", "지금까지 말한 내용이 하나의 같은 사안이고, 이 내용으로 리포트를 생성해도 되나요?",
                 option("이 내용으로 분석", "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다."),
                 option("추가 설명 필요", "확인 답변: "));
+    }
+
+    private static ConfirmationCandidate realityCheckQuestion() {
+        return candidate("reality_check", "말해준 내용이 실제로 있었던 일인지, 비유나 장난 표현인지 먼저 확인할게요.",
+                option("실제 사건", "확인 답변: 실제로 있었던 일입니다."),
+                option("비유·농담", "확인 답변: 비유나 농담 표현입니다."),
+                option("설명 보완", "확인 답변: "));
     }
 
     private static ConfirmationCandidate roleConflictQuestion() {
@@ -1555,6 +1601,21 @@ public class ChatService {
         ReportReadiness readiness = assessReadiness(history);
         boolean perpetratorContext = isPerpetratorContext(combined);
 
+        if (hasBodilyWasteIncidentSignal(latest) && !hasRealityCheckAnswer(combined)) {
+            return """
+                    말해준 내용은 표현이 매우 특이해서, 실제로 있었던 일인지 비유나 장난 표현인지 먼저 확인해야 합니다.
+                    실제 사건이라면 신체적 모욕이나 위해가 될 수 있어 목격자, 시간, 장소를 정확히 남기는 쪽이 중요합니다.
+                    아래에 실제 사건 여부를 확인할 선택지를 띄워둘게요.
+                    """.trim();
+        }
+
+        if (hasNonRealEventAnswer(latest)) {
+            return """
+                    실제 사건이 아니라 비유나 농담 표현이라면 학교폭력 리포트로 만들 내용은 아닙니다.
+                    실제로 겪은 괴롭힘이나 신고가 필요한 일이 따로 있다면, 그 일을 기준으로 새로 적어 주세요.
+                    """.trim();
+        }
+
         if (asksMaleVictimCanConsult(latest)) {
             return """
                     남자여도 당연히 상담해도 됩니다. 원하지 않은 성적 접촉이나 말은 성별과 관계없이 도움을 요청할 수 있는 일입니다.
@@ -1638,6 +1699,12 @@ public class ChatService {
 
     private String buildConfirmationFallbackReply(String latest, ReportReadiness readiness) {
         String t = latest == null ? "" : latest;
+        if (hasRealityCheckAnswer(t)) {
+            if (hasNonRealEventAnswer(t)) {
+                return "실제 사건이 아니라면 이 내용은 리포트로 만들지 않는 게 맞습니다. 실제로 겪은 괴롭힘이나 도움이 필요한 일이 있으면 그 내용을 기준으로 다시 정리해 주세요.";
+            }
+            return "실제로 있었던 일이라는 점을 먼저 확인했습니다. 상황이 드문 만큼, 시간·장소·목격자·당시 대응을 최대한 구체적으로 남겨 두는 것이 중요합니다.";
+        }
         if (hasUnknownActorSignal(t)) {
             return "상대를 지금 특정하기 어렵다는 점도 상담 기록에 반영됩니다. 이 경우 같은 질문을 반복하기보다, 게시물 URL·계정 화면·시간·댓글 흐름처럼 남아 있는 단서부터 보관하는 쪽이 중요합니다.";
         }
@@ -1753,7 +1820,9 @@ public class ChatService {
                 "sns", "카톡", "단톡", "채팅", "채팅방", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱",
                 "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는", "불쾌", "갈취", "스토킹",
                 "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담", "확인 질문",
-                "용의자", "특정", "누군지", "누구인지", "작성자", "계정");
+                "용의자", "특정", "누군지", "누구인지", "작성자", "계정",
+                "걱정", "무서", "두려", "불안", "보복", "반복", "재발", "또 그럴", "다시 그럴",
+                "또 쌀", "쌀까", "목격자", "도망", "얼굴", "몸", "배설물", "대변", "소변");
     }
 
     private static boolean isConsultationMetaQuestion(String text) {
@@ -2296,6 +2365,16 @@ public class ChatService {
 
     private ReportReadiness assessReadiness(List<Message> history) {
         String combined = combinedUserText(history);
+        if (hasBodilyWasteIncidentSignal(combined) && hasNonRealEventAnswer(combined)) {
+            return new ReportReadiness(
+                    false,
+                    "상담 내용 확인 필요",
+                    "실제 사건이 아닌 비유나 농담 표현으로 확인되어 리포트 생성 대상이 아닙니다.",
+                    List.of(),
+                    List.of("비유 또는 농담 표현 확인"),
+                    false
+            );
+        }
         ReportReadiness raw = analysisService.assessReportReadiness(combined, userMessageCount(history));
         return applyHistoryAnswerState(raw, combined, userMessageCount(history), history);
     }

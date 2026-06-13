@@ -447,6 +447,8 @@ class ChatServiceTest {
         assertTrue(ChatService.shouldGuardIrrelevantInput("응가", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("똥", false));
         assertTrue(ChatService.shouldGuardIrrelevantInput("밥 필요해", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("확인 답변: 씨발 또 쌀까봐 걱정된다고요", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("추가 설명: 또 그럴까봐 걱정됩니다.", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("어떤 확인이 필요한가요?", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("뭘 더 확인해야 해요?", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("추가 질문이 뭐예요?", false));
@@ -461,8 +463,9 @@ class ChatServiceTest {
                 List.of(Map.of("question", "대화 전체가 보이는 캡처나 원본이 있나요?"))
         );
 
-        assertTrue(reply.contains("확인을 위해 질문 하나 할게요."));
-        assertTrue(reply.contains("대화 전체가 보이는 캡처나 원본이 있나요?"));
+        assertFalse(reply.contains("확인을 위해 질문 하나 할게요."));
+        assertFalse(reply.contains("대화 전체가 보이는 캡처나 원본이 있나요?"));
+        assertTrue(reply.contains("아래에 이어서 확인할 내용을 하나만 띄워둘게요."));
     }
 
     @Test
@@ -473,7 +476,49 @@ class ChatServiceTest {
         );
 
         assertFalse(reply.contains("내용 전체가 있다는 점은 중요합니다. 확인을 위해 질문 하나 할게요."));
-        assertTrue(reply.endsWith("확인을 위해 질문 하나 할게요. 상대와의 관계는 어디에 가깝나요?"));
+        assertFalse(reply.contains("상대와의 관계는 어디에 가깝나요?"));
+        assertTrue(reply.endsWith("아래에 이어서 확인할 내용을 하나만 띄워둘게요."));
+    }
+
+    @Test
+    void asksRealityCheckForImplausibleBodilyWasteIncident() {
+        ReportReadiness incidentMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "사건 내용을 확인해야 합니다.",
+                List.of("무슨 일이 있었는지"),
+                List.of(),
+                true
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                incidentMissing,
+                "친구가 제 얼굴에 진짜로 똥을 쌌어요. 이거 신고 될까요?",
+                1
+        );
+
+        assertTrue(questions.get(0).contains("실제로 있었던 일인지"));
+    }
+
+    @Test
+    void doesNotRepeatImpactQuestionAfterRecurrenceConcernAnswer() {
+        ReportReadiness impactMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "피해 영향을 확인해야 합니다.",
+                List.of("피해 영향이나 피해 회복을 위해 이미 한 일이 있는지"),
+                List.of("구체적인 사건 내용 확인", "상대방과 학교 관계 확인", "시점 또는 반복성 단서 확인"),
+                true
+        );
+        List<Message> history = List.of(
+                transientMessage("user", "같은 반 친구가 실제로 얼굴에 배설물을 묻혔고 목격자가 있습니다."),
+                transientMessage("assistant", "지금 가장 걱정되는 부분은 무엇인가요?"),
+                transientMessage("user", "확인 답변: 씨발 또 쌀까봐 걱정된다고요")
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(impactMissing, history);
+
+        assertFalse(questions.stream().anyMatch(question -> question.contains("가장 걱정되는 부분")));
     }
 
     @Test

@@ -877,7 +877,7 @@ const SShieldChat = () => {
                                                     );
                                                     return (
                                                     <div className="confirmation-prompt" key={promptKey}>
-                                                        <span className="confirmation-kicker">다음 확인</span>
+                                                        <span className="confirmation-kicker">이어 볼 내용</span>
                                                         <p>{prompt.question}</p>
                                                         <span className="confirmation-multi-hint">
                                                             {prompt.instruction || '여러 개 선택 가능 · 필요하면 직접 입력도 함께 작성'}
@@ -904,7 +904,7 @@ const SShieldChat = () => {
                                                             className="confirmation-custom-input"
                                                             type="text"
                                                             value={draft?.customText || ''}
-                                                            placeholder="선택 없이 직접 답변하거나, 선택 후 설명을 덧붙일 수 있습니다"
+                                                            placeholder="선택지에 없으면 짧게 적어도 괜찮아요"
                                                             onChange={(e) => handleConfirmationCustomChange(msg.id, prompt, promptIndex, e.target.value)}
                                                             onKeyDown={(e) => {
                                                                 if (e.key === 'Enter' && confirmationAnswersForMessage(msg).length) {
@@ -923,9 +923,9 @@ const SShieldChat = () => {
                                                         onClick={() => handleSendConfirmation(msg)}
                                                         disabled={isChatLocked || !confirmationAnswersForMessage(msg).length}
                                                     >
-                                                        확인 답변 보내기
+                                                        이 내용으로 이어가기
                                                     </button>
-                                                    <span>선택한 답변을 모아서 상담에 추가합니다.</span>
+                                                    <span>답하기 편한 만큼만 골라도 됩니다.</span>
                                                 </div>
                                             </div>
                                         )}

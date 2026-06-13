@@ -224,6 +224,17 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void treatsContextualBodilyWasteIncidentAsPhysicalViolenceCue() {
+        String text = "같은 반 친구가 제 얼굴에 실제로 똥을 쌌고 목격자가 있습니다. " +
+                "오늘 한 번 있었고 또 그럴까봐 걱정됩니다. 보호자와 담임에게 말하고 싶습니다.";
+        ReportReadiness readiness = analysisService.assessReportReadiness(text, 5);
+        var result = analysisService.analyze(text, readiness);
+
+        assertTrue(readiness.schoolViolenceLikely(), "사건 맥락이 있는 배설물 진술은 무관 입력으로 보지 않아야 합니다.");
+        assertTrue(result.violenceTypes().contains("신체 폭력"), "신체적 모욕이나 위해 가능성이 있는 행위로 분류해야 합니다.");
+    }
+
+    @Test
     void requiresDefiniteSchoolRelationshipBeforeReportReady() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "친구가 계속 욕을 했고 캡처가 있습니다. 여러 번 반복됐습니다.",
