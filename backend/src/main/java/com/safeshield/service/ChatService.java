@@ -215,7 +215,7 @@ public class ChatService {
         boolean reportGenerated = false;
         boolean reportUpdated;
         if (readiness.ready() && confirmationPrompts.isEmpty()) {
-            report = reportService.generateOrUpdateForSession(user, session, "");
+            report = reportService.generateOrUpdateForSession(user, session, "", readiness);
             reportGenerated = true;
             reportUpdated = true;
         } else {
@@ -270,7 +270,7 @@ public class ChatService {
         Map<String, Object> report = null;
         boolean reportGenerated = false;
         if (readiness.ready() && confirmationPrompts.isEmpty()) {
-            report = reportService.generateTemporary(history, "");
+            report = reportService.generateTemporary(history, "", readiness);
             reportGenerated = true;
         }
 
@@ -754,7 +754,8 @@ public class ChatService {
         return hasAny(text,
                 "오늘 현재까지는 한 번", "한 번 발생", "최근 비슷한 일이 여러 번", "여러 번 반복",
                 "며칠 동안 반복", "몇 주 이상", "오래 지속", "지금도 계속", "정확한 시점이나 횟수",
-                "기억나지 않습니다", "처음", "어제", "방금", "지난");
+                "기억나지 않습니다", "며칠 반복", "며칠", "몇 번", "여러 번", "계속", "반복",
+                "한 달", "달 정도", "주 이상", "처음", "어제", "방금", "지난");
     }
 
     private static boolean hasEvidenceAnswer(String text) {
@@ -777,7 +778,9 @@ public class ChatService {
         return hasAny(text,
                 "증거를 어떻게 정리", "신고나 학교 상담 절차", "안전하게 보호받고",
                 "상대와 어떻게 거리를", "사과나 피해 회복 방법", "게시물 삭제",
-                "학교에 어떻게 설명", "재발 방지");
+                "학교에 어떻게 설명", "재발 방지", "신고 절차", "학교 상담 절차",
+                "어떻게 해야", "뭘 해야", "무엇을 해야", "알고 싶", "도움 받고",
+                "도움이 필요", "대처", "해결", "보호받고 싶");
     }
 
     private static boolean hasFinalCheckAnswer(String text) {
@@ -1409,7 +1412,7 @@ public class ChatService {
         if (combined.isBlank()) return "";
 
         List<String> types = detectTypes(combined);
-        ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessageCount(history));
+        ReportReadiness readiness = assessReadiness(history);
         AnalysisResult analysis = analysisService.analyze(combined, readiness);
         List<String> citations = selectFallbackCitations(lawContext);
         if (citations.isEmpty()) return "";
@@ -1452,7 +1455,7 @@ public class ChatService {
                 .map(Message::getContent)
                 .collect(Collectors.joining(" "))
                 .trim();
-        ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessageCount(history));
+        ReportReadiness readiness = assessReadiness(history);
         boolean perpetratorContext = isPerpetratorContext(combined);
 
         if (asksMaleVictimCanConsult(latest)) {
@@ -1880,7 +1883,7 @@ public class ChatService {
                 .collect(Collectors.joining(" "));
         List<String> violenceTypes = detectTypes(combined);
         long userMessages = userMessageCount(history);
-        ReportReadiness readiness = analysisService.assessReportReadiness(combined, userMessages);
+        ReportReadiness readiness = assessReadiness(history);
         String latest = latestUserMessage(history);
         ReplyMode replyMode = determineReplyMode(history, latest, combined);
         String lawContext = lawApiService.getContextForCase(combined, violenceTypes);
@@ -2196,7 +2199,196 @@ public class ChatService {
 
     private ReportReadiness assessReadiness(List<Message> history) {
         String combined = combinedUserText(history);
-        return analysisService.assessReportReadiness(combined, userMessageCount(history));
+        ReportReadiness raw = analysisService.assessReportReadiness(combined, userMessageCount(history));
+        return applyHistoryAnswerState(raw, combined, userMessageCount(history), history);
+    }
+
+    static ReportReadiness applyHistoryAnswerState(
+            ReportReadiness readiness,
+            String combinedText,
+            long userMessageCount,
+            List<Message> history
+    ) {
+        if (readiness == null || readiness.ready() || readiness.missingInfo().isEmpty()) return readiness;
+        if ("상담 내용 확인 필요".equals(readiness.status())) return readiness;
+
+        String text = combinedText == null ? "" : combinedText;
+        Set<String> answeredFamilies = answeredQuestionFamilies(history);
+        List<String> remainingMissing = new ArrayList<>();
+        List<String> answeredFacts = new ArrayList<>();
+
+        for (String missing : readiness.missingInfo()) {
+            if (isMissingInfoAnsweredByHistory(missing, text, userMessageCount, answeredFamilies)) {
+                answeredFacts.add(factForMissingInfo(missing));
+            } else {
+                remainingMissing.add(missing);
+            }
+        }
+
+        if (remainingMissing.size() == readiness.missingInfo().size()) return readiness;
+
+        List<String> keyFacts = new ArrayList<>(readiness.keyFacts());
+        answeredFacts.stream()
+                .filter(fact -> fact != null && !fact.isBlank())
+                .forEach(keyFacts::add);
+
+        if (!remainingMissing.isEmpty()) {
+            return new ReportReadiness(
+                    false,
+                    readiness.status(),
+                    readiness.reason(),
+                    remainingMissing.stream().distinct().toList(),
+                    keyFacts.stream().distinct().toList(),
+                    readiness.schoolViolenceLikely()
+            );
+        }
+
+        String status = effectiveReadyStatus(readiness, text);
+        String reason = effectiveReadyReason(readiness, status);
+        boolean schoolViolenceLikely = !"학교폭력 해당성 낮음".equals(status);
+        return new ReportReadiness(
+                true,
+                status,
+                reason,
+                List.of(),
+                keyFacts.stream().distinct().toList(),
+                schoolViolenceLikely
+        );
+    }
+
+    private static boolean isMissingInfoAnsweredByHistory(
+            String missingInfo,
+            String text,
+            long userMessageCount,
+            Set<String> answeredFamilies
+    ) {
+        String family = missingInfoFamily(missingInfo);
+        if ("conversation_depth".equals(family)) {
+            return userMessageCount >= 3 && hasCoreReportAnswers(text, answeredFamilies);
+        }
+        if (family.isBlank()) return false;
+        return answeredFamilies.contains(family) || isConfirmationCandidateAnswered(family, text);
+    }
+
+    private static boolean hasCoreReportAnswers(String text, Set<String> answeredFamilies) {
+        return hasReportAnswer("incident", text, answeredFamilies)
+                && hasReportAnswer("relationship", text, answeredFamilies)
+                && hasReportAnswer("timeline", text, answeredFamilies)
+                && hasReportAnswer("evidence", text, answeredFamilies)
+                && hasReportAnswer("impact", text, answeredFamilies)
+                && hasReportAnswer("goal", text, answeredFamilies);
+    }
+
+    private static boolean hasReportAnswer(String family, String text, Set<String> answeredFamilies) {
+        return answeredFamilies.contains(family) || isConfirmationCandidateAnswered(family, text);
+    }
+
+    private static Set<String> answeredQuestionFamilies(List<Message> history) {
+        Set<String> answered = new HashSet<>();
+        if (history == null || history.isEmpty()) return answered;
+        String pendingFamily = "";
+
+        for (Message message : history) {
+            if (message == null) continue;
+            String role = message.getRole();
+            String content = message.getContent() == null ? "" : message.getContent().trim();
+            if ("assistant".equals(role)) {
+                pendingFamily = questionFamilyFromAssistantText(content);
+                continue;
+            }
+            if ("user".equals(role) && !pendingFamily.isBlank() && isUsableAnswerToQuestion(content)) {
+                answered.add(pendingFamily);
+                answered.addAll(relatedAnswerFamilies(pendingFamily));
+                pendingFamily = "";
+            }
+        }
+        return answered;
+    }
+
+    private static boolean isUsableAnswerToQuestion(String content) {
+        String answer = confirmationAnswerBody(content);
+        return !answer.isBlank() && !isExplicitOffTopicNonsense(answer);
+    }
+
+    private static Set<String> relatedAnswerFamilies(String family) {
+        return switch (family) {
+            case "incident_post", "chat_pattern" -> Set.of("incident");
+            case "post_trace", "evidence_chat", "physical_support", "sexual_context" -> Set.of("evidence");
+            case "post_spread" -> Set.of("evidence", "impact");
+            case "chat_support", "physical_injury", "sexual_support", "actor_stop" -> Set.of("impact");
+            case "actor_recovery" -> Set.of("goal");
+            default -> Set.of();
+        };
+    }
+
+    private static String questionFamilyFromAssistantText(String content) {
+        if (content == null || content.isBlank() || !looksLikeQuestionTurn(content)) return "";
+        if (hasAny(content, "실제로 있었던 행동", "온라인에 올라온 내용", "몸에 어떤 일", "어떤 유형")) return "incident";
+        if (hasAny(content, "상대와의 관계", "학교폭력 절차 기준", "같은 반", "같은 학교", "학교 밖", "학교 관계")) return "relationship";
+        if (hasAny(content, "언제부터", "몇 번", "어떤 빈도", "한 번인지", "지금도", "반복됐나요")) return "timeline";
+        if (hasAny(content, "남아 있는 증거", "증거는 무엇", "캡처", "URL", "작성자 계정", "게시 시간", "확인 가능한 게")) return "evidence";
+        if (hasAny(content, "영향", "걱정되는 부분", "보복", "등교", "불안", "두려운")) return "impact";
+        if (hasAny(content, "필요한 도움", "어떤 도움", "신고", "증거 정리", "안전하게 보호", "거리를 둬야")) return "goal";
+        if (hasAny(content, "같은 사안", "리포트를 생성")) return "final_check";
+        return "";
+    }
+
+    private static String missingInfoFamily(String missingInfo) {
+        if (missingInfo == null) return "";
+        if (missingInfo.contains("무슨 일")) return "incident";
+        if (missingInfo.contains("학교 관계")) return "relationship";
+        if (missingInfo.contains("언제")) return "timeline";
+        if (missingInfo.contains("증거")) return "evidence";
+        if (missingInfo.contains("피해 영향") || missingInfo.contains("회복")) return "impact";
+        if (missingInfo.contains("원하는 도움")) return "goal";
+        if (missingInfo.contains("조금 더")) return "conversation_depth";
+        return "";
+    }
+
+    private static String factForMissingInfo(String missingInfo) {
+        String family = missingInfoFamily(missingInfo);
+        return switch (family) {
+            case "incident" -> "질문 답변 이력으로 사건 내용 확인";
+            case "relationship" -> "질문 답변 이력으로 상대 관계 또는 관계상 제한사항 확인";
+            case "timeline" -> "질문 답변 이력으로 시점 또는 반복성 확인";
+            case "evidence" -> "질문 답변 이력으로 증거 또는 발생 경로 확인";
+            case "impact" -> "질문 답변 이력으로 피해 영향 또는 보호 필요성 확인";
+            case "goal" -> "질문 답변 이력으로 요청한 도움 방향 확인";
+            case "conversation_depth" -> "핵심 확인 항목이 충족되어 리포트 생성 가능";
+            default -> "";
+        };
+    }
+
+    private static String effectiveReadyStatus(ReportReadiness readiness, String text) {
+        if (!"추가 확인 필요".equals(readiness.status())) return readiness.status();
+        if (isPerpetratorText(text)) return "가해 또는 연루 가능성 검토";
+        if (!hasLikelySchoolRelationship(text) || !hasViolenceTypeSignal(text)) return "학교폭력 해당성 낮음";
+        return "학교폭력 가능성 검토";
+    }
+
+    private static String effectiveReadyReason(ReportReadiness readiness, String status) {
+        if ("학교폭력 해당성 낮음".equals(status)) {
+            return "현재 정보만으로는 학교 관계 또는 학교폭력 유형과의 연결이 약합니다.";
+        }
+        if ("추가 확인 필요".equals(readiness.status())) {
+            return "사용자의 확인 답변 이력을 바탕으로 제한사항을 포함해 리포트를 생성할 수 있습니다.";
+        }
+        return readiness.reason();
+    }
+
+    private static boolean hasLikelySchoolRelationship(String text) {
+        return hasAny(text, "같은 반", "같은 학교", "반 친구", "학교 친구", "학교 학생", "선후배", "선배", "후배", "학원 관계", "우리 학교");
+    }
+
+    private static boolean hasViolenceTypeSignal(String text) {
+        return hasPhysicalViolenceSignal(text)
+                || hasSexualViolationSignal(text)
+                || hasPostSignal(text)
+                || hasChatSignal(text)
+                || hasSocialExclusionSignal(text)
+                || hasExtortionSignal(text)
+                || hasStalkingSignal(text)
+                || hasAny(text, "욕", "협박", "모욕", "비하", "비방", "놀림", "소문", "명예훼손");
     }
 
     private static String buildConversationMemory(List<Message> history) {

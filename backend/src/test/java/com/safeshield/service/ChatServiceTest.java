@@ -664,6 +664,72 @@ class ChatServiceTest {
         ).isEmpty());
     }
 
+    @Test
+    void historyAnswersCanCompleteReadinessWithoutKeywordSurveyLoop() {
+        ReportReadiness raw = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "리포트 생성 전에 사안 구조와 요청한 도움 방향을 더 확인해야 합니다.",
+                List.of(
+                        "남아 있는 증거가 무엇인지",
+                        "피해 영향이나 피해 회복을 위해 이미 한 일이 있는지",
+                        "상담 내용을 조금 더 들은 뒤 리포트 생성"
+                ),
+                List.of(
+                        "구체적인 사건 내용 확인",
+                        "상대방과 학교 관계 확인",
+                        "시점 또는 반복성 단서 확인",
+                        "요청한 도움 방향 확인"
+                ),
+                true
+        );
+        List<Message> history = List.of(
+                transientMessage("user", "같은 반 친구가 SNS에 제 사진을 올리고 비방했습니다. 며칠 반복됐고 신고 절차를 알고 싶습니다."),
+                transientMessage("assistant", "지금 남아 있는 증거는 무엇인가요? 캡처, URL, 목격자 중 골라주세요."),
+                transientMessage("user", "정확히는 아직 정리 못 했어요."),
+                transientMessage("assistant", "이 일 때문에 지금 가장 크게 영향을 받은 부분은 무엇인가요?"),
+                transientMessage("user", "그 부분은 말하기가 어렵습니다."),
+                transientMessage("assistant", "상대와의 관계를 학교폭력 절차 기준으로 확인해야 합니다. 같은 반, 같은 학교, 학교 밖 중 어디에 가깝나요?"),
+                transientMessage("user", "같은 반입니다.")
+        );
+        String combined = history.stream()
+                .filter(message -> "user".equals(message.getRole()))
+                .map(Message::getContent)
+                .reduce("", (a, b) -> a + " " + b);
+
+        ReportReadiness effective = ChatService.applyHistoryAnswerState(raw, combined, 4, history);
+
+        assertTrue(effective.ready());
+        assertTrue(effective.missingInfo().isEmpty());
+    }
+
+    @Test
+    void offTopicAnswerDoesNotCompleteMissingCategoryFromQuestionHistory() {
+        ReportReadiness raw = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "증거를 확인해야 합니다.",
+                List.of("남아 있는 증거가 무엇인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+        List<Message> history = List.of(
+                transientMessage("user", "같은 반 친구가 SNS에 제 사진을 올리고 비방했습니다."),
+                transientMessage("assistant", "지금 남아 있는 증거는 무엇인가요? 캡처, URL, 목격자 중 골라주세요."),
+                transientMessage("user", "똥")
+        );
+
+        ReportReadiness effective = ChatService.applyHistoryAnswerState(
+                raw,
+                "같은 반 친구가 SNS에 제 사진을 올리고 비방했습니다. 똥",
+                2,
+                history
+        );
+
+        assertFalse(effective.ready());
+        assertTrue(effective.missingInfo().contains("남아 있는 증거가 무엇인지"));
+    }
+
     private ReportReadiness needsMoreContext() {
         return new ReportReadiness(
                 false,

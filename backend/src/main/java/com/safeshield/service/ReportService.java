@@ -64,6 +64,10 @@ public class ReportService {
     }
 
     public Map<String, Object> generateOrUpdateForSession(User user, Session session, String title) {
+        return generateOrUpdateForSession(user, session, title, null);
+    }
+
+    public Map<String, Object> generateOrUpdateForSession(User user, Session session, String title, ReportReadiness suppliedReadiness) {
         if (session == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "리포트를 만들 상담 세션이 없습니다.");
         }
@@ -81,10 +85,14 @@ public class ReportService {
                 .reduce("", (a, b) -> a + " " + b)
                 .trim();
 
-        return saveReport(user, session, userText, userMessages.size(), title, true);
+        return saveReport(user, session, userText, userMessages.size(), title, true, suppliedReadiness);
     }
 
     public Map<String, Object> generateTemporary(List<Message> messages, String title) {
+        return generateTemporary(messages, title, null);
+    }
+
+    public Map<String, Object> generateTemporary(List<Message> messages, String title, ReportReadiness suppliedReadiness) {
         List<Message> userMessages = messages == null ? List.of() : messages.stream()
                 .filter(m -> "user".equals(m.getRole()))
                 .toList();
@@ -97,7 +105,9 @@ public class ReportService {
                 .reduce("", (a, b) -> a + " " + b)
                 .trim();
 
-        ReportReadiness readiness = analysisService.assessReportReadiness(userText, userMessages.size());
+        ReportReadiness readiness = suppliedReadiness == null
+                ? analysisService.assessReportReadiness(userText, userMessages.size())
+                : suppliedReadiness;
         if (!readiness.ready()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -114,7 +124,13 @@ public class ReportService {
     }
 
     private Map<String, Object> saveReport(User user, Session session, String userText, int userMessageCount, String title, boolean updateExisting) {
-        ReportReadiness readiness = analysisService.assessReportReadiness(userText, userMessageCount);
+        return saveReport(user, session, userText, userMessageCount, title, updateExisting, null);
+    }
+
+    private Map<String, Object> saveReport(User user, Session session, String userText, int userMessageCount, String title, boolean updateExisting, ReportReadiness suppliedReadiness) {
+        ReportReadiness readiness = suppliedReadiness == null
+                ? analysisService.assessReportReadiness(userText, userMessageCount)
+                : suppliedReadiness;
         if (!readiness.ready()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,

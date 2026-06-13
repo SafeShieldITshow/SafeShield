@@ -1,6 +1,7 @@
 package com.safeshield.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.safeshield.dto.ReportReadiness;
 import com.safeshield.model.Message;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +35,26 @@ class ReportServiceTest {
 
         assertEquals("학교폭력 해당성 낮음 - 사이버 폭력", report.get("title"));
         assertTrue(((List<?>) report.get("violence_types")).contains("언어 폭력"));
+        assertTrue(((List<?>) report.get("violence_types")).contains("사이버 폭력"));
+    }
+
+    @Test
+    void temporaryReportUsesSuppliedReadinessFromChatFlow() {
+        ReportReadiness readiness = new ReportReadiness(
+                true,
+                "학교폭력 가능성 검토",
+                "사용자의 확인 답변 이력을 바탕으로 제한사항을 포함해 리포트를 생성할 수 있습니다.",
+                List.of(),
+                List.of("구체적인 사건 내용 확인", "질문 답변 이력으로 증거 또는 발생 경로 확인"),
+                true
+        );
+
+        Map<String, Object> report = reportService.generateTemporary(List.of(
+                user("같은 반 친구가 SNS에 제 사진을 올리고 비방했습니다. 며칠 반복됐고 신고 절차를 알고 싶습니다."),
+                user("정확히는 아직 정리 못 했어요.")
+        ), null, readiness);
+
+        assertEquals("학교폭력 가능성 검토", report.get("assessment_status"));
         assertTrue(((List<?>) report.get("violence_types")).contains("사이버 폭력"));
     }
 
