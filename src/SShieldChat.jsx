@@ -16,6 +16,7 @@ const CONVERSATION_STOPPED_MARKERS = [
     '대화가 중단되었습니다.',
 ];
 const TEMP_REPORT_STORAGE_KEY = 'ss_temp_report';
+const TEMP_REPORT_UPDATED_EVENT = 'ss_temp_report_updated';
 
 const initialMessage = () => ({
     id: 'welcome',
@@ -53,9 +54,20 @@ const storeTemporaryReport = (report) => {
     if (!report) return;
     try {
         sessionStorage.setItem(TEMP_REPORT_STORAGE_KEY, JSON.stringify(report));
+        window.dispatchEvent(new Event(TEMP_REPORT_UPDATED_EVENT));
     } catch {
         // 임시 리포트 저장 실패 시에도 현재 화면 상태로는 이동할 수 있게 둔다.
     }
+};
+
+const reportNoticeText = (report, action = '생성') => {
+    if (!report) return '';
+    const status = report.assessment_status || '판단 정보 없음';
+    const types = Array.isArray(report.violence_types) && report.violence_types.length
+        ? report.violence_types.join(', ')
+        : '분류 정보 없음';
+    const risk = report.risk_score ?? 0;
+    return `리포트가 ${action}되었습니다. 현재 판단: ${status}, 유형: ${types}, 위험도: ${risk}/10입니다.`;
 };
 
 const isStoppedMessage = (text = '') => CONVERSATION_STOPPED_MARKERS.some((marker) => (
@@ -323,6 +335,7 @@ const SShieldChat = () => {
     const [generatingReport, setGeneratingReport] = useState(false);
     const [isSessionLoading, setIsSessionLoading] = useState(false);
     const [isSessionsLoading, setIsSessionsLoading] = useState(false);
+    const [isReplyTyping, setIsReplyTyping] = useState(false);
     const [isGuestMode, setIsGuestMode] = useState(() => !hasToken());
     const [conversationStopped, setConversationStopped] = useState(false);
     const scrollRef = useRef(null);
@@ -338,7 +351,7 @@ const SShieldChat = () => {
     const requestedSessionParam = searchParams.get('session');
     const isGuest = isGuestMode;
     const isCurrentLoading = pendingKeys.has(conversationKey);
-    const isChatBusy = isCurrentLoading || isSessionLoading;
+    const isChatBusy = isCurrentLoading || isSessionLoading || isReplyTyping;
     const isChatLocked = isChatBusy || conversationStopped;
 
     const requireLoginForSavedFeature = () => {
@@ -462,6 +475,7 @@ const SShieldChat = () => {
 
         return () => {
             if (typingTimerRef.current) clearInterval(typingTimerRef.current);
+            setIsReplyTyping(false);
         };
     }, [loadSessions, loadMessagesForSession, requestedSessionParam]);
 
@@ -499,6 +513,7 @@ const SShieldChat = () => {
         const prompts = normalizeConfirmationPrompts(confirmationPrompts);
         let index = 0;
 
+        setIsReplyTyping(true);
         setMessages((prev) => [...clearConfirmationPrompts(prev), { id, type: 'ai', text: '', time: now(), confirmationPrompts: [] }]);
         if (typingTimerRef.current) clearInterval(typingTimerRef.current);
 
@@ -511,6 +526,7 @@ const SShieldChat = () => {
             if (index >= safeReply.length) {
                 clearInterval(typingTimerRef.current);
                 typingTimerRef.current = null;
+                setIsReplyTyping(false);
                 if (prompts.length) {
                     setMessages((prev) => prev.map((message) => (
                         message.id === id ? { ...message, confirmationPrompts: prompts } : message
@@ -586,13 +602,18 @@ const SShieldChat = () => {
                     activateConversation(data.session_id);
                 }
                 const stopped = Boolean(data.conversation_stopped) || isStoppedMessage(data.reply);
-                const generatedReport = data.report || null;
+                const latestReport = data.report || null;
                 setConversationStopped(stopped);
-                setReadyReport(generatedReport);
-                setShowReport(!stopped && Boolean(data.report_ready || generatedReport));
-                const replyText = data.report_generated && generatedReport
-                    ? `${data.reply}\n\n리포트가 생성되었습니다. 아래 리포트 보기 버튼으로 확인할 수 있습니다.`
-                    : data.reply;
+                if (latestReport) {
+                    setReadyReport(latestReport);
+                    if (guestSend) storeTemporaryReport(latestReport);
+                }
+                setShowReport(!stopped && Boolean(data.report_ready || latestReport || readyReport));
+                const reportChanged = latestReport && (data.report_generated || data.report_updated);
+                const notice = reportChanged && !String(data.reply || '').includes('리포트가 ')
+                    ? reportNoticeText(latestReport, data.report_updated ? '갱신' : '생성')
+                    : '';
+                const replyText = notice ? `${data.reply}\n\n${notice}` : data.reply;
                 appendTypingReply(replyText, data.confirmation_prompts);
             }
             if (!guestSend) loadSessions();

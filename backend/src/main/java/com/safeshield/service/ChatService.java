@@ -202,25 +202,31 @@ public class ChatService {
             );
         }
 
+        Map<String, Object> report = null;
+        boolean reportGenerated = false;
+        boolean reportUpdated = false;
         List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
-        String reply = connectReplyToConfirmation(getAiReply(history), confirmationPrompts);
+        if (readiness.ready() && confirmationPrompts.isEmpty()) {
+            ReportService.ReportMutation mutation = reportService.generateOrUpdateForSessionMutation(user, session, "", readiness);
+            report = mutation.report();
+            reportGenerated = mutation.generated();
+            reportUpdated = mutation.updated();
+        } else {
+            report = reportService.refreshReportForSession(user, session, readiness);
+            reportUpdated = report != null;
+        }
+        String reply = appendReportSummary(
+                connectReplyToConfirmation(getAiReply(history), confirmationPrompts),
+                report,
+                reportGenerated,
+                reportUpdated
+        );
 
         Message aiMessage = new Message();
         aiMessage.setSession(session);
         aiMessage.setRole("assistant");
         aiMessage.setContent(reply);
         messageRepository.save(aiMessage);
-
-        Map<String, Object> report = null;
-        boolean reportGenerated = false;
-        boolean reportUpdated;
-        if (readiness.ready() && confirmationPrompts.isEmpty()) {
-            report = reportService.generateOrUpdateForSession(user, session, "", readiness);
-            reportGenerated = true;
-            reportUpdated = true;
-        } else {
-            reportUpdated = reportService.refreshReportsForSession(user, session);
-        }
         long userMessageCount = messageRepository.countBySessionAndRole(session, "user");
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("session_id", session.getId());
@@ -265,14 +271,21 @@ public class ChatService {
             response.put("temporary", true);
             return response;
         }
-        List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
-        String reply = connectReplyToConfirmation(getAiReply(history), confirmationPrompts);
         Map<String, Object> report = null;
         boolean reportGenerated = false;
+        boolean reportUpdated = false;
+        List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
         if (readiness.ready() && confirmationPrompts.isEmpty()) {
             report = reportService.generateTemporary(history, "", readiness);
-            reportGenerated = true;
+            reportUpdated = hasPriorReportSignal(history);
+            reportGenerated = !reportUpdated;
         }
+        String reply = appendReportSummary(
+                connectReplyToConfirmation(getAiReply(history), confirmationPrompts),
+                report,
+                reportGenerated,
+                reportUpdated
+        );
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("session_id", null);
@@ -280,7 +293,7 @@ public class ChatService {
         response.put("user_message_count", userMessageCount(history));
         response.put("new_session_started", false);
         response.put("report_generated", reportGenerated);
-        response.put("report_updated", false);
+        response.put("report_updated", reportUpdated);
         response.put("report", report);
         response.put("report_ready", readiness.ready());
         response.put("report_status", readiness.status());
@@ -394,6 +407,70 @@ public class ChatService {
         String question = firstConfirmationQuestion(prompts);
         if (question.isBlank() || trimmed.contains(question)) return trimmed;
         return trimmed + "\n\n확인을 위해 질문 하나 할게요. " + question;
+    }
+
+    private static String appendReportSummary(
+            String reply,
+            Map<String, Object> report,
+            boolean reportGenerated,
+            boolean reportUpdated
+    ) {
+        if (report == null || (!reportGenerated && !reportUpdated)) return reply;
+        String summary = reportSummaryText(report, reportGenerated ? "생성" : "갱신");
+        String trimmed = reply == null ? "" : reply.trim();
+        if (trimmed.contains("리포트가 생성되었습니다") || trimmed.contains("리포트가 갱신되었습니다")) {
+            return trimmed;
+        }
+        if (isGenericRecordOnlyReply(trimmed)) {
+            return summary;
+        }
+        return trimmed.isBlank() ? summary : trimmed + "\n\n" + summary;
+    }
+
+    private static String reportSummaryText(Map<String, Object> report, String action) {
+        String status = stringValue(report.get("assessment_status"), "판단 정보 없음");
+        String risk = stringValue(report.get("risk_score"), "0");
+        String types = reportTypesText(report.get("violence_types"));
+        return "리포트가 %s되었습니다. 현재 판단: %s, 유형: %s, 위험도: %s/10입니다."
+                .formatted(action, status, types, risk);
+    }
+
+    private static String stringValue(Object value, String fallback) {
+        if (value == null) return fallback;
+        String text = String.valueOf(value).trim();
+        return text.isBlank() ? fallback : text;
+    }
+
+    private static String reportTypesText(Object value) {
+        if (value instanceof List<?> list && !list.isEmpty()) {
+            return list.stream()
+                    .map(String::valueOf)
+                    .filter(item -> !item.isBlank())
+                    .collect(Collectors.joining(", "));
+        }
+        return "분류 정보 없음";
+    }
+
+    private static boolean isGenericRecordOnlyReply(String reply) {
+        if (reply == null || reply.isBlank()) return true;
+        String text = reply.replace("\r", "").trim();
+        return containsAny(text,
+                "방금 답변은 상담 기록에 반영했습니다",
+                "이 내용도 상담 기록에 반영해 두겠습니다",
+                "필요한 내용은 이어지는 대화 안에서 자연스럽게 더 보완하면 됩니다")
+                && text.length() <= 160;
+    }
+
+    private static boolean hasPriorReportSignal(List<Message> history) {
+        if (history == null) return false;
+        return history.stream()
+                .filter(Objects::nonNull)
+                .filter(message -> "assistant".equals(message.getRole()))
+                .map(Message::getContent)
+                .filter(Objects::nonNull)
+                .anyMatch(content -> content.contains("리포트가 생성되었습니다")
+                        || content.contains("리포트가 갱신되었습니다")
+                        || content.contains("리포트 보기 버튼"));
     }
 
     private static String stripDanglingConfirmationLeadIn(String reply) {

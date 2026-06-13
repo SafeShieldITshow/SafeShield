@@ -3,13 +3,22 @@ package com.safeshield.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.safeshield.dto.ReportReadiness;
 import com.safeshield.model.Message;
+import com.safeshield.model.Report;
+import com.safeshield.model.Session;
+import com.safeshield.model.User;
+import com.safeshield.repository.MessageRepository;
+import com.safeshield.repository.ReportRepository;
+import com.safeshield.repository.SessionRepository;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class ReportServiceTest {
 
@@ -56,6 +65,53 @@ class ReportServiceTest {
 
         assertEquals("학교폭력 가능성 검토", report.get("assessment_status"));
         assertTrue(((List<?>) report.get("violence_types")).contains("사이버 폭력"));
+    }
+
+    @Test
+    void refreshReportForSessionReturnsUpdatedReportMap() {
+        User user = new User();
+        user.setId(1L);
+        Session session = new Session();
+        session.setId(10L);
+        session.setUser(user);
+        Report existing = new Report();
+        existing.setId(100L);
+        existing.setUser(user);
+        existing.setSession(session);
+        existing.setTitle("이전 리포트");
+
+        Message first = user("학교에서 맞았고 멍이 들었습니다. 병원 진단서가 있습니다.");
+        first.setSession(session);
+        Message update = user("추가 설명: 상대가 같은 학교 학생이었고 여러 번 때렸습니다. 보복도 걱정됩니다.");
+        update.setSession(session);
+
+        ReportRepository reportRepository = mock(ReportRepository.class);
+        SessionRepository sessionRepository = mock(SessionRepository.class);
+        MessageRepository messageRepository = mock(MessageRepository.class);
+        when(reportRepository.findBySessionOrderByCreatedAtAsc(session)).thenReturn(List.of(existing));
+        when(messageRepository.findBySessionOrderByCreatedAtAsc(session)).thenReturn(List.of(first, update));
+        ReportService service = new ReportService(
+                reportRepository,
+                sessionRepository,
+                messageRepository,
+                new AnalysisService(new LawDataService(), new EvidenceGuideService()),
+                new ObjectMapper()
+        );
+        ReportReadiness readiness = new ReportReadiness(
+                true,
+                "학교폭력 가능성 검토",
+                "추가 대화 내용으로 리포트를 갱신할 수 있습니다.",
+                List.of(),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        Map<String, Object> updated = service.refreshReportForSession(user, session, readiness);
+
+        assertNotNull(updated);
+        assertEquals("학교폭력 가능성 검토", updated.get("assessment_status"));
+        assertTrue(((Double) updated.get("risk_score")) > 4.5);
+        assertTrue(((List<?>) updated.get("violence_types")).contains("신체 폭력"));
     }
 
     private static Message user(String content) {

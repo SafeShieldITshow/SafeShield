@@ -59,6 +59,7 @@ const EVIDENCE_MAP = {
 const DEFAULT_EVIDENCE_KEYS = ['음성 녹음', '메시지 캡처', '일지 작성', '목격자 진술'];
 const MEASURES = ['서면사과', '접촉금지', '학교봉사', '사회봉사', '특별교육', '출석정지', '학급교체', '전학', '퇴학'];
 const TEMP_REPORT_STORAGE_KEY = 'ss_temp_report';
+const TEMP_REPORT_UPDATED_EVENT = 'ss_temp_report_updated';
 
 const readTemporaryReport = () => {
     try {
@@ -206,13 +207,28 @@ const SShieldResult = () => {
             })));
         };
 
-        const temporaryReport = location.state?.report || (temporaryMode ? readTemporaryReport() : null);
-        if (temporaryReport) {
-            applyReport({ ...temporaryReport, temporary: true });
-            setError('');
-            setLoading(false);
+        if (temporaryMode) {
+            const loadTemporaryReport = () => {
+                const temporaryReport = readTemporaryReport() || location.state?.report || null;
+                if (temporaryReport) {
+                    applyReport({ ...temporaryReport, temporary: true });
+                    setError('');
+                } else {
+                    setReport(null);
+                    setError('임시 리포트를 찾을 수 없습니다. 채팅에서 리포트 보기 버튼으로 다시 열어 주세요.');
+                }
+                setLoading(false);
+            };
+
+            loadTemporaryReport();
+            window.addEventListener(TEMP_REPORT_UPDATED_EVENT, loadTemporaryReport);
+            const tempTimer = window.setInterval(() => {
+                if (document.visibilityState === 'visible') loadTemporaryReport();
+            }, 2000);
             return () => {
                 cancelled = true;
+                window.removeEventListener(TEMP_REPORT_UPDATED_EVENT, loadTemporaryReport);
+                window.clearInterval(tempTimer);
             };
         }
 

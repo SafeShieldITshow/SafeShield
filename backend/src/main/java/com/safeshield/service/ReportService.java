@@ -22,6 +22,8 @@ import java.util.Map;
 @Service
 public class ReportService {
 
+    public record ReportMutation(Map<String, Object> report, boolean generated, boolean updated) {}
+
     private final ReportRepository reportRepository;
     private final SessionRepository sessionRepository;
     private final MessageRepository messageRepository;
@@ -68,6 +70,10 @@ public class ReportService {
     }
 
     public Map<String, Object> generateOrUpdateForSession(User user, Session session, String title, ReportReadiness suppliedReadiness) {
+        return generateOrUpdateForSessionMutation(user, session, title, suppliedReadiness).report();
+    }
+
+    public ReportMutation generateOrUpdateForSessionMutation(User user, Session session, String title, ReportReadiness suppliedReadiness) {
         if (session == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "리포트를 만들 상담 세션이 없습니다.");
         }
@@ -85,7 +91,7 @@ public class ReportService {
                 .reduce("", (a, b) -> a + " " + b)
                 .trim();
 
-        return saveReport(user, session, userText, userMessages.size(), title, true, suppliedReadiness);
+        return saveReportMutation(user, session, userText, userMessages.size(), title, true, suppliedReadiness);
     }
 
     public Map<String, Object> generateTemporary(List<Message> messages, String title) {
@@ -128,6 +134,10 @@ public class ReportService {
     }
 
     private Map<String, Object> saveReport(User user, Session session, String userText, int userMessageCount, String title, boolean updateExisting, ReportReadiness suppliedReadiness) {
+        return saveReportMutation(user, session, userText, userMessageCount, title, updateExisting, suppliedReadiness).report();
+    }
+
+    private ReportMutation saveReportMutation(User user, Session session, String userText, int userMessageCount, String title, boolean updateExisting, ReportReadiness suppliedReadiness) {
         ReportReadiness readiness = suppliedReadiness == null
                 ? analysisService.assessReportReadiness(userText, userMessageCount)
                 : suppliedReadiness;
@@ -140,39 +150,46 @@ public class ReportService {
 
         AnalysisResult analysis = analysisService.analyze(userText, readiness);
         List<Report> reports = updateExisting ? reportRepository.findBySessionOrderByCreatedAtAsc(session) : List.of();
+        boolean generated = reports.isEmpty();
         Report report = reports.isEmpty() ? new Report() : reports.get(reports.size() - 1);
         report.setUser(user);
         report.setSession(session);
         applyAnalysis(report, analysis, reports.isEmpty() ? title : generatedOrBlankTitle(report));
 
         reportRepository.save(report);
-        return toMap(report);
+        return new ReportMutation(toMap(report), generated, !generated);
     }
 
     public boolean refreshReportsForSession(User user, Session session) {
-        if (user == null || session == null) return false;
+        return refreshReportForSession(user, session, null) != null;
+    }
+
+    public Map<String, Object> refreshReportForSession(User user, Session session, ReportReadiness suppliedReadiness) {
+        if (user == null || session == null) return null;
         requireOwner(user, session);
 
         List<Report> reports = reportRepository.findBySessionOrderByCreatedAtAsc(session);
-        if (reports.isEmpty()) return false;
+        if (reports.isEmpty()) return null;
 
         List<Message> userMessages = messageRepository.findBySessionOrderByCreatedAtAsc(session).stream()
                 .filter(m -> "user".equals(m.getRole()))
                 .toList();
-        if (userMessages.isEmpty()) return false;
+        if (userMessages.isEmpty()) return null;
 
         String userText = userMessages.stream()
                 .map(Message::getContent)
                 .reduce("", (a, b) -> a + " " + b)
                 .trim();
-        ReportReadiness readiness = analysisService.assessReportReadiness(userText, userMessages.size());
+        ReportReadiness readiness = suppliedReadiness == null
+                ? analysisService.assessReportReadiness(userText, userMessages.size())
+                : suppliedReadiness;
         AnalysisResult analysis = analysisService.analyze(userText, readiness);
 
         for (Report report : reports) {
             applyAnalysis(report, analysis, generatedOrBlankTitle(report));
         }
         reportRepository.saveAll(reports);
-        return true;
+        return toMap(reports.get(reports.size() - 1));
     }
 
     public List<Map<String, Object>> list(User user) {
