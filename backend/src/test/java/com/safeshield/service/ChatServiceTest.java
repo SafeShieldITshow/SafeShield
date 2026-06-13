@@ -295,6 +295,30 @@ class ChatServiceTest {
     }
 
     @Test
+    void fallsBackToSexualContextQuestionWhenMissingInfoPhraseIsUnmapped() {
+        ReportReadiness unclearMissingInfo = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "리포트 작성 전에 추가 확인이 필요합니다.",
+                List.of("확인 정보 부족"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                unclearMissingInfo,
+                "저... 친구한테 성적으로 불쾌한 걸 당했어요. 남자인데 이런 거 상담해도 되나요? " +
+                        "확인 답변: 원하지 않는 신체 접촉이 있었습니다. " +
+                        "확인 답변: 상대는 같은 반 학생입니다. " +
+                        "확인 답변: 최근 비슷한 일이 여러 번 반복됐습니다. 한 달 정도 됐고 학교 가기가 무서워요.",
+                4
+        );
+
+        assertFalse(questions.isEmpty());
+        assertTrue(questions.get(0).contains("기억나는 범위"));
+    }
+
+    @Test
     void rewritesSexualContactReportAwayFromPhysicalViolenceLabel() {
         String adapted = ChatService.adaptSexualViolenceWording(
                 "현재 판단: 이는 학교폭력의 '신체 폭력' 유형에 해당할 수 있습니다.",

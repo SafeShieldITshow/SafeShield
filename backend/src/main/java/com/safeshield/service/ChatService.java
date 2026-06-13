@@ -587,13 +587,22 @@ public class ChatService {
         }
 
         for (String missingInfo : readiness.missingInfo()) {
-            if (missingInfo.contains("무슨 일")) candidates.add(incidentQuestion(text));
-            else if (missingInfo.contains("학교 관계")) candidates.add(relationshipQuestion(text));
-            else if (missingInfo.contains("언제")) candidates.add(timelineQuestion(text));
-            else if (missingInfo.contains("증거")) candidates.add(evidenceQuestion(text));
-            else if (missingInfo.contains("피해 영향") || missingInfo.contains("회복")) candidates.add(impactQuestion(text));
-            else if (missingInfo.contains("원하는 도움")) candidates.add(goalQuestion(text));
-            else if (missingInfo.contains("조금 더")) candidates.addAll(deepDiveQuestions(text, userMessageCount));
+            String info = missingInfo == null ? "" : missingInfo;
+            if (containsAny(info, "무슨 일", "사건 내용", "사안 내용", "행동", "구체")) {
+                candidates.add(incidentQuestion(text));
+            } else if (containsAny(info, "학교 관계", "상대", "관계")) {
+                candidates.add(relationshipQuestion(text));
+            } else if (containsAny(info, "언제", "시점", "횟수", "반복", "기간", "빈도")) {
+                candidates.add(timelineQuestion(text));
+            } else if (containsAny(info, "증거", "자료", "단서", "기록")) {
+                candidates.add(evidenceQuestion(text));
+            } else if (containsAny(info, "피해 영향", "영향", "회복", "불안", "두려움", "보복")) {
+                candidates.add(impactQuestion(text));
+            } else if (containsAny(info, "원하는 도움", "도움", "지원", "요청", "방향")) {
+                candidates.add(goalQuestion(text));
+            } else if (info.contains("조금 더")) {
+                candidates.addAll(deepDiveQuestions(text, userMessageCount));
+            }
         }
 
         boolean hadCandidates = !candidates.isEmpty();
@@ -672,7 +681,7 @@ public class ChatService {
         if (readiness == null || readiness.missingInfo().isEmpty()) return false;
         if (hadAnsweredCandidate) return false;
         if (hasAnsweredDeepDive(text)) return false;
-        return hadCandidates || readiness.missingInfo().stream().anyMatch(info -> info.contains("조금 더"));
+        return true;
     }
 
     private static boolean wasCandidateAnsweredAfterQuestion(ConfirmationCandidate candidate, List<Message> history) {
