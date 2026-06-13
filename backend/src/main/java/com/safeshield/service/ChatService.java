@@ -698,10 +698,18 @@ public class ChatService {
                 continue;
             }
             if (asked && "user".equals(role) && !content.isBlank()) {
-                return true;
+                return isConfirmationCandidateAnswered(candidate.id(), content)
+                        || isUncertainConfirmationAnswer(content);
             }
         }
         return false;
+    }
+
+    private static boolean isUncertainConfirmationAnswer(String content) {
+        String text = content == null ? "" : content.trim();
+        return containsAny(text,
+                "모르", "기억 안", "기억나지", "정리 어렵", "말하기 어렵", "확인하지 못",
+                "특정이 어렵", "아직 확실하지", "아직 모르", "아직 못", "잘 모르");
     }
 
     private static boolean wasCandidateQuestionAlreadyAsked(ConfirmationCandidate candidate, List<Message> history) {
@@ -719,7 +727,8 @@ public class ChatService {
                 continue;
             }
             if (asked && "user".equals(role) && !content.isBlank()) {
-                userRespondedAfterAsk = true;
+                userRespondedAfterAsk = isConfirmationCandidateAnswered(candidate.id(), content)
+                        || isUncertainConfirmationAnswer(content);
             }
         }
         return asked && userRespondedAfterAsk;

@@ -498,6 +498,27 @@ class ChatServiceTest {
     }
 
     @Test
+    void doesNotTreatDifferentCategoryAnswerAfterQuestionAsAnswered() {
+        ReportReadiness evidenceMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "증거를 확인해야 합니다.",
+                List.of("남아 있는 증거가 무엇인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+        List<Message> history = List.of(
+                transientMessage("user", "친구한테 성적으로 불쾌한 일을 당했고 원하지 않는 신체 접촉이 있었습니다."),
+                transientMessage("assistant", "확인을 위해 질문 하나 할게요. 지금 남길 수 있는 단서는 무엇인가요? 당시 장소·시간, 주변에 있던 사람, 이후 메시지, 상담 기록 중 가까운 것을 골라주세요."),
+                transientMessage("user", "확인 답변: 최근 비슷한 일이 여러 번 반복됐습니다.")
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(evidenceMissing, history);
+
+        assertTrue(questions.stream().anyMatch(question -> question.contains("지금 남길 수 있는 단서")));
+    }
+
+    @Test
     void treatsShortAnswerPrefixAsConfirmationAnswerForPostSpread() {
         ReportReadiness moreContext = needsMoreContext();
         List<Message> history = List.of(
