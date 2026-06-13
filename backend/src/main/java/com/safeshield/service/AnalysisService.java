@@ -365,6 +365,14 @@ public class AnalysisService {
         } else if (!severeSignal) {
             cap = 5.8;
         }
+        if (violenceTypes.contains("성폭력")) {
+            boolean sexualMedia = containsAny(t, "사진", "영상", "촬영", "유포", "온라인", "dm", "디엠");
+            boolean repeatedOrForcedContact = repeated || ongoing || longTerm
+                    || containsAny(t, "자꾸", "강제로", "원하지 않는", "신체 접촉", "만졌", "만지는", "성추행");
+            if (!sexualMedia && !severeDistress && !directThreat && !weaponOrGroup) {
+                cap = Math.min(cap, repeatedOrForcedContact ? 8.4 : 7.6);
+            }
+        }
 
         return Math.round(Math.max(1.0, Math.min(cap, score)) * 10.0) / 10.0;
     }

@@ -296,6 +296,7 @@ class AnalysisServiceTest {
         assertTrue(result.violenceTypes().contains("성폭력"));
         assertFalse(result.violenceTypes().contains("신체 폭력"), "원하지 않은 성적 접촉을 일반 신체폭력 선택지로 오분류하면 안 됩니다.");
         assertTrue(result.riskScore() >= 7.0, "원하지 않은 성적 접촉과 반복·불안 단서가 있으면 위험도를 낮게 산정하면 안 됩니다.");
+        assertTrue(result.riskScore() <= 8.4, "촬영·유포·극단 위험·직접 협박이 없으면 자동 최고점으로 과측정하지 않습니다.");
     }
 
     @Test
@@ -313,6 +314,7 @@ class AnalysisServiceTest {
         assertTrue(readiness.status().contains("학교폭력 해당성 낮음"));
         assertTrue(result.violenceTypes().contains("성폭력"));
         assertTrue(result.riskScore() >= 7.0, "학교폭력 절차 해당성이 낮아도 성폭력 피해 위험도는 낮게 제한하면 안 됩니다.");
+        assertTrue(result.riskScore() <= 8.4, "학교폭력 해당성이 낮아도 별도 최고위험 신호가 없으면 위험도는 8점대에서 제한합니다.");
     }
 
     @Test
