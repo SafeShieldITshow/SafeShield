@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import './SShieldResult.css';
 import { api, clearSession, hasToken } from './api.js';
 import SessionHistory from './SessionHistory.jsx';
+import { formatKoreanDateTime } from './time.js';
 
 const EVIDENCE_MAP = {
     '음성 녹음': { icon: '녹음', desc: '위협, 욕설, 협박 발언을 날짜와 시간 정보가 남도록 보관하세요.' },
@@ -157,18 +158,7 @@ const detailValue = (details = [], label) => {
     return item ? String(item).slice(prefix.length).trim() : '';
 };
 
-const formatDate = (value) => {
-    if (!value) return '';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleString('ko-KR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-    });
-};
+const formatDate = (value) => formatKoreanDateTime(value);
 
 const SShieldResult = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);

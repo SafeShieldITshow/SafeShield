@@ -134,7 +134,7 @@ public class AnalysisService {
                 && hasEvidenceOrChannel
                 && hasImpactOrRecovery
                 && hasUserGoal;
-        int minimumCoreMessages = violenceTypes.contains("성폭력") ? 5 : 4;
+        int minimumCoreMessages = 6;
         boolean enoughConversation = userMessageCount >= requiredUserMessages
                 || (coreFactsReady && userMessageCount >= minimumCoreMessages);
         if (relevantInput && !enoughConversation) {

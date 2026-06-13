@@ -267,6 +267,29 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void doesNotBecomeReadyTooEarlyEvenWhenCoreFactsArePresent() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "같은 반 친구들이 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
+                        "캡처가 있고 불안해서 등교가 힘듭니다. 보복 없이 멈추게 하고 싶습니다.",
+                5
+        );
+
+        assertFalse(readiness.ready(), "핵심 정보가 모였어도 5턴 이하에서 리포트를 너무 빨리 열면 안 됩니다.");
+        assertTrue(readiness.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
+    }
+
+    @Test
+    void becomesReadyAfterEnoughConversationWhenCoreFactsArePresent() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "같은 반 친구들이 단톡방에서 욕설과 비방을 여러 번 했습니다. " +
+                        "캡처가 있고 불안해서 등교가 힘듭니다. 보복 없이 멈추게 하고 싶습니다.",
+                6
+        );
+
+        assertTrue(readiness.ready(), "핵심 정보가 있고 최소 대화량을 채우면 리포트 생성이 가능해야 합니다.");
+    }
+
+    @Test
     void recognizesDurationConfirmationAnswerAsTimelineFact() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "같은 학원 선배가 카톡에서 욕설과 비방을 했습니다. 캡처가 있고 불안해서 신고 상담을 원합니다. " +
@@ -482,7 +505,7 @@ class AnalysisServiceTest {
     }
 
     @Test
-    void opensLowApplicabilityReportWhenPhysicalCoreFactsAreCompleteInFourTurns() {
+    void waitsBeforeLowApplicabilityReportWhenPhysicalCoreFactsAreCompleteInFourTurns() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "학교에서 맞았고 멍이 들었는데 어떻게 해야 하나요? " +
                         "확인 답변: 상대는 학교 관계자가 아닙니다. " +
@@ -491,7 +514,23 @@ class AnalysisServiceTest {
                 4
         );
 
-        assertTrue(readiness.ready(), "핵심 정보가 다 찼으면 더 이상 임의 턴 수 때문에 멈추면 안 됩니다.");
+        assertFalse(readiness.ready(), "핵심 정보가 다 찼어도 4턴만으로는 리포트를 너무 빨리 열면 안 됩니다.");
+        assertTrue(readiness.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
+    }
+
+    @Test
+    void opensLowApplicabilityReportAfterEnoughConversation() {
+        ReportReadiness readiness = analysisService.assessReportReadiness(
+                "학교에서 맞았고 멍이 들었는데 어떻게 해야 하나요? " +
+                        "확인 답변: 상대는 학교 관계자가 아닙니다. " +
+                        "확인 답변: 정확한 시점이나 횟수는 아직 기억나지 않습니다. " +
+                        "확인 답변: 병원 진단서나 진료 기록이 있습니다. " +
+                        "확인 답변: 불안하고 다시 마주칠까봐 걱정됩니다. " +
+                        "확인 답변: 보호자와 상의하고 신고 가능성을 알고 싶습니다.",
+                6
+        );
+
+        assertTrue(readiness.ready(), "핵심 정보가 다 차고 최소 대화량이 쌓이면 리포트를 열어야 합니다.");
         assertFalse(readiness.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
         assertTrue(readiness.status().contains("학교폭력 해당성 낮음"));
     }

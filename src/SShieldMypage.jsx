@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import './SShieldMypage.css';
 import { api, clearSession } from './api.js';
 import SessionHistory from './SessionHistory.jsx';
+import { formatKoreanNumericDateTime } from './time.js';
 
 const getRiskLevel = (score) => {
     if (score >= 7) return { label: `높음 ${score}`, cls: 'high' };
@@ -69,11 +70,7 @@ const SShieldMypage = () => {
         return Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '-';
     })();
 
-    const formatDate = (iso) => {
-        if (!iso) return '';
-        const d = new Date(iso);
-        return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    };
+    const formatDate = (iso) => formatKoreanNumericDateTime(iso);
 
     return (
         <div className="wrapper">

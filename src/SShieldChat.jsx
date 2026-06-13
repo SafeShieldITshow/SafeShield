@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import './SShieldChat.css';
 import { api, clearSession, hasToken, setSession } from './api.js';
 import SessionHistory from './SessionHistory.jsx';
+import { formatKoreanTime } from './time.js';
 
 const EXAMPLE_QUESTIONS = [
     '친구들이 단체 채팅방에서 계속 욕하고 놀립니다.',
@@ -116,7 +117,7 @@ const selectedConfirmationOptions = (draft) => {
 };
 
 function now() {
-    return new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    return formatKoreanTime();
 }
 
 function renderInlineMarkdown(text) {
@@ -302,7 +303,7 @@ const toUiMessage = (message) => ({
     type: message.role === 'assistant' ? 'ai' : 'user',
     text: message.role === 'assistant' ? removeInlineDisclaimer(message.content) : message.content,
     time: message.created_at
-        ? new Date(message.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+        ? formatKoreanTime(message.created_at)
         : now(),
 });
 
@@ -827,7 +828,15 @@ const SShieldChat = () => {
 
             <main className="ss-chat-main">
                 <header className="ss-chat-header">
-                    <div className="ss-chat-logo">S-<span className="logo-accent">Shield</span></div>
+                    <button
+                        type="button"
+                        className="ss-chat-logo"
+                        onClick={handleNewChat}
+                        aria-label="새 상담 시작"
+                        title="새 상담 시작"
+                    >
+                        S-<span className="logo-accent">Shield</span>
+                    </button>
                     <nav className="ss-mobile-nav" aria-label="모바일 메뉴">
                         <button className="active">상담</button>
                         <button onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/result'))}>결과</button>

@@ -16,10 +16,26 @@
 .ss-chat-header  { padding: 17px 0 12px; }
 
 .ss-chat-logo {
+  display: block;
+  border: 0;
+  background: transparent;
+  color: inherit;
   font-size: 19px;
   font-weight: 700;
   text-align: center;
   margin-bottom: 14px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.2;
+}
+.ss-chat-logo:hover { color: var(--text); }
+.ss-chat-logo:focus-visible {
+  outline: 2px solid var(--accent-light);
+  outline-offset: 4px;
+  border-radius: 6px;
 }
 .ss-logo-w { color: var(--text); }
 .ss-logo-p { color: var(--accent-light); }

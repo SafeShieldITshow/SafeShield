@@ -1,13 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, setSession } from './api.js';
+import { formatKoreanCompactDateTime } from './time.js';
 import './SessionHistory.css';
 
-const formatSessionDate = (iso) => {
-    if (!iso) return '';
-    const date = new Date(iso);
-    return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-};
+const formatSessionDate = (iso) => formatKoreanCompactDateTime(iso);
 
 const SessionHistory = ({ sessions: providedSessions, activeSessionId, onSelect, variant = 'sidebar', loading = false }) => {
     const [loadedSessions, setLoadedSessions] = useState([]);
