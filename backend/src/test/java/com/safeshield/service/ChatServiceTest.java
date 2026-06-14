@@ -93,6 +93,22 @@ class ChatServiceTest {
     }
 
     @Test
+    void stripsUnsupportedLegalLineInsteadOfDroppingWholeExternalAiReply() {
+        String reply = """
+                SNS에 사진과 비방 글이 올라온 상황이라면 사이버 폭력 가능성을 검토할 수 있습니다.
+                정보통신망법 제70조는 온라인 명예훼손에 관한 조항입니다.
+                지금은 게시물 URL, 작성자 계정, 게시 시간이 보이는 화면을 보관하세요.
+                """;
+
+        String sanitized = ChatService.sanitizeUnsupportedLegalReferences(reply, LAW_CONTEXT);
+
+        assertFalse(sanitized.contains("정보통신망법"));
+        assertTrue(sanitized.contains("사이버 폭력 가능성"));
+        assertTrue(sanitized.contains("게시물 URL"));
+        assertTrue(ChatService.isGeneratedReplyValid(sanitized, LAW_CONTEXT));
+    }
+
+    @Test
     void rejectsForeignLanguageWord() {
         String reply = """
                 SNS 게시물로 힘든 상황입니다.

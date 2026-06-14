@@ -2761,7 +2761,10 @@ public class ChatService {
     }
 
     private String requireValidGeneratedReply(String reply, PromptContext promptContext) {
-        String sanitized = sanitizeGeneratedReply(reply);
+        String sanitized = sanitizeUnsupportedLegalReferences(
+                sanitizeGeneratedReply(reply),
+                promptContext.lawContext()
+        );
         boolean valid = promptContext.mode() == ReplyMode.CONVERSATION
                 ? isGeneratedConversationReplyValid(sanitized, promptContext.lawContext())
                 : isGeneratedReplyValid(sanitized, promptContext.lawContext());
@@ -2887,6 +2890,29 @@ public class ChatService {
                         .replace("당신은 ", ""))
                 .collect(Collectors.joining("\n"))
                 .trim();
+    }
+
+    static String sanitizeUnsupportedLegalReferences(String reply, String lawContext) {
+        if (reply == null || reply.isBlank()) return "";
+        Map<String, Set<String>> allowed = parseAllowedCitations(lawContext);
+        return reply.lines()
+                .filter(line -> isAllowedLegalReferenceLine(line, allowed))
+                .collect(Collectors.joining("\n"))
+                .trim();
+    }
+
+    private static boolean isAllowedLegalReferenceLine(String line, Map<String, Set<String>> allowed) {
+        if (line == null || line.isBlank()) return true;
+        for (String marker : KNOWN_LAW_MARKERS) {
+            if (line.contains(marker) && allowed.keySet().stream().noneMatch(
+                    law -> law.equals(marker) || isSupportedAlias(marker, law))) {
+                return false;
+            }
+        }
+        List<String> references = extractArticleReferences(line);
+        if (references.isEmpty()) return true;
+        String law = findLawForLine(line, allowed.keySet());
+        return law != null && allowed.get(law).containsAll(references);
     }
 
     private static boolean containsRemovableBadReplyPhrase(String line) {
