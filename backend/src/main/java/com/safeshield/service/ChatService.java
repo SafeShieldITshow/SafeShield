@@ -2766,10 +2766,10 @@ public class ChatService {
                 sanitizeGeneratedReply(reply),
                 promptContext.lawContext()
         );
-        boolean valid = promptContext.mode() == ReplyMode.CONVERSATION
-                ? isGeneratedConversationReplyValid(sanitized, promptContext.lawContext())
-                : isGeneratedReplyValid(sanitized, promptContext.lawContext());
-        if (!valid) {
+        if (sanitized.isBlank()
+                || !usesAllowedCharacters(sanitized)
+                || containsForbiddenTemplatePhrase(sanitized)
+                || hasUnsafePhysicalViolenceAdvice(sanitized)) {
             throw new IllegalStateException("AI 응답이 안전 또는 법령 검증을 통과하지 못했습니다.");
         }
         return sanitized;
@@ -2872,6 +2872,8 @@ public class ChatService {
                 .filter(line -> !line.contains("추가 확인 필요가 아니므로"))
                 .filter(line -> !containsDanglingQuestionLeadIn(line))
                 .filter(line -> !containsRemovableBadReplyPhrase(line))
+                .filter(line -> !containsForbiddenTemplatePhrase(line))
+                .filter(line -> !hasUnsafePhysicalViolenceAdvice(line))
                 .map(ChatService::removeUncontrolledQuestionSentences)
                 .map(line -> line
                         .replace("니깐요", "니까요")
