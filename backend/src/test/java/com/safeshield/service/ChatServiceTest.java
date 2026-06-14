@@ -82,6 +82,17 @@ class ChatServiceTest {
     }
 
     @Test
+    void acceptsSafeAnalysisReplyEvenWhenSectionsAreMissing() {
+        String reply = """
+                같은 반 친구가 반복해서 욕설과 조롱을 했다면 언어 폭력과 사이버 폭력 가능성을 함께 볼 수 있습니다.
+                학교폭력 예방 및 대책에 관한 법률 제2조는 학교 안팎에서 학생을 대상으로 한 신체·정신상 피해 행위를 학교폭력 판단 기준으로 봅니다.
+                지금은 캡처 원본, 날짜가 보이는 화면, 참여자 목록을 보관하고 보호자나 담임에게 먼저 공유하는 것이 좋습니다.
+                """;
+
+        assertTrue(ChatService.isGeneratedReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
     void rejectsForeignLanguageWord() {
         String reply = """
                 SNS 게시물로 힘든 상황입니다.
@@ -131,7 +142,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void rejectsAnalysisTemplateInConversationalReply() {
+    void acceptsSafeAnalysisTemplateInConversationalReplyToKeepExternalAiUsable() {
         String reply = """
                 🔎 현재 판단
                 감정 표현이 확인됩니다.
@@ -146,7 +157,7 @@ class ChatServiceTest {
                 보호자에게 말하세요.
                 """;
 
-        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+        assertTrue(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
     }
 
     @Test
@@ -193,6 +204,21 @@ class ChatServiceTest {
     }
 
     @Test
+    void sanitizesChoiceLessQuestionBeforeValidatingExternalAiReply() {
+        String reply = """
+                게시물의 URL이나 링크가 있다는 것은 중요한 증거가 될 수 있습니다.
+                혹시 이 게시물이 올라온 SNS 계정의 주인이 누구인지 짐작 가는 부분이 있으신가요?
+                지금은 작성자 계정과 게시 시간을 함께 보관하는 것이 중요합니다.
+                """;
+
+        String sanitized = ChatService.sanitizeGeneratedReply(reply);
+
+        assertFalse(sanitized.contains("?"));
+        assertFalse(sanitized.contains("있으신가요"));
+        assertTrue(ChatService.isGeneratedConversationReplyValid(sanitized, LAW_CONTEXT));
+    }
+
+    @Test
     void rejectsRepeatedSmallActionTemplateAndWrongPhysicalOptions() {
         String repeated = """
                 지금 당장 할 수 있는 작은 행동 2가지를 알려드릴게요.
@@ -206,20 +232,24 @@ class ChatServiceTest {
     }
 
     @Test
-    void rejectsAwkwardRepeatedConversationStyle() {
+    void acceptsAwkwardButSafeConversationStyleAfterNormalization() {
         String reply = """
                 같은 반 학생이니깐요. 혼자 감당하지 않아도 된다는 걸 기억하세요.
                 증거가 많이 있으니깐요. 캡처도 있으니깐요.
                 """;
 
-        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+        String sanitized = ChatService.sanitizeGeneratedReply(reply);
+
+        assertTrue(sanitized.contains("니까요"));
+        assertFalse(sanitized.contains("니깐요"));
+        assertTrue(ChatService.isGeneratedConversationReplyValid(sanitized, LAW_CONTEXT));
     }
 
     @Test
-    void rejectsAwkwardSingleLineBecauseEnding() {
+    void acceptsAwkwardButSafeSingleLineBecauseEnding() {
         String reply = "그런 일들이 며칠 동안 계속해서 올라와서요.";
 
-        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+        assertTrue(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
     }
 
     @Test

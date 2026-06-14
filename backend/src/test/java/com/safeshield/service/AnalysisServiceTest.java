@@ -3,6 +3,7 @@ package com.safeshield.service;
 import com.safeshield.dto.ReportReadiness;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -620,6 +621,33 @@ class AnalysisServiceTest {
                 "리포트 핵심 상황에는 실제로 추가된 행위들이 정리되어야 합니다.");
         assertTrue(bodilyWaste.keyFindings().stream().anyMatch(item ->
                 item.contains("가중·완화 단서:") && item.contains("배설물 관련 신체적 모욕")));
+    }
+
+    @Test
+    void coversBroadSchoolViolenceScenarioMatrixWithoutEmptyTypesOrFixedScores() {
+        ReportReadiness readiness = readySchoolViolence();
+        record Scenario(String text, String expectedType, double minRisk) {}
+        List<Scenario> scenarios = List.of(
+                new Scenario("같은 반 친구가 여러 번 때리고 멍이 들었으며 멍 사진이 있습니다.", "신체 폭력", 6.0),
+                new Scenario("같은 반 친구들이 단톡방에서 욕설과 모욕을 반복했고 캡처가 있습니다.", "언어 폭력", 4.0),
+                new Scenario("같은 학교 학생이 SNS에 제 사진과 비방 글을 공개로 올렸고 URL이 있습니다.", "사이버 폭력", 4.0),
+                new Scenario("반 친구들이 계속 저만 빼고 따돌리고 단체 활동에서 배제합니다.", "따돌림", 4.0),
+                new Scenario("같은 반 학생이 원하지 않는 신체 접촉을 여러 번 했고 말하기가 부끄럽습니다.", "성폭력", 7.0),
+                new Scenario("선배가 집 앞에서 기다리고 계속 연락하며 따라와서 무섭습니다.", "스토킹", 6.0),
+                new Scenario("같은 학교 친구가 돈을 내놓으라고 강요하고 여러 번 빼앗았습니다.", "갈취", 6.0)
+        );
+
+        HashSet<Double> scores = new HashSet<>();
+        for (Scenario scenario : scenarios) {
+            var result = analysisService.analyze(scenario.text(), readiness);
+            assertTrue(result.violenceTypes().contains(scenario.expectedType()),
+                    scenario.expectedType() + " 유형을 놓치면 안 됩니다: " + scenario.text());
+            assertTrue(result.riskScore() >= scenario.minRisk(),
+                    scenario.expectedType() + " 위험도가 대표 사안 기준보다 낮게 묶이면 안 됩니다.");
+            assertFalse(result.keyFindings().isEmpty(), "리포트 사건 정리와 판단 근거가 비어 있으면 안 됩니다.");
+            scores.add(result.riskScore());
+        }
+        assertTrue(scores.size() >= 4, "서로 다른 학폭 유형들이 같은 위험도 값으로만 고정되면 안 됩니다.");
     }
 
     @Test

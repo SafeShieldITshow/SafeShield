@@ -72,11 +72,6 @@ public class ChatService {
                     + "|제\\s*(\\d+)\\s*의\\s*(\\d+)\\s*조"
                     + "|제\\s*(\\d+)\\s*조"
     );
-    private static final Pattern ASCII_WORD_PATTERN = Pattern.compile("[A-Za-z]+");
-    private static final Set<String> ALLOWED_ASCII_WORDS = Set.of(
-            "AI", "SNS", "URL", "DM", "CCTV", "PDF", "ID", "IP",
-            "JPG", "JPEG", "PNG", "S", "SHIELD"
-    );
     private static final List<String> KNOWN_LAW_MARKERS = List.of(
             "학교폭력 예방 및 대책에 관한 법률",
             "학교폭력예방법",
@@ -131,6 +126,8 @@ public class ChatService {
     private volatile long geminiDisabledUntil = 0;
     private volatile long deepSeekDisabledUntil = 0;
     private volatile String lastProvider = "none";
+    private volatile String lastProviderFailure = "";
+    private volatile String lastProviderFailureReason = "";
 
     public ChatService(SessionRepository sessionRepository, MessageRepository messageRepository,
                        LawApiService lawApiService, AnalysisService analysisService,
@@ -2769,27 +2766,21 @@ public class ChatService {
                 ? isGeneratedConversationReplyValid(sanitized, promptContext.lawContext())
                 : isGeneratedReplyValid(sanitized, promptContext.lawContext());
         if (!valid) {
-            throw new IllegalStateException("AI 응답이 언어 또는 법령 검증을 통과하지 못했습니다.");
+            throw new IllegalStateException("AI 응답이 안전 또는 법령 검증을 통과하지 못했습니다.");
         }
         return sanitized;
     }
 
     static boolean isGeneratedConversationReplyValid(String reply, String lawContext) {
-        if (reply == null || reply.isBlank() || reply.length() > 900) return false;
+        if (reply == null || reply.isBlank() || reply.length() > 1400) return false;
         if (containsForbiddenTemplatePhrase(reply)) return false;
-        if (reply.contains("관련 법률")
-                || reply.contains("증거 확보")
-                || reply.contains("보관해야 할 증거")
-                || reply.contains("다음 단계")
-                || reply.contains("⚖️")
-                || reply.contains("🗂️")) {
-            return false;
-        }
         if (!usesAllowedCharacters(reply)) return false;
-        if (hasUnnaturalConversationStyle(reply)) return false;
         if (hasUnsafePhysicalViolenceAdvice(reply)) return false;
         if (hasUncontrolledQuestion(reply)) return false;
+        return hasOnlyAllowedLegalReferences(reply, lawContext);
+    }
 
+    private static boolean hasOnlyAllowedLegalReferences(String reply, String lawContext) {
         Map<String, Set<String>> allowed = parseAllowedCitations(lawContext);
         for (String marker : KNOWN_LAW_MARKERS) {
             if (reply.contains(marker) && allowed.keySet().stream().noneMatch(
@@ -2804,24 +2795,6 @@ public class ChatService {
             if (law == null || !allowed.get(law).containsAll(references)) return false;
         }
         return true;
-    }
-
-    private static boolean hasUnnaturalConversationStyle(String reply) {
-        String text = reply == null ? "" : reply.trim();
-        if (text.contains("니깐요")) return true;
-        if (countOccurrences(text, "니까요") >= 2) return true;
-        if (countOccurrences(text, "같은 반 학생") >= 2) return true;
-        if (text.matches("(?s).{0,120}(해서요|라서요|여서요|어서요|있어서요|올라와서요)[.!?。]?\\s*$")) return true;
-        if (countRepeatedSentenceEndings(text, "요.") >= 4 && text.length() < 180) return true;
-
-        String[] sentences = text.split("(?<=[.!?。])\\s+|\\R+");
-        Set<String> compacted = new HashSet<>();
-        for (String sentence : sentences) {
-            String normalized = sentence.replaceAll("[\\s.,!?。]", "").trim();
-            if (normalized.length() < 8) continue;
-            if (!compacted.add(normalized)) return true;
-        }
-        return false;
     }
 
     private static boolean hasUncontrolledQuestion(String reply) {
@@ -2844,55 +2817,13 @@ public class ChatService {
         return !hasSafetyAction;
     }
 
-    private static int countOccurrences(String text, String needle) {
-        if (text == null || needle == null || needle.isEmpty()) return 0;
-        int count = 0;
-        int index = 0;
-        while ((index = text.indexOf(needle, index)) >= 0) {
-            count++;
-            index += needle.length();
-        }
-        return count;
-    }
-
-    private static int countRepeatedSentenceEndings(String text, String ending) {
-        int count = 0;
-        for (String sentence : text.split("(?<=[.!?。])\\s+|\\R+")) {
-            if (sentence.trim().endsWith(ending)) count++;
-        }
-        return count;
-    }
-
     static boolean isGeneratedReplyValid(String reply, String lawContext) {
-        if (reply == null || reply.isBlank() || reply.length() > 1800) return false;
+        if (reply == null || reply.isBlank() || reply.length() > 2400) return false;
         if (containsForbiddenTemplatePhrase(reply)) return false;
-        if (!reply.contains("관련 법률")
-                || !(reply.contains("보관해야 할 증거") || reply.contains("증거 확보"))
-                || !reply.contains("다음 단계")) {
-            return false;
-        }
         if (!usesAllowedCharacters(reply)) return false;
-
-        Map<String, Set<String>> allowed = parseAllowedCitations(lawContext);
-        if (allowed.isEmpty()) return false;
-
-        for (String marker : KNOWN_LAW_MARKERS) {
-            if (reply.contains(marker) && allowed.keySet().stream().noneMatch(
-                    law -> law.equals(marker) || isSupportedAlias(marker, law))) {
-                return false;
-            }
-        }
-
-        int citationCount = 0;
-        for (String line : reply.split("\\R")) {
-            List<String> references = extractArticleReferences(line);
-            if (references.isEmpty()) continue;
-            citationCount += references.size();
-
-            String law = findLawForLine(line, allowed.keySet());
-            if (law == null || !allowed.get(law).containsAll(references)) return false;
-        }
-        return citationCount >= 1 && citationCount <= 3;
+        if (hasUnsafePhysicalViolenceAdvice(reply)) return false;
+        if (hasUncontrolledQuestion(reply)) return false;
+        return hasOnlyAllowedLegalReferences(reply, lawContext);
     }
 
     private static boolean containsForbiddenTemplatePhrase(String reply) {
@@ -2934,7 +2865,7 @@ public class ChatService {
                 && (reply.contains("있") || reply.contains("계신")));
     }
 
-    private static String sanitizeGeneratedReply(String reply) {
+    static String sanitizeGeneratedReply(String reply) {
         if (reply == null) return "";
         return stripConfirmationQuestionSection(reply).lines()
                 .filter(line -> !(line.contains("일반적인 법률 정보") && line.contains("대체하지")))
@@ -2942,7 +2873,10 @@ public class ChatService {
                 .filter(line -> !line.contains("추가 확인 질문 없이"))
                 .filter(line -> !line.contains("추가 확인 필요가 아니므로"))
                 .filter(line -> !containsDanglingQuestionLeadIn(line))
+                .filter(line -> !containsRemovableBadReplyPhrase(line))
+                .map(ChatService::removeUncontrolledQuestionSentences)
                 .map(line -> line
+                        .replace("니깐요", "니까요")
                         .replace("사용자가", "말해준 내용이")
                         .replace("사용자는", "지금은")
                         .replace("피해자는", "피해를 겪은 쪽은")
@@ -2953,6 +2887,33 @@ public class ChatService {
                         .replace("당신은 ", ""))
                 .collect(Collectors.joining("\n"))
                 .trim();
+    }
+
+    private static boolean containsRemovableBadReplyPhrase(String line) {
+        return containsAny(line,
+                "지금 당장 할 수 있는 작은 행동 2가지",
+                "상담 내용을 다시 한번 확인",
+                "상담 내용을 다시 한 번 확인",
+                "어떤 부분이 특히 어려운지 다시",
+                "맞음, 밀침, 넘어짐, 상처",
+                "선생님이나 어른이 계신가요",
+                "채팅방에 참여하고 있는 친구들 중에 선생님")
+                || (line.contains("채팅방")
+                && (line.contains("어른") || line.contains("선생님"))
+                && (line.contains("있") || line.contains("계신")));
+    }
+
+    private static String removeUncontrolledQuestionSentences(String line) {
+        if (line == null || line.isBlank()) return "";
+        StringBuilder kept = new StringBuilder();
+        for (String sentence : line.split("(?<=[?？])\\s*")) {
+            String trimmed = sentence.trim();
+            if (trimmed.isBlank()) continue;
+            if (hasUncontrolledQuestion(trimmed)) continue;
+            if (!kept.isEmpty()) kept.append(' ');
+            kept.append(trimmed);
+        }
+        return kept.toString();
     }
 
     private static String stripConfirmationQuestionSection(String reply) {
@@ -3163,10 +3124,6 @@ public class ChatService {
             if (script == Character.UnicodeScript.LATIN && codePoint > 127) return false;
         }
 
-        Matcher words = ASCII_WORD_PATTERN.matcher(reply);
-        while (words.find()) {
-            if (!ALLOWED_ASCII_WORDS.contains(words.group().toUpperCase(Locale.ROOT))) return false;
-        }
         return true;
     }
 
@@ -3205,6 +3162,10 @@ public class ChatService {
 
     private long cooldownFor(Exception error) {
         if (error instanceof RestClientResponseException response
+                && response.getStatusCode().value() == 402) {
+            return 30 * 60_000L;
+        }
+        if (error instanceof RestClientResponseException response
                 && response.getStatusCode().value() == 429) {
             return 30_000L;
         }
@@ -3221,6 +3182,8 @@ public class ChatService {
         } else if (error.getMessage() != null && !error.getMessage().isBlank()) {
             reason += ": " + compactLogMessage(error.getMessage());
         }
+        lastProviderFailure = provider.toLowerCase(Locale.ROOT);
+        lastProviderFailureReason = reason;
         System.err.println("[AI] " + provider + " 호출 실패, 다음 공급자로 전환 (" + reason + ")");
     }
 
@@ -3235,7 +3198,9 @@ public class ChatService {
                 "gemini", geminiApiKey != null && !geminiApiKey.isBlank(),
                 "deepseek", !effectiveDeepSeekApiKey().isBlank(),
                 "claude", isClaudeBackupAvailable(),
-                "last_provider", lastProvider
+                "last_provider", lastProvider,
+                "last_failure_provider", lastProviderFailure,
+                "last_failure_reason", lastProviderFailureReason
         );
     }
 
