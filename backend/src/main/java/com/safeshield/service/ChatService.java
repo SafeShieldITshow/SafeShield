@@ -1002,7 +1002,8 @@ public class ChatService {
 
     private static boolean hasPhysicalViolenceSignal(String text) {
         return hasAny(text, "맞았", "맞고", "맞거나", "때렸", "폭행", "가격", "밀쳤", "밀침",
-                "밀쳐", "넘어뜨", "멍", "상처", "통증", "다쳤", "출혈", "골절");
+                "밀쳐", "넘어뜨", "멍", "상처", "통증", "다쳤", "출혈", "골절",
+                "던졌", "던진", "던지", "투척", "우유곽", "물건을 던", "들이붓", "끼얹", "부었", "뿌렸");
     }
 
     private static boolean hasBodilyWasteIncidentSignal(String text) {
@@ -2237,17 +2238,20 @@ public class ChatService {
 
     private boolean containsSevereNewIncident(String text) {
         return containsAny(text, "또 맞", "또 때", "때렸", "맞았", "출혈", "골절", "응급실", "흉기", "칼",
+                "던졌", "던지", "우유곽", "들이붓", "끼얹", "부었", "뿌렸",
                 "성추행", "성폭행", "성적으로", "원하지 않는", "만졌", "자살", "자해", "죽고 싶", "보복", "협박");
     }
 
     private boolean isPhysicalViolenceSignal(String text) {
-        return containsAny(text, "맞았", "맞고", "때렸", "폭행", "밀쳤", "멍", "상처", "통증", "다쳤");
+        return containsAny(text, "맞았", "맞고", "때렸", "폭행", "밀쳤", "멍", "상처", "통증", "다쳤",
+                "던졌", "던지", "우유곽", "들이붓", "끼얹", "부었", "뿌렸");
     }
 
     private boolean hasCaseFactSignal(String text) {
         return containsAny(text,
                 "학교", "같은 반", "반 친구", "친구", "선배", "후배", "학생", "담임", "선생", "학원",
                 "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
+                "던졌", "던지", "우유곽", "들이붓", "끼얹", "부었", "뿌렸",
                 "sns", "카톡", "단톡", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "성적으로",
                 "신체 접촉", "원하지 않는", "만졌", "불쾌", "갈취", "스토킹",
                 "가해", "피해", "캡처", "url", "진단", "병원", "목격", "사과", "삭제", "보호자");
@@ -2626,7 +2630,14 @@ public class ChatService {
     }
 
     private static boolean hasLikelySchoolRelationship(String text) {
-        return hasAny(text, "같은 반", "같은 학교", "반 친구", "학교 친구", "학교 학생", "선후배", "선배", "후배", "학원 관계", "우리 학교");
+        return hasAny(text, "같은 반", "같은 학교", "반 친구", "학교 친구", "학교 학생", "선후배", "선배", "후배", "학원 관계", "우리 학교")
+                || hasSchoolLocationContext(text);
+    }
+
+    private static boolean hasSchoolLocationContext(String text) {
+        return hasAny(text,
+                "학교에서", "학교 안", "학교 내", "교내", "교실", "복도", "운동장", "급식실", "화장실",
+                "보건실", "등교", "하교", "학교 앞", "학교 주변", "쉬는 시간", "점심시간", "수업 중", "방과 후");
     }
 
     private static boolean hasViolenceTypeSignal(String text) {

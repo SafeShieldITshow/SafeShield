@@ -913,6 +913,45 @@ class ChatServiceTest {
     }
 
     @Test
+    void schoolLocationKeepsEffectiveStatusLikelyWhenRelationshipIsLimited() {
+        ReportReadiness raw = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "리포트 생성 전에 사안 구조와 요청한 도움 방향을 더 확인해야 합니다.",
+                List.of("상담 내용을 조금 더 들은 뒤 리포트 생성"),
+                List.of(
+                        "구체적인 사건 내용 확인",
+                        "상대방과 학교 관계 확인",
+                        "시점 또는 반복성 단서 확인",
+                        "증거 또는 발생 경로 단서 확인",
+                        "피해 영향 또는 회복 노력 확인",
+                        "요청한 도움 방향 확인"
+                ),
+                true
+        );
+        List<Message> history = List.of(
+                transientMessage("user", "학교에서 맞았고 멍이 들었는데 어떻게 해야 하나요?"),
+                transientMessage("assistant", "상대와의 관계를 학교폭력 절차 기준으로 확인해야 합니다."),
+                transientMessage("user", "확인 답변: 상대는 학교 관계자가 아닙니다."),
+                transientMessage("assistant", "언제부터 몇 번 있었고, 지금도 계속되고 있나요?"),
+                transientMessage("user", "확인 답변: 지금도 계속되고 있습니다."),
+                transientMessage("assistant", "신체 피해를 확인할 자료가 무엇인가요?"),
+                transientMessage("user", "확인 답변: 멍이나 상처 사진이 있습니다."),
+                transientMessage("user", "저한테 우유곽도 던졌고 우유를 제 머리에 들이붓기도 했어요.")
+        );
+        String combined = history.stream()
+                .filter(message -> "user".equals(message.getRole()))
+                .map(Message::getContent)
+                .reduce("", (a, b) -> a + " " + b);
+
+        ReportReadiness effective = ChatService.applyHistoryAnswerState(raw, combined, 6, history);
+
+        assertTrue(effective.ready());
+        assertTrue(effective.schoolViolenceLikely());
+        assertTrue(effective.status().contains("학교폭력 가능성 검토"));
+    }
+
+    @Test
     void offTopicAnswerDoesNotCompleteMissingCategoryFromQuestionHistory() {
         ReportReadiness raw = new ReportReadiness(
                 false,

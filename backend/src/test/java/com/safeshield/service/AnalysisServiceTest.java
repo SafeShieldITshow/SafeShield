@@ -554,7 +554,7 @@ class AnalysisServiceTest {
     }
 
     @Test
-    void opensLowApplicabilityReportAfterEnoughConversation() {
+    void schoolLocationPhysicalCaseRemainsLikelyEvenWithLimitedRelationship() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "학교에서 맞았고 멍이 들었는데 어떻게 해야 하나요? " +
                         "확인 답변: 상대는 학교 관계자가 아닙니다. " +
@@ -567,7 +567,47 @@ class AnalysisServiceTest {
 
         assertTrue(readiness.ready(), "핵심 정보가 다 차고 최소 대화량이 쌓이면 리포트를 열어야 합니다.");
         assertFalse(readiness.missingInfo().contains("상담 내용을 조금 더 들은 뒤 리포트 생성"));
+        assertTrue(readiness.status().contains("학교폭력 가능성 검토"),
+                "학교에서 발생한 신체피해는 상대 학교 관계가 제한적이어도 낮음으로 고정하면 안 됩니다.");
+        assertTrue(readiness.schoolViolenceLikely());
+    }
+
+    @Test
+    void physicalRiskIncreasesWhenObjectThrowingAndHumiliatingPouringAreAdded() {
+        String baseText = "학교에서 맞았고 멍이 들었는데 어떻게 해야 하나요? " +
+                "확인 답변: 상대는 학교 관계자가 아닙니다. " +
+                "확인 답변: 지금도 계속되고 있습니다. " +
+                "확인 답변: 멍이나 상처 사진이 있습니다. " +
+                "확인 답변: 불안하고 다시 마주칠까봐 걱정됩니다. " +
+                "확인 답변: 보호자와 상의하고 신고 가능성을 알고 싶습니다.";
+        String aggravatedText = baseText + " 저한테 우유 다 먹고 난 우유곽도 던졌어요. 우유를 제 머리에 들이붓기도 했어요.";
+
+        ReportReadiness baseReadiness = analysisService.assessReportReadiness(baseText, 6);
+        ReportReadiness aggravatedReadiness = analysisService.assessReportReadiness(aggravatedText, 8);
+        var base = analysisService.analyze(baseText, baseReadiness);
+        var aggravated = analysisService.analyze(aggravatedText, aggravatedReadiness);
+
+        assertTrue(baseReadiness.schoolViolenceLikely());
+        assertTrue(aggravatedReadiness.schoolViolenceLikely());
+        assertTrue(base.riskScore() > 4.5, "학교 내 반복 신체피해는 4.5에 묶이면 안 됩니다.");
+        assertTrue(aggravated.riskScore() >= base.riskScore() + 0.4,
+                "우유곽 투척과 머리에 우유를 붓는 추가 행위는 리포트 위험도에 반영되어야 합니다.");
+    }
+
+    @Test
+    void clearlyDisconnectedExternalPhysicalCaseCanStayLowApplicability() {
+        String text = "학교와 무관한 동네 사람이 집 근처에서 저를 밀쳐 멍이 들었습니다. " +
+                "확인 답변: 상대는 학교 관계자가 아닙니다. " +
+                "확인 답변: 오늘 한 번 있었습니다. " +
+                "확인 답변: 멍 사진이 있습니다. " +
+                "확인 답변: 불안합니다. " +
+                "확인 답변: 보호자와 신고 가능성을 알고 싶습니다.";
+
+        ReportReadiness readiness = analysisService.assessReportReadiness(text, 6);
+
+        assertTrue(readiness.ready());
         assertTrue(readiness.status().contains("학교폭력 해당성 낮음"));
+        assertFalse(readiness.schoolViolenceLikely());
     }
 
     @Test

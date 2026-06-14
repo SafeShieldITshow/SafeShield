@@ -88,7 +88,7 @@ public class AnalysisService {
 
         boolean hasConcreteIncident = containsAny(t, "때렸", "맞았", "욕", "모욕", "비방", "사진", "게시", "댓글", "협박",
                 "따돌", "돈", "갈취", "성희롱", "성추행", "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는",
-                "괴롭", "놀림", "밀쳤", "사과",
+                "괴롭", "놀림", "밀쳤", "던졌", "던지", "우유곽", "들이붓", "끼얹", "부었", "뿌렸", "사과",
                 "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는")
                 || bodilyWasteIncident;
         boolean hasRelationshipAnswer = hasDefiniteSchoolRelationship(t)
@@ -203,6 +203,7 @@ public class AnalysisService {
         return containsAny(text,
                 "학교", "같은 반", "반 친구", "친구", "선배", "후배", "동급생", "학생", "담임", "선생", "학원",
                 "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
+                "던졌", "던지", "우유곽", "들이붓", "끼얹", "부었", "뿌렸",
                 "sns", "카톡", "단톡", "dm", "디엠", "게시", "댓글", "사진", "성추행", "성희롱", "성적으로",
                 "신체 접촉", "원하지 않는", "만졌", "만지는", "불쾌", "갈취", "스토킹",
                 "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담");
@@ -213,7 +214,8 @@ public class AnalysisService {
         List<String> types = new ArrayList<>();
         boolean mildExpressionOnly = isMildExpressionOrMisunderstanding(t);
 
-        if (containsAny(t, "때렸", "맞았", "폭행", "밀쳤", "발로", "주먹", "상처", "멍", "상해", "다쳤")
+        if (containsAny(t, "때렸", "맞았", "폭행", "밀쳤", "발로", "주먹", "상처", "멍", "상해", "다쳤",
+                "던졌", "던지", "투척", "우유곽", "물건을 던", "들이붓", "끼얹", "부었", "뿌렸")
                 || hasBodilyWasteIncidentSignal(t)) {
             types.add("신체 폭력");
         }
@@ -277,10 +279,14 @@ public class AnalysisService {
                 || (containsAny(t, "병원") && !noMedicalOrInjury);
         boolean directThreat = containsAny(t, "죽이", "때리겠", "찾아가", "가만 안", "협박") && !noThreat;
         boolean weaponOrGroup = containsAny(t, "흉기", "칼", "위험한 물건", "여러 명", "단체로", "무리");
+        boolean objectThrowing = containsAny(t, "던졌", "던진", "던지", "투척", "우유곽", "물건을 던", "맞혔");
+        boolean humiliatingPhysical = containsAny(t, "들이붓", "끼얹", "부었", "부어", "쏟", "뿌렸", "침을 뱉", "머리에", "얼굴에", "우유를");
         boolean resolved = containsAny(t, "삭제", "사과", "멈췄", "그만뒀", "해결");
         boolean mildExpression = isMildExpressionOrMisunderstanding(t);
         boolean noMeaningfulImpact = hasNoMeaningfulImpact(t);
         boolean minorContext = containsAny(t, "별거 아니", "사소", "가벼운", "오해", "장난", "실수", "기분만", "기분이 상한 정도");
+        boolean physicalType = violenceTypes.contains("신체 폭력");
+        boolean aggravatedPhysical = physicalType && (objectThrowing || humiliatingPhysical || hasBodilyWasteIncidentSignal(t));
 
         if (repeated) score += 0.75;
         if (longTerm) score += 0.55;
@@ -290,6 +296,8 @@ public class AnalysisService {
         if (identityExposure) score += 0.55;
         if (directThreat) score += 1.0;
         if (weaponOrGroup) score += 0.65;
+        if (physicalType && objectThrowing) score += 0.35;
+        if (physicalType && humiliatingPhysical) score += 0.45;
         if (distress) score += 0.75;
         if (severeDistress) score += 1.0;
         if (resolved && !ongoing && !repeated) score -= 0.4;
@@ -339,7 +347,6 @@ public class AnalysisService {
             score = Math.max(score, factorBasedScore);
         }
 
-        boolean physicalType = violenceTypes.contains("신체 폭력");
         boolean seriousPhysicalSignal = physicalType && (injuryScore >= 0.9 || directThreat || weaponOrGroup);
         boolean severeSignal = severeDistress || injuryScore >= 1.1 || directThreat || weaponOrGroup
                 || seriousPhysicalSignal
@@ -367,12 +374,12 @@ public class AnalysisService {
             if (distress) cap = Math.max(cap, 7.0);
             if (containsAny(t, "보복", "학교 못", "등교 못")) cap = Math.max(cap, 7.2);
             cap = Math.min(cap, 7.4);
-        } else if (physicalType && oneOff && injuryScore <= 0.5 && !directThreat && !weaponOrGroup) {
+        } else if (physicalType && oneOff && injuryScore <= 0.5 && !directThreat && !weaponOrGroup && !aggravatedPhysical) {
             cap = 5.3;
         } else if (physicalType && injuryScore <= 0.5 && !directThreat && !weaponOrGroup && (repeated || longTerm || ongoing)) {
-            cap = 6.8;
+            cap = aggravatedPhysical ? 7.4 : 6.8;
         } else if (physicalType && injuryScore <= 0.5 && !directThreat && !weaponOrGroup) {
-            cap = 5.8;
+            cap = aggravatedPhysical ? 6.5 : 5.8;
         } else if (!severeSignal) {
             cap = 5.8;
         }
@@ -455,6 +462,9 @@ public class AnalysisService {
         if (types.contains("스토킹")) seriousness = Math.max(seriousness, 3);
         if (types.contains("신체 폭력")) {
             seriousness = Math.max(seriousness, 2);
+            if (containsAny(t, "던졌", "던진", "던지", "투척", "우유곽", "물건을 던", "들이붓", "끼얹", "부었", "뿌렸", "침을 뱉")) {
+                seriousness = Math.max(seriousness, 3);
+            }
             if (containsAny(t, "진단", "치료", "병원", "상해", "출혈")) seriousness = Math.max(seriousness, 3);
             if (containsAny(t, "골절", "응급실", "수술", "기절", "흉기", "칼")) seriousness = Math.max(seriousness, 4);
         }
@@ -469,7 +479,8 @@ public class AnalysisService {
 
         int intent = 1;
         if (!types.isEmpty()) intent = 2;
-        if (containsAny(t, "협박", "죽이", "찾아가", "유포", "게시", "단톡", "단체", "여러 명", "돈", "강요")) {
+        if (containsAny(t, "협박", "죽이", "찾아가", "유포", "게시", "단톡", "단체", "여러 명", "돈", "강요",
+                "던졌", "던지", "들이붓", "끼얹", "부었", "뿌렸")) {
             intent = Math.max(intent, 3);
         }
         if (containsAny(t, "보복", "신고하면", "흉기", "칼", "강제로", "촬영", "퍼뜨")) {
@@ -491,6 +502,7 @@ public class AnalysisService {
         int aggravation = 0;
         if (containsAny(t, "보복", "신고하면", "협박", "때리겠", "찾아가", "장애", "특수학급", "여러 명", "단체로", "무리")) aggravation += 1;
         if (containsAny(t, "흉기", "칼", "촬영", "유포", "골절", "응급실", "수술")) aggravation += 1;
+        if (containsAny(t, "던졌", "던진", "던지", "투척", "우유곽", "물건을 던", "들이붓", "끼얹", "부었", "뿌렸", "침을 뱉")) aggravation += 1;
         if (containsAny(t, "반성 안", "사과 안", "계속하겠", "삭제 안")) aggravation += 1;
         aggravation = Math.min(3, aggravation);
 
@@ -595,7 +607,13 @@ public class AnalysisService {
     }
 
     private boolean hasSchoolContext(String text) {
-        return hasDefiniteSchoolRelationship(text);
+        return hasDefiniteSchoolRelationship(text) || hasSchoolLocationContext(text);
+    }
+
+    private boolean hasSchoolLocationContext(String text) {
+        return containsAny(text,
+                "학교에서", "학교 안", "학교 내", "교내", "교실", "복도", "운동장", "급식실", "화장실",
+                "보건실", "등교", "하교", "학교 앞", "학교 주변", "쉬는 시간", "점심시간", "수업 중", "방과 후");
     }
 
     private boolean hasDefiniteSchoolRelationship(String text) {
