@@ -5,15 +5,14 @@
 
 .login-container {
   width: 100%;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
-  background:
-    radial-gradient(circle at 50% 42%, rgba(95, 82, 208, 0.14), transparent 34%),
-    var(--bg);
+  padding: 88px 20px 36px;
+  background: var(--bg);
 }
 
 /* 상단 로고 */
@@ -23,12 +22,12 @@
 
 .top-logo {
   position: absolute;
-  top: 32px;
-  left: 40px;
-  color: var(--text-sub);
+  top: 30px;
+  left: 38px;
+  color: var(--text);
   font-size: 19px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
+  font-weight: 800;
+  letter-spacing: 0;
   transition: color var(--ease), transform var(--ease);
   cursor: pointer;
   user-select: none;
@@ -45,44 +44,45 @@
 .form-wrapper {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  width: min(100%, 400px);
-  max-width: 400px;
-  padding: 30px 34px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--r-md);
-  background: rgba(39, 38, 46, 0.92);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
-  backdrop-filter: blur(10px);
+  align-items: stretch;
+  width: min(100%, 416px);
+  max-width: 416px;
+  padding: 28px 30px 30px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.24);
   box-sizing: border-box;
   animation: slideUpFade 0.7s ease-out forwards;
 }
 
 .login-heading {
   width: 100%;
-  text-align: center;
+  text-align: left;
   margin-bottom: 22px;
 }
 
 .login-kicker {
   display: block;
-  color: var(--accent-light);
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.1em;
   margin-bottom: 8px;
 }
 
 .login-heading h1 {
   margin: 0 0 8px;
-  font-size: 21px;
-  letter-spacing: -0.04em;
+  font-size: 22px;
+  line-height: 1.32;
+  letter-spacing: 0;
 }
 
 .login-heading p {
   margin: 0;
   color: #a8a8b8;
   font-size: 12px;
+  line-height: 1.55;
 }
 
 /* 탭 */
@@ -97,20 +97,22 @@
   display: flex;
   position: relative;
   width: 100%;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: var(--r-md);
-  margin-bottom: 24px;
-  padding: 4px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--r-sm);
+  margin-bottom: 22px;
+  padding: 3px;
 }
 
 .tab-active-bar {
   position: absolute;
-  top: 4px;
-  left: 4px;
-  width: calc(50% - 4px);
-  height: calc(100% - 8px);
-  background: var(--accent);
-  border-radius: var(--r-md);
+  top: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  height: calc(100% - 6px);
+  background: rgba(126, 116, 240, 0.22);
+  border: 1px solid rgba(126, 116, 240, 0.22);
+  border-radius: var(--r-sm);
   transition: transform var(--ease-menu);
   z-index: 1;
 }
@@ -119,12 +121,12 @@
 
 .tab-btn-item {
   flex: 1;
-  height: 38px;
+  height: 36px;
   border: none;
   background: transparent;
   color: var(--text-sub);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 700;
   font-family: var(--font);
   cursor: pointer;
   position: relative;
@@ -136,7 +138,7 @@
 /* 입력 */
 .input-group-container {
   width: 100%;
-  margin-bottom: 14px;
+  margin-bottom: 13px;
   display: flex;
   flex-direction: column;
 }
@@ -160,17 +162,18 @@
 .input-label {
   color: var(--text-sub);
   font-size: 12px;
+  font-weight: 600;
   margin-bottom: 7px;
-  padding-left: 6px;
+  padding-left: 0;
 }
 
 .clean-purple-input {
   width: 100%;
   height: 44px;
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--r-md);
-  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--r-sm);
+  padding: 0 14px;
   color: var(--text);
   font-size: 13px;
   font-family: var(--font);
@@ -180,8 +183,8 @@
 .clean-purple-input::placeholder { color: #7f7f8f; }
 .clean-purple-input:focus {
   outline: none;
-  border-color: rgba(126, 116, 240, 0.74);
-  box-shadow: 0 0 0 3px rgba(126, 116, 240, 0.16);
+  border-color: rgba(126, 116, 240, 0.62);
+  box-shadow: 0 0 0 2px rgba(126, 116, 240, 0.14);
 }
 .clean-purple-input:disabled {
   opacity: 0;
@@ -191,7 +194,7 @@
   width: 100%;
   margin: 0 0 12px;
   padding: 10px 12px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   box-sizing: border-box;
   font-size: 12px;
   line-height: 1.5;
@@ -216,7 +219,7 @@
   height: 44px;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   color: var(--text-sub);
   font-size: 14px;
   font-family: var(--font);
@@ -241,16 +244,16 @@
   height: 46px;
   background: var(--accent);
   border: none;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   color: var(--text);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 800;
   font-family: var(--font);
   cursor: pointer;
-  transition: all var(--ease);
-  box-shadow: var(--shadow-sm);
+  transition: background var(--ease);
+  box-shadow: none;
 }
-.main-action-btn:hover  { background: var(--accent-hover); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.main-action-btn:hover  { background: var(--accent-hover); }
 .main-action-btn:active { transform: scale(0.98); }
 
 /* 구분선 */
@@ -258,10 +261,10 @@
   display: flex;
   align-items: center;
   width: 100%;
-  margin: 13px 0;
+  margin: 14px 0;
   gap: 12px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 .divider::before,
 .divider::after {
@@ -277,7 +280,7 @@
   height: 44px;
   background: #fff;
   border: 1px solid #dadce0;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   color: #3c4043;
   font-size: 13px;
   font-weight: 500;
@@ -287,9 +290,9 @@
   justify-content: center;
   gap: 10px;
   cursor: pointer;
-  transition: box-shadow var(--ease), background var(--ease);
+  transition: border-color var(--ease), background var(--ease);
 }
-.google-login-btn:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.2); background: #f8f8f8; }
+.google-login-btn:hover { border-color: #b8bcc2; background: #f8f8f8; }
 
 @media (max-width: 600px) {
   .login-container {
@@ -305,9 +308,10 @@
   }
 
   .form-wrapper {
-    padding: 26px 22px;
+    padding: 24px 22px 26px;
     width: calc(100vw - 32px);
     max-width: none;
     align-self: flex-start;
+    box-shadow: none;
   }
 }

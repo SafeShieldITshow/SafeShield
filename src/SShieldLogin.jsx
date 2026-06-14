@@ -87,24 +87,28 @@ function SShieldLogin() {
 
             <div className="form-wrapper animated-entrance">
                 <div className="login-heading">
-                    <span className="login-kicker">SAFE LEGAL GUIDE</span>
-                    <h1>{isSignup ? '계정을 만들고 상담을 시작하세요' : '다시 만나서 반가워요'}</h1>
-                    <p>상담 기록과 분석 리포트는 계정에 안전하게 저장됩니다.</p>
+                    <span className="login-kicker">S-SHIELD ACCOUNT</span>
+                    <h1>{isSignup ? '계정 만들기' : 'S-Shield 로그인'}</h1>
+                    <p>
+                        {isSignup
+                            ? '계정을 만들면 상담 기록과 분석 리포트를 저장할 수 있습니다.'
+                            : '상담 기록과 분석 리포트를 저장하려면 로그인하세요.'}
+                    </p>
                 </div>
 
                 <div className="tab-group-container">
-                    <div className={`tab-active-bar ${isSignup ? 'pos-left' : 'pos-right'}`}></div>
-                    <button
-                        className={`tab-btn-item ${isSignup ? 'selected' : ''}`}
-                        onClick={() => switchTab('signup')}
-                    >
-                        회원가입
-                    </button>
+                    <div className={`tab-active-bar ${isSignup ? 'pos-right' : 'pos-left'}`}></div>
                     <button
                         className={`tab-btn-item ${!isSignup ? 'selected' : ''}`}
                         onClick={() => switchTab('login')}
                     >
                         로그인
+                    </button>
+                    <button
+                        className={`tab-btn-item ${isSignup ? 'selected' : ''}`}
+                        onClick={() => switchTab('signup')}
+                    >
+                        회원가입
                     </button>
                 </div>
 
