@@ -272,12 +272,19 @@ class ChatServiceTest {
     @Test
     void rejectsUnsafePhysicalViolenceAdvice() {
         String reply = """
-                학교에서 맞았고 멍이 들었는데요. 그 감정은 정말 힘들고 혼자 감당하기도 어려울 것 같아요.
-                하지만 지금은 안전하고, 혼자서도 괜찮은 곳에 계신 것 같아요.
+                학교에서 맞았고 멍이 들었는데요. 그 감정은 정말 힘들었을 것 같아요.
+                하지만 혼자서도 괜찮은 곳에 계신 것 같아요.
                 멍이 들었을 때는 잘 쉬고, 물을 많이 마시고, 따뜻한 물로 목욕을 해보세요.
                 """;
 
         assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
+    void acceptsDoNotHandleAloneEmpathyPhrase() {
+        String reply = "혼자 감당하지 않아도 됩니다. 지금 말한 내용은 신체 폭력 단서로 상담 기록에 반영됩니다.";
+
+        assertTrue(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
     }
 
     @Test
