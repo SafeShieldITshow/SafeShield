@@ -102,14 +102,14 @@ function MainHome() {
                 </p>
 
                 <div className="anim-7">
-                    <button className="start-btn" onClick={() => navigate('/chat')}>
+                    <button className="start-btn" onClick={() => navigate('/chat?new=1')}>
                         시작하기
                     </button>
                     <p className="info-note">* 상담 기록과 리포트 저장을 위해 로그인이 필요합니다.</p>
                 </div>
             </div>
 
-            <div className="chat-wrapper">
+            <div className="chat-wrapper" aria-hidden="true">
                 <div className="bubble b-white-1"></div>
                 <div className="bubble b-purple-1"></div>
                 <div className="bubble b-white-2"></div>

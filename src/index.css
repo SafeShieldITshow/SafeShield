@@ -267,22 +267,23 @@ html, body {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 0 0 12px;
+  padding: 0 0 10px;
   animation: fadeUp 0.4s 0.4s ease both;
   opacity: 0;
   animation-fill-mode: both;
 }
 
 .example-chip {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text-sub);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #c9c7d5;
   padding: 8px 13px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   font-size: 12px;
   font-family: var(--font);
   cursor: pointer;
   transition: all var(--ease);
+  white-space: nowrap;
 }
 .example-chip:hover {
   border-color: var(--accent-light);
@@ -365,9 +366,9 @@ html, body {
 }
 
 .insightCard {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
+  background: rgba(255, 255, 255, 0.052);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--r-md);
   padding: 16px;
   text-align: center;
 }
@@ -503,11 +504,24 @@ html, body {
   font: 600 12px var(--font);
   padding: 7px 10px;
   border-radius: var(--r-pill);
+  cursor: pointer;
+  transition: background var(--ease), color var(--ease), border-color var(--ease);
 }
 
 .ss-mobile-nav button.active {
   color: var(--text);
   background: var(--accent-dim);
+}
+
+.ss-mobile-nav button:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ss-mobile-nav button:last-child {
+  color: #ffffff;
+  background: rgba(126, 116, 240, 0.2);
+  border: 1px solid rgba(126, 116, 240, 0.34);
 }
 
 .ss-side-action-btn {
@@ -520,14 +534,42 @@ html, body {
   color: var(--text);
   font: 600 13px var(--font);
   cursor: pointer;
+  transition: background var(--ease), border-color var(--ease), transform var(--ease);
+}
+
+.ss-side-action-btn:hover {
+  border-color: rgba(126, 116, 240, 0.6);
+  background: rgba(126, 116, 240, 0.16);
+  transform: translateY(-1px);
+}
+
+.logo-button,
+.ss-logo-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1.2;
+}
+
+.logo-button:focus-visible,
+.ss-logo-button:focus-visible,
+.ss-side-action-btn:focus-visible,
+.ss-mobile-nav button:focus-visible {
+  outline: 2px solid var(--accent-light);
+  outline-offset: 3px;
 }
 
 @media (max-width: 800px) {
   .ss-mobile-nav {
     display: flex;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 4px;
     margin-top: 10px;
+    padding: 0 12px;
   }
 }
 

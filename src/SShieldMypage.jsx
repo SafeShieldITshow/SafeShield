@@ -71,6 +71,7 @@ const SShieldMypage = () => {
     })();
 
     const formatDate = (iso) => formatKoreanNumericDateTime(iso);
+    const startNewChat = () => navigate('/chat?new=1');
 
     return (
         <div className="wrapper">
@@ -87,11 +88,12 @@ const SShieldMypage = () => {
                         <nav className="ss-nav-list">
                             <div className="ss-nav-item" onClick={() => navigate('/result')}><span className="ss-emoji-icon">R</span><span className="ss-nav-text">분석 결과</span></div>
                             <div className="ss-nav-item active"><span className="ss-emoji-icon">M</span><span className="ss-nav-text">마이페이지</span></div>
-                            <div className="ss-nav-item" onClick={() => navigate('/chat')}><span className="ss-emoji-icon">C</span><span className="ss-nav-text">상담</span></div>
+                            <div className="ss-nav-item" onClick={startNewChat}><span className="ss-emoji-icon">C</span><span className="ss-nav-text">상담</span></div>
                         </nav>
                         <SessionHistory sessions={sessions} />
                         <div className="ss-logout-section">
                             <div className="ss-divider"></div>
+                            <button className="ss-side-action-btn" onClick={startNewChat}>새 상담</button>
                             <button className="ss-logout-btn" onClick={() => setShowLogoutConfirm(true)}>로그아웃</button>
                         </div>
                     </div>
@@ -100,14 +102,29 @@ const SShieldMypage = () => {
 
             <div className="container">
                 <header className="header">
-                    <h1 className="logo">S-<span className="logo-accent">Shield</span></h1>
+                    <div className="pageHeaderTop">
+                        <span aria-hidden="true"></span>
+                        <button
+                            type="button"
+                            className="logo logo-button"
+                            onClick={startNewChat}
+                            aria-label="새 상담 시작"
+                            title="새 상담 시작"
+                        >
+                            S-<span className="logo-accent">Shield</span>
+                        </button>
+                        <div className="headerActions">
+                            <button type="button" className="pageActionBtn" onClick={startNewChat}>새 상담</button>
+                        </div>
+                    </div>
                     <nav className="ss-mobile-nav" aria-label="모바일 메뉴">
-                        <button onClick={() => navigate('/chat')}>상담</button>
+                        <button onClick={startNewChat}>상담</button>
                         <button onClick={() => navigate('/result')}>결과</button>
                         <button className="active">마이</button>
                         <button onClick={() => document.getElementById('session-history')?.scrollIntoView({ behavior: 'smooth' })}>
                             기록
                         </button>
+                        <button onClick={startNewChat}>새 상담</button>
                     </nav>
                 </header>
 
@@ -152,7 +169,7 @@ const SShieldMypage = () => {
                     <section className="section" id="session-history">
                         <div className="sectionHeader">
                             <h2 className="label">상담 기록</h2>
-                            <button className="btnDetail" onClick={() => navigate('/chat')}>새 상담</button>
+                            <button className="btnDetail" onClick={startNewChat}>새 상담</button>
                         </div>
                         <SessionHistory sessions={sessions} variant="page" />
                     </section>

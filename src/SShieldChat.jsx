@@ -350,6 +350,7 @@ const SShieldChat = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const requestedSessionParam = searchParams.get('session');
+    const requestedNewChat = searchParams.get('new') === '1';
     const isGuest = isGuestMode;
     const isCurrentLoading = pendingKeys.has(conversationKey);
     const isChatBusy = isCurrentLoading || isSessionLoading || isReplyTyping;
@@ -443,6 +444,26 @@ const SShieldChat = () => {
         }
     }, [activateConversation, isGuestMode]);
 
+    const resetConversation = useCallback(() => {
+        messageLoadSequenceRef.current += 1;
+        if (typingTimerRef.current) {
+            clearInterval(typingTimerRef.current);
+            typingTimerRef.current = null;
+        }
+        localStorage.removeItem('ss_session');
+        activateConversation(null, `draft:${Date.now()}`);
+        setIsSessionLoading(false);
+        setIsReplyTyping(false);
+        setConfirmationDrafts({});
+        shouldAutoScrollRef.current = true;
+        setShowReport(false);
+        setReadyReport(null);
+        setMessages([initialMessage()]);
+        setInput('');
+        setTopicPrompt(null);
+        setConversationStopped(false);
+    }, [activateConversation]);
+
     useEffect(() => {
         if (!hasToken()) {
             setIsGuestMode(true);
@@ -468,7 +489,10 @@ const SShieldChat = () => {
         loadSessions();
 
         const requestedSessionId = Number(requestedSessionParam);
-        if (Number.isInteger(requestedSessionId) && requestedSessionId > 0) {
+        if (requestedNewChat) {
+            resetConversation();
+            navigate('/chat', { replace: true });
+        } else if (Number.isInteger(requestedSessionId) && requestedSessionId > 0) {
             loadMessagesForSession(requestedSessionId);
         } else {
             localStorage.removeItem('ss_session');
@@ -478,7 +502,7 @@ const SShieldChat = () => {
             if (typingTimerRef.current) clearInterval(typingTimerRef.current);
             setIsReplyTyping(false);
         };
-    }, [loadSessions, loadMessagesForSession, requestedSessionParam]);
+    }, [loadSessions, loadMessagesForSession, requestedSessionParam, requestedNewChat, resetConversation, navigate]);
 
     useEffect(() => {
         if (scrollRef.current && shouldAutoScrollRef.current) {
@@ -739,17 +763,8 @@ const SShieldChat = () => {
     };
 
     const handleNewChat = () => {
-        messageLoadSequenceRef.current += 1;
-        localStorage.removeItem('ss_session');
-        activateConversation(null, `draft:${Date.now()}`);
-        setIsSessionLoading(false);
-        setConfirmationDrafts({});
-        shouldAutoScrollRef.current = true;
-        setShowReport(false);
-        setReadyReport(null);
-        setMessages([initialMessage()]);
-        setInput('');
-        setConversationStopped(false);
+        resetConversation();
+        navigate('/chat', { replace: true });
     };
 
     const handleLogout = () => {
@@ -828,15 +843,23 @@ const SShieldChat = () => {
 
             <main className="ss-chat-main">
                 <header className="ss-chat-header">
-                    <button
-                        type="button"
-                        className="ss-chat-logo"
-                        onClick={handleNewChat}
-                        aria-label="새 상담 시작"
-                        title="새 상담 시작"
-                    >
-                        S-<span className="logo-accent">Shield</span>
-                    </button>
+                    <div className="ss-chat-topbar">
+                        <span aria-hidden="true"></span>
+                        <button
+                            type="button"
+                            className="ss-chat-logo"
+                            onClick={handleNewChat}
+                            aria-label="새 상담 시작"
+                            title="새 상담 시작"
+                        >
+                            S-<span className="logo-accent">Shield</span>
+                        </button>
+                        <div className="ss-chat-header-actions">
+                            <button type="button" className="ss-top-action" onClick={handleNewChat}>
+                                새 상담
+                            </button>
+                        </div>
+                    </div>
                     <nav className="ss-mobile-nav" aria-label="모바일 메뉴">
                         <button className="active">상담</button>
                         <button onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/result'))}>결과</button>

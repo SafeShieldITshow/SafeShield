@@ -297,6 +297,7 @@ const SShieldResult = () => {
     };
     const reportChatPath = report?.session_id ? `/chat?session=${report.session_id}` : '/chat';
     const goToReportChat = () => navigate(reportChatPath);
+    const startNewChat = () => navigate('/chat?new=1');
 
     return (
         <div className="ss-wrap">
@@ -320,6 +321,7 @@ const SShieldResult = () => {
                         <SessionHistory />
                         <div className="ss-logout-section">
                             <div className="ss-divider"></div>
+                            <button className="ss-side-action-btn" onClick={startNewChat}>새 상담</button>
                             <button className="ss-logout-btn" onClick={() => setShowConfirm(true)}>로그아웃</button>
                         </div>
                     </div>
@@ -328,14 +330,29 @@ const SShieldResult = () => {
 
             <main className="ss-main">
                 <header className="ss-header">
-                    <div className="ss-logo">S-<span className="logo-accent">Shield</span></div>
+                    <div className="ss-page-topbar">
+                        <span aria-hidden="true"></span>
+                        <button
+                            type="button"
+                            className="ss-logo ss-logo-button"
+                            onClick={startNewChat}
+                            aria-label="새 상담 시작"
+                            title="새 상담 시작"
+                        >
+                            S-<span className="logo-accent">Shield</span>
+                        </button>
+                        <div className="ss-header-actions">
+                            <button type="button" className="ss-header-btn secondary" onClick={goToReportChat}>상담 이어가기</button>
+                            <button type="button" className="ss-header-btn primary" onClick={startNewChat}>새 상담</button>
+                        </div>
+                    </div>
                     <nav className="ss-mobile-nav" aria-label="모바일 메뉴">
                         <button onClick={goToReportChat}>상담</button>
                         <button className="active">결과</button>
                         <button onClick={() => navigate('/mypage')}>마이</button>
                         <button onClick={() => navigate('/mypage#session-history')}>기록</button>
+                        <button onClick={startNewChat}>새 상담</button>
                     </nav>
-                    <button className="ss-back-btn" onClick={goToReportChat}>상담으로 돌아가기</button>
                 </header>
 
                 <div className="ss-content-scroll">
@@ -349,7 +366,7 @@ const SShieldResult = () => {
                                 <p className="ss-summary-text">
                                     {error || '아직 생성된 리포트가 없습니다. 상담을 진행한 뒤 리포트를 생성해 주세요.'}
                                 </p>
-                                <button className="ss-inline-btn" onClick={() => navigate('/chat')}>
+                                <button className="ss-inline-btn" onClick={startNewChat}>
                                     상담 시작하기
                                 </button>
                             </div>
@@ -483,6 +500,7 @@ const SShieldResult = () => {
                                 <div className="ss-actions report-actions">
                                     <a href="tel:117" className="ss-action-link"><button>117 학교폭력 신고</button></a>
                                     <button onClick={goToReportChat}>상담 이어가기</button>
+                                    <button onClick={startNewChat}>새 상담</button>
                                 </div>
                             </>
                         )}
