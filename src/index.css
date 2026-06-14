@@ -274,22 +274,21 @@ html, body {
 }
 
 .example-chip {
-  background: rgba(255, 255, 255, 0.055);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #c9c7d5;
-  padding: 8px 13px;
+  padding: 7px 12px;
   border-radius: var(--r-sm);
   font-size: 12px;
   font-family: var(--font);
   cursor: pointer;
-  transition: all var(--ease);
+  transition: background var(--ease), border-color var(--ease), color var(--ease);
   white-space: nowrap;
 }
 .example-chip:hover {
-  border-color: var(--accent-light);
+  border-color: rgba(126, 116, 240, 0.46);
   color: var(--text);
-  background: var(--accent-dim);
-  transform: translateY(-1px);
+  background: rgba(126, 116, 240, 0.12);
 }
 
 /* =====================================================
@@ -311,9 +310,9 @@ html, body {
    ===================================================== */
 .chat-cta {
   margin: 0 0 12px;
-  background: linear-gradient(135deg, rgba(95,82,208,0.18), rgba(126,116,240,0.12));
-  border: 1px solid var(--accent);
-  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid rgba(126, 116, 240, 0.24);
+  border-radius: var(--r-sm);
   padding: 12px 16px;
   display: flex;
   justify-content: space-between;
@@ -327,7 +326,7 @@ html, body {
   color: #fff;
   border: none;
   padding: 8px 15px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   font-size: 14px;
   font-weight: 600;
   font-family: var(--font);
@@ -335,7 +334,7 @@ html, body {
   white-space: nowrap;
   transition: background var(--ease), transform var(--ease);
 }
-.chat-cta-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.chat-cta-btn:hover { background: var(--accent-hover); }
 
 /* =====================================================
    위험도 뱃지 (Mypage 카드용)
