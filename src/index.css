@@ -311,9 +311,9 @@ html, body {
    ===================================================== */
 .chat-cta {
   margin: 0 0 12px;
-  background: linear-gradient(135deg, rgba(95,82,208,0.18), rgba(126,116,240,0.12));
-  border: 1px solid var(--accent);
-  border-radius: var(--r-lg);
+  background: var(--surface);
+  border: 1px solid rgba(126, 116, 240, 0.28);
+  border-radius: var(--r-md);
   padding: 12px 16px;
   display: flex;
   justify-content: space-between;
@@ -345,7 +345,7 @@ html, body {
   align-items: center;
   gap: 5px;
   padding: 3px 10px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   font-size: 12px;
   font-weight: 700;
   margin-bottom: 8px;
@@ -366,7 +366,7 @@ html, body {
 }
 
 .insightCard {
-  background: rgba(255, 255, 255, 0.052);
+  background: var(--surface);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--r-md);
   padding: 16px;
@@ -503,7 +503,7 @@ html, body {
   color: var(--text-muted);
   font: 600 12px var(--font);
   padding: 7px 10px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   cursor: pointer;
   transition: background var(--ease), color var(--ease), border-color var(--ease);
 }
