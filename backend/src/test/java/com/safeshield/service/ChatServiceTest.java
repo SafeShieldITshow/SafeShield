@@ -210,13 +210,14 @@ class ChatServiceTest {
     }
 
     @Test
-    void rejectsChoiceLessFollowUpQuestionInsideConversationReply() {
+    void acceptsChoiceLessQuestionForProviderButStripsItBeforeOutput() {
         String reply = """
                 게시물의 URL이나 링크가 있다는 것은 중요한 증거가 될 수 있습니다.
                 혹시 이 게시물이 올라온 SNS 계정의 주인이 누구인지 짐작 가는 부분이 있으신가요?
                 """;
 
-        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+        assertTrue(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+        assertFalse(ChatService.connectReplyToConfirmation(reply, List.of()).contains("있으신가요"));
     }
 
     @Test

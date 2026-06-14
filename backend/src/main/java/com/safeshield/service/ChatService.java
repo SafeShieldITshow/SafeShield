@@ -406,7 +406,8 @@ public class ChatService {
     }
 
     static String connectReplyToConfirmation(String reply, List<Map<String, Object>> prompts) {
-        if (reply == null || prompts == null || prompts.isEmpty()) return reply;
+        if (reply == null) return "";
+        if (prompts == null || prompts.isEmpty()) return stripGeneratedQuestionSentences(reply).trim();
         String trimmed = stripGeneratedQuestionSentences(reply).trim();
         trimmed = stripDanglingConfirmationLeadIn(trimmed);
         if (trimmed.isBlank()) {
@@ -2779,7 +2780,6 @@ public class ChatService {
         if (containsForbiddenTemplatePhrase(reply)) return false;
         if (!usesAllowedCharacters(reply)) return false;
         if (hasUnsafePhysicalViolenceAdvice(reply)) return false;
-        if (hasUncontrolledQuestion(reply)) return false;
         return hasOnlyAllowedLegalReferences(reply, lawContext);
     }
 
@@ -2821,7 +2821,6 @@ public class ChatService {
         if (containsForbiddenTemplatePhrase(reply)) return false;
         if (!usesAllowedCharacters(reply)) return false;
         if (hasUnsafePhysicalViolenceAdvice(reply)) return false;
-        if (hasUncontrolledQuestion(reply)) return false;
         return hasOnlyAllowedLegalReferences(reply, lawContext);
     }
 
