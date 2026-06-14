@@ -382,6 +382,19 @@ class ChatServiceTest {
     }
 
     @Test
+    void prioritizesConductFactQuestionForVagueIncidentInNormalFlow() {
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                needsMoreContext(),
+                "친구가 저한테 이상한 일을 했어요.",
+                1
+        );
+
+        assertTrue(questions.get(0).contains("학교폭력 유형은 제가 판단"));
+        assertFalse(questions.get(0).contains("상대와의 관계"));
+        assertFalse(questions.get(0).contains("말, 게시물, 신체 접촉"));
+    }
+
+    @Test
     void doesNotShowConfirmationQuestionForGreetingOnly() {
         ReportReadiness incidentMissing = new ReportReadiness(
                 false,

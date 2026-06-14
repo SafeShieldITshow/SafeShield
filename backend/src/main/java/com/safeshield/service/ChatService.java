@@ -595,6 +595,11 @@ public class ChatService {
         if (needsRealityCheck(text)) return List.of(realityCheckQuestion());
         List<ConfirmationCandidate> candidates = new ArrayList<>();
 
+        if (needsVagueIncidentDetail(text)) {
+            candidates.add(incidentQuestion(text));
+            return candidates;
+        }
+
         if (hasRoleConflict(text) && !hasRoleConflictAnswer(text)) {
             candidates.add(roleConflictQuestion());
             return candidates;
@@ -862,6 +867,16 @@ public class ChatService {
 
     private static boolean needsSexualIncidentDetail(String text) {
         return hasSexualViolationSignal(text) && !hasSexualIncidentAnswer(text);
+    }
+
+    private static boolean needsVagueIncidentDetail(String text) {
+        String t = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+        if (t.isBlank()) return false;
+        if (hasIncidentAnswer(t) || hasViolenceTypeSignal(t) || hasBodilyWasteIncidentSignal(t)) return false;
+        return hasAny(t,
+                "이상한 일", "이상한 짓", "나쁜 일", "안 좋은 일", "불쾌한 일", "문제되는 일",
+                "무슨 일", "뭔 일", "어떤 일", "무슨 짓", "뭔 짓", "뭘 했", "뭘 당",
+                "뭔가 했", "일이 있었", "당했어요", "당했습니다");
     }
 
     private static boolean hasSexualIncidentAnswer(String text) {
