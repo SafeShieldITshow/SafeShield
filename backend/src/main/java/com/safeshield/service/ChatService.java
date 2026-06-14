@@ -2813,11 +2813,7 @@ public class ChatService {
         String text = reply == null ? "" : reply;
         boolean physicalContext = containsAny(text, "맞", "멍", "폭행", "상처", "통증", "밀쳤", "신체");
         if (!physicalContext) return false;
-        if (containsAny(text, "지금은 안전", "혼자서도 괜찮", "혼자 감당", "물 많이", "따뜻한 물", "목욕", "잘 쉬")) {
-            return true;
-        }
-        boolean hasSafetyAction = containsAny(text, "보호자", "담임", "사진", "진료", "병원", "보건실", "117");
-        return !hasSafetyAction;
+        return containsAny(text, "지금은 안전", "혼자서도 괜찮", "혼자 감당", "물 많이", "따뜻한 물", "목욕", "잘 쉬");
     }
 
     static boolean isGeneratedReplyValid(String reply, String lawContext) {

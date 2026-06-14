@@ -280,6 +280,16 @@ class ChatServiceTest {
     }
 
     @Test
+    void acceptsPhysicalReplyWithoutExplicitSafetyActionBecauseReportAddsActions() {
+        String reply = """
+                학교에서 맞고 멍이 들었다면 많이 놀랐을 수 있습니다.
+                지금 말한 내용은 신체 폭력 단서로 상담 기록에 반영됩니다.
+                """;
+
+        assertTrue(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
     void buildsContextSpecificFollowUpQuestionForGroupChat() {
         ReportReadiness readiness = needsMoreContext();
 
