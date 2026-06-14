@@ -114,6 +114,33 @@ class ReportServiceTest {
         assertTrue(((List<?>) updated.get("violence_types")).contains("신체 폭력"));
     }
 
+    @Test
+    void temporaryPhysicalReportSummaryIncludesConcreteIncidentDetails() {
+        ReportReadiness readiness = new ReportReadiness(
+                true,
+                "학교폭력 가능성 검토",
+                "학교 내 신체피해와 가중 단서를 반영해 리포트를 생성할 수 있습니다.",
+                List.of(),
+                List.of("구체적인 사건 내용 확인", "증거 또는 발생 경로 단서 확인"),
+                true
+        );
+
+        Map<String, Object> report = reportService.generateTemporary(List.of(
+                user("학교에서 맞았고 멍이 들었습니다."),
+                user("확인 답변: 지금도 계속되고 있습니다."),
+                user("확인 답변: 멍이나 상처 사진이 있습니다."),
+                user("저한테 우유곽도 던졌고 우유를 제 머리에 들이붓기도 했어요."),
+                user("친구들 앞에서 제 얼굴에 똥도 쌌다니까요.")
+        ), null, readiness);
+
+        String summary = String.valueOf(report.get("summary"));
+
+        assertTrue(summary.contains("우유곽"));
+        assertTrue(summary.contains("우유 등 액체"));
+        assertTrue(summary.contains("배설물"));
+        assertTrue(((Double) report.get("risk_score")) >= 8.0);
+    }
+
     private static Message user(String content) {
         Message message = new Message();
         message.setRole("user");

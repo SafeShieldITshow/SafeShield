@@ -595,6 +595,34 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void bodilyWasteIncidentFurtherIncreasesPhysicalRiskAndAppearsInCaseSummary() {
+        String aggravatedText = "학교에서 맞았고 멍이 들었는데 어떻게 해야 하나요? " +
+                "확인 답변: 상대는 학교 관계자가 아닙니다. " +
+                "확인 답변: 지금도 계속되고 있습니다. " +
+                "확인 답변: 멍이나 상처 사진이 있습니다. " +
+                "확인 답변: 불안하고 다시 마주칠까봐 걱정됩니다. " +
+                "확인 답변: 보호자와 상의하고 신고 가능성을 알고 싶습니다. " +
+                "저한테 우유곽도 던졌고 우유를 제 머리에 들이붓기도 했어요.";
+        String bodilyWasteText = aggravatedText + " 그리고 친구들 앞에서 제 얼굴에 똥도 쌌다니까요.";
+
+        ReportReadiness aggravatedReadiness = analysisService.assessReportReadiness(aggravatedText, 8);
+        ReportReadiness bodilyWasteReadiness = analysisService.assessReportReadiness(bodilyWasteText, 9);
+        var aggravated = analysisService.analyze(aggravatedText, aggravatedReadiness);
+        var bodilyWaste = analysisService.analyze(bodilyWasteText, bodilyWasteReadiness);
+
+        assertTrue(bodilyWaste.riskScore() >= aggravated.riskScore() + 0.4,
+                "배설물 행위는 우유 붓기와 같은 점수에 머물지 않고 추가 가중되어야 합니다.");
+        assertTrue(bodilyWaste.keyFindings().stream().anyMatch(item ->
+                item.contains("핵심 상황:")
+                        && item.contains("우유곽")
+                        && item.contains("우유 등 액체")
+                        && item.contains("배설물")),
+                "리포트 핵심 상황에는 실제로 추가된 행위들이 정리되어야 합니다.");
+        assertTrue(bodilyWaste.keyFindings().stream().anyMatch(item ->
+                item.contains("가중·완화 단서:") && item.contains("배설물 관련 신체적 모욕")));
+    }
+
+    @Test
     void clearlyDisconnectedExternalPhysicalCaseCanStayLowApplicability() {
         String text = "학교와 무관한 동네 사람이 집 근처에서 저를 밀쳐 멍이 들었습니다. " +
                 "확인 답변: 상대는 학교 관계자가 아닙니다. " +

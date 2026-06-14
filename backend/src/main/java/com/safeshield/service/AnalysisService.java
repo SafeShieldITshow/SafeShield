@@ -280,13 +280,14 @@ public class AnalysisService {
         boolean directThreat = containsAny(t, "죽이", "때리겠", "찾아가", "가만 안", "협박") && !noThreat;
         boolean weaponOrGroup = containsAny(t, "흉기", "칼", "위험한 물건", "여러 명", "단체로", "무리");
         boolean objectThrowing = containsAny(t, "던졌", "던진", "던지", "투척", "우유곽", "물건을 던", "맞혔");
+        boolean physicalType = violenceTypes.contains("신체 폭력");
+        boolean bodilyWastePhysical = physicalType && hasBodilyWasteIncidentSignal(t);
         boolean humiliatingPhysical = containsAny(t, "들이붓", "끼얹", "부었", "부어", "쏟", "뿌렸", "침을 뱉", "머리에", "얼굴에", "우유를");
         boolean resolved = containsAny(t, "삭제", "사과", "멈췄", "그만뒀", "해결");
         boolean mildExpression = isMildExpressionOrMisunderstanding(t);
         boolean noMeaningfulImpact = hasNoMeaningfulImpact(t);
         boolean minorContext = containsAny(t, "별거 아니", "사소", "가벼운", "오해", "장난", "실수", "기분만", "기분이 상한 정도");
-        boolean physicalType = violenceTypes.contains("신체 폭력");
-        boolean aggravatedPhysical = physicalType && (objectThrowing || humiliatingPhysical || hasBodilyWasteIncidentSignal(t));
+        boolean aggravatedPhysical = physicalType && (objectThrowing || humiliatingPhysical || bodilyWastePhysical);
 
         if (repeated) score += 0.75;
         if (longTerm) score += 0.55;
@@ -298,6 +299,7 @@ public class AnalysisService {
         if (weaponOrGroup) score += 0.65;
         if (physicalType && objectThrowing) score += 0.35;
         if (physicalType && humiliatingPhysical) score += 0.45;
+        if (bodilyWastePhysical) score += 0.9;
         if (distress) score += 0.75;
         if (severeDistress) score += 1.0;
         if (resolved && !ongoing && !repeated) score -= 0.4;
@@ -346,10 +348,14 @@ public class AnalysisService {
             if (noMeaningfulImpact) factorBasedScore -= 0.7;
             score = Math.max(score, factorBasedScore);
         }
+        if (bodilyWastePhysical) {
+            score = Math.max(score, 8.0);
+        }
 
         boolean seriousPhysicalSignal = physicalType && (injuryScore >= 0.9 || directThreat || weaponOrGroup);
         boolean severeSignal = severeDistress || injuryScore >= 1.1 || directThreat || weaponOrGroup
                 || seriousPhysicalSignal
+                || bodilyWastePhysical
                 || violenceTypes.contains("성폭력")
                 || violenceTypes.contains("스토킹")
                 || violenceTypes.contains("갈취");
@@ -390,6 +396,9 @@ public class AnalysisService {
             if (!sexualMedia && !severeDistress && !directThreat && !weaponOrGroup) {
                 cap = Math.min(cap, repeatedOrForcedContact ? 8.4 : 7.6);
             }
+        }
+        if (bodilyWastePhysical && !severeDistress && !directThreat && !weaponOrGroup) {
+            cap = Math.max(cap, (repeated || ongoing || longTerm) ? 8.4 : 8.0);
         }
 
         return Math.round(Math.max(1.0, Math.min(cap, score)) * 10.0) / 10.0;
@@ -462,7 +471,8 @@ public class AnalysisService {
         if (types.contains("스토킹")) seriousness = Math.max(seriousness, 3);
         if (types.contains("신체 폭력")) {
             seriousness = Math.max(seriousness, 2);
-            if (containsAny(t, "던졌", "던진", "던지", "투척", "우유곽", "물건을 던", "들이붓", "끼얹", "부었", "뿌렸", "침을 뱉")) {
+            if (containsAny(t, "던졌", "던진", "던지", "투척", "우유곽", "물건을 던", "들이붓", "끼얹", "부었", "뿌렸", "침을 뱉")
+                    || hasBodilyWasteIncidentSignal(t)) {
                 seriousness = Math.max(seriousness, 3);
             }
             if (containsAny(t, "진단", "치료", "병원", "상해", "출혈")) seriousness = Math.max(seriousness, 3);
@@ -502,7 +512,8 @@ public class AnalysisService {
         int aggravation = 0;
         if (containsAny(t, "보복", "신고하면", "협박", "때리겠", "찾아가", "장애", "특수학급", "여러 명", "단체로", "무리")) aggravation += 1;
         if (containsAny(t, "흉기", "칼", "촬영", "유포", "골절", "응급실", "수술")) aggravation += 1;
-        if (containsAny(t, "던졌", "던진", "던지", "투척", "우유곽", "물건을 던", "들이붓", "끼얹", "부었", "뿌렸", "침을 뱉")) aggravation += 1;
+        if (containsAny(t, "던졌", "던진", "던지", "투척", "우유곽", "물건을 던", "들이붓", "끼얹", "부었", "뿌렸", "침을 뱉")
+                || hasBodilyWasteIncidentSignal(t)) aggravation += 1;
         if (containsAny(t, "반성 안", "사과 안", "계속하겠", "삭제 안")) aggravation += 1;
         aggravation = Math.min(3, aggravation);
 
@@ -690,6 +701,9 @@ public class AnalysisService {
         if (containsAny(t, "사진", "영상", "얼굴", "신상", "이름", "학교명")) aggravating.add("신원·이미지 노출");
         if (containsAny(t, "협박", "보복", "죽이", "때리겠", "찾아가")) aggravating.add("위협·보복 우려");
         if (types.contains("성폭력")) aggravating.add("성적 침해");
+        if (types.contains("신체 폭력") && containsAny(t, "던졌", "던진", "던지", "우유곽", "물건을 던")) aggravating.add("물건 투척");
+        if (types.contains("신체 폭력") && containsAny(t, "들이붓", "끼얹", "부었", "뿌렸", "우유를")) aggravating.add("액체를 붓거나 끼얹은 행위");
+        if (types.contains("신체 폭력") && hasBodilyWasteIncidentSignal(t)) aggravating.add("배설물 관련 신체적 모욕");
         if (types.contains("신체 폭력") && containsAny(t, "진단", "병원", "치료", "출혈", "골절")) aggravating.add("상해·진료 단서");
 
         if (containsAny(t, "한 번", "처음", "1번")) mitigating.add("1회성 진술");
@@ -757,6 +771,9 @@ public class AnalysisService {
             actions.add("안전이 먼저입니다. 등하교 동선, 혼자 있는 시간, 온라인 연락을 줄이고 보호자·담임에게 바로 공유하세요.");
         }
         if (types.contains("신체 폭력")) {
+            if (hasBodilyWasteIncidentSignal(t)) {
+                actions.add("배설물이나 액체가 닿은 옷·소지품은 세탁 전 사진을 찍고, 가능하면 보호자와 함께 보관하거나 당시 상황을 시간순으로 적어두세요.");
+            }
             if (containsAny(t, "멍", "상처", "출혈")) {
                 actions.add("멍이나 상처는 오늘 날짜가 남게 가까운 사진과 전체 위치 사진을 나눠 찍고, 통증이 지속되면 병원 기록을 남기세요.");
             } else {
@@ -848,11 +865,24 @@ public class AnalysisService {
     }
 
     private String detectConductSummary(String text, List<String> types) {
-        if (types.contains("신체 폭력") && hasBodilyWasteIncidentSignal(text)) {
-            return "배설물 등 신체적 모욕이나 위해가 될 수 있는 행위";
-        }
-        if (types.contains("신체 폭력") && containsAny(text, "때렸", "맞았", "밀쳤", "밀쳐", "멍", "상처")) {
-            return "때리거나 밀치는 신체 폭력";
+        if (types.contains("신체 폭력")) {
+            List<String> physicalActs = new ArrayList<>();
+            boolean hitOrInjury = containsAny(text, "때렸", "맞았", "밀쳤", "밀쳐", "멍", "상처");
+            if (hitOrInjury) {
+                physicalActs.add("폭행·멍 등 신체 피해");
+            }
+            if (containsAny(text, "던졌", "던진", "던지", "투척", "우유곽", "물건을 던")) {
+                physicalActs.add("우유곽 등 물건 투척");
+            }
+            if (containsAny(text, "들이붓", "끼얹", "부었", "부어", "쏟", "뿌렸", "우유를")) {
+                physicalActs.add("우유 등 액체를 머리나 몸에 붓는 행위");
+            }
+            if (hasBodilyWasteIncidentSignal(text)) {
+                physicalActs.add("배설물을 얼굴이나 몸에 묻히거나 배설한 행위");
+            }
+            if (physicalActs.size() == 1 && hitOrInjury) return "때리거나 밀치는 신체 폭력";
+            if (!physicalActs.isEmpty()) return String.join(", ", physicalActs);
+            return "신체 폭력";
         }
         if (types.contains("사이버 폭력") && containsAny(text, "사진", "영상", "유포", "올렸", "게시")) return "사진·게시물 관련 괴롭힘";
         if (containsAny(text, "욕", "욕설", "비방", "모욕", "놀림")) return "욕설·비방·조롱";
@@ -940,8 +970,8 @@ public class AnalysisService {
 
     private boolean hasBodilyWasteIncidentSignal(String text) {
         String t = normalize(text);
-        boolean bodilyWaste = containsAny(t, "얼굴에 똥", "몸에 똥", "똥을 쌌", "똥을 싸", "똥 싸질",
-                "배설물", "대변", "소변", "오줌", "침을 뱉", "침 뱉");
+        boolean bodilyWaste = containsAny(t, "얼굴에 똥", "몸에 똥", "똥을 쌌", "똥을 싸", "똥도 쌌", "똥도 싸",
+                "똥 쌌", "똥 싸", "똥 싸질", "배설물", "대변", "소변", "오줌", "침을 뱉", "침 뱉");
         boolean eventContext = containsAny(t, "친구", "같은 반", "학생", "상대", "제 얼굴", "내 얼굴", "얼굴에",
                 "몸에", "목격", "도망", "신고", "학교");
         return bodilyWaste && eventContext;

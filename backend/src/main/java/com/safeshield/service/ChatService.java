@@ -437,8 +437,25 @@ public class ChatService {
         String status = stringValue(report.get("assessment_status"), "판단 정보 없음");
         String risk = stringValue(report.get("risk_score"), "0");
         String types = reportTypesText(report.get("violence_types"));
-        return "리포트가 %s되었습니다. 현재 판단: %s, 유형: %s, 위험도: %s/10입니다."
-                .formatted(action, status, types, risk);
+        String caseSummary = reportCaseSummary(report);
+        String summaryLine = caseSummary.isBlank() ? "" : "\n사건 정리: " + caseSummary;
+        return "리포트가 %s되었습니다. 현재 판단: %s, 유형: %s, 위험도: %s/10입니다.%s"
+                .formatted(action, status, types, risk, summaryLine);
+    }
+
+    private static String reportCaseSummary(Map<String, Object> report) {
+        Object details = report.get("assessment_details");
+        if (details instanceof Iterable<?> iterable) {
+            for (Object item : iterable) {
+                String text = stringValue(item, "");
+                if (text.startsWith("핵심 상황:")) {
+                    return text.substring("핵심 상황:".length()).trim();
+                }
+            }
+        }
+        String summary = stringValue(report.get("summary"), "");
+        int marker = summary.indexOf("분류 유형은");
+        return marker > 0 ? summary.substring(0, marker).trim() : summary;
     }
 
     private static String stringValue(Object value, String fallback) {
@@ -1008,7 +1025,8 @@ public class ChatService {
 
     private static boolean hasBodilyWasteIncidentSignal(String text) {
         String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
-        return containsAny(t, "얼굴에 똥", "몸에 똥", "똥을 쌌", "똥을 싸", "똥 싸질", "배설물",
+        return containsAny(t, "얼굴에 똥", "몸에 똥", "똥을 쌌", "똥을 싸", "똥도 쌌", "똥도 싸",
+                "똥 쌌", "똥 싸", "똥 싸질", "배설물",
                 "대변", "소변", "오줌", "침을 뱉", "침 뱉");
     }
 
@@ -1893,7 +1911,7 @@ public class ChatService {
                 "가해", "피해", "증거", "캡처", "신고", "117", "리포트", "상담", "확인 질문",
                 "용의자", "특정", "누군지", "누구인지", "작성자", "계정",
                 "걱정", "무서", "두려", "불안", "보복", "반복", "재발", "또 그럴", "다시 그럴",
-                "또 쌀", "쌀까", "목격자", "도망", "얼굴", "몸", "배설물", "대변", "소변");
+                "또 쌀", "쌀까", "똥도 쌌", "똥 쌌", "목격자", "도망", "얼굴", "몸", "배설물", "대변", "소변");
     }
 
     private static boolean isConsultationMetaQuestion(String text) {

@@ -518,6 +518,7 @@ class ChatServiceTest {
         assertFalse(ChatService.shouldGuardIrrelevantInput("ㅎㅇ", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("확인 답변: 씨발 또 쌀까봐 걱정된다고요", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("추가 설명: 또 그럴까봐 걱정됩니다.", false));
+        assertFalse(ChatService.shouldGuardIrrelevantInput("추가 설명: 친구들 앞에서 제 얼굴에 똥도 쌌다니까요", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("어떤 확인이 필요한가요?", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("뭘 더 확인해야 해요?", false));
         assertFalse(ChatService.shouldGuardIrrelevantInput("추가 질문이 뭐예요?", false));
@@ -535,6 +536,25 @@ class ChatServiceTest {
         assertFalse(reply.contains("확인을 위해 질문 하나 할게요."));
         assertFalse(reply.contains("대화 전체가 보이는 캡처나 원본이 있나요?"));
         assertTrue(reply.contains("아래에 이어서 확인할 내용을 하나만 띄워둘게요."));
+    }
+
+    @Test
+    void reportNoticeIncludesConcreteCaseSummary() throws Exception {
+        Map<String, Object> report = Map.of(
+                "assessment_status", "학교폭력 가능성 검토",
+                "risk_score", 8.2,
+                "violence_types", List.of("신체 폭력"),
+                "assessment_details", List.of("핵심 상황: 학교 공간에서 폭행·멍, 우유곽 투척, 배설물 행위를 겪었다고 진술한 사안입니다.")
+        );
+        var method = ChatService.class.getDeclaredMethod("reportSummaryText", Map.class, String.class);
+        method.setAccessible(true);
+
+        String notice = (String) method.invoke(null, report, "갱신");
+
+        assertTrue(notice.contains("위험도: 8.2/10"));
+        assertTrue(notice.contains("사건 정리:"));
+        assertTrue(notice.contains("우유곽 투척"));
+        assertTrue(notice.contains("배설물 행위"));
     }
 
     @Test
