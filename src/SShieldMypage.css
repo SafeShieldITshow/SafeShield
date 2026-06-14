@@ -110,7 +110,9 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--r-md);
   padding: 22px 26px;
-  background: var(--surface);
+  background:
+    linear-gradient(135deg, rgba(126, 116, 240, 0.09), transparent 44%),
+    var(--surface);
 }
 
 .userName  { font-size: 19px; font-weight: 700; margin-bottom: 5px; }
@@ -144,7 +146,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.052);
   transition: transform var(--ease), border-color var(--ease);
 }
 .reportCard:hover { border-color: var(--accent); transform: translateY(-2px); }
@@ -160,7 +162,7 @@
   color: #d8d3ff;
   font-size: 12px;
   padding: 5px 11px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-pill);
 }
 
 /* 액션 버튼 */

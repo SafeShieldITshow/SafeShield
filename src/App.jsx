@@ -78,33 +78,43 @@ function MainHome() {
 
     return (
         <div className="root-container">
-            <header className="home-header">
-                <button className="logo-text" onClick={() => navigate('/chat?new=1')} aria-label="새 상담 시작">
-                    S-<span className="logo-accent">Shield</span>
-                </button>
-                <button className="home-login" onClick={() => navigate('/login')}>
-                    로그인
-                </button>
-            </header>
+            <div className="gradient-overlay"></div>
+            <div className="logo-text">S-<span className="logo-accent">Shield</span></div>
 
-            <main className="main-content">
-                <p className="home-kicker">학교폭력 법률 상담 AI</p>
-                <h1 className="title-h1">학교폭력 상황을 법 기준으로 정리합니다.</h1>
+            <div className="main-content">
+                <h1 className="title-h1">
+                    <div className="line-wrapper">
+                        <span className="typing-txt anim-1 text-white">당신의 상황,</span>
+                    </div>
+                    <div className="line-wrapper line-flex">
+                        <span className="fade-txt anim-2 text-purple">법 기준</span>
+                        <span className="typing-txt anim-3 text-white">으로</span>
+                    </div>
+                    <div className="line-wrapper line-flex">
+                        <span className="fade-txt anim-4 text-purple">분석</span>
+                        <span className="typing-txt anim-5 text-white">해드립니다</span>
+                    </div>
+                </h1>
 
-                <p className="sub-desc">
-                    상황을 입력하면 유형, 관련 법령, 증거 준비와 다음 조치를 한 화면에 정리합니다.
+                <p className="sub-desc anim-6">
+                    학교폭력 상황을 입력하면 관련 법령과<br className="pc-br" />
+                    증거 준비 방법, 신고 절차를 안내합니다.
                 </p>
 
-                <div className="home-actions">
+                <div className="anim-7">
                     <button className="start-btn" onClick={() => navigate('/chat?new=1')}>
-                        상담 시작
+                        시작하기
                     </button>
-                    <button className="secondary-btn" onClick={() => navigate('/login')}>
-                        로그인
-                    </button>
+                    <p className="info-note">* 상담 기록과 리포트 저장을 위해 로그인이 필요합니다.</p>
                 </div>
-                <p className="info-note">상담 기록과 리포트 저장은 로그인 후 사용할 수 있습니다.</p>
-            </main>
+            </div>
+
+            <div className="chat-wrapper" aria-hidden="true">
+                <div className="bubble b-white-1"></div>
+                <div className="bubble b-purple-1"></div>
+                <div className="bubble b-white-2"></div>
+                <div className="bubble b-purple-2"></div>
+            </div>
         </div>
     );
 }
