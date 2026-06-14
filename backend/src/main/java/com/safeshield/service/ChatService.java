@@ -275,7 +275,7 @@ public class ChatService {
         boolean reportGenerated = false;
         boolean reportUpdated = false;
         List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
-        if (readiness.ready() && confirmationPrompts.isEmpty()) {
+        if (shouldGenerateGuestTemporaryReport(readiness, confirmationPrompts, history)) {
             report = reportService.generateTemporary(history, "", readiness);
             reportUpdated = hasPriorReportSignal(history);
             reportGenerated = !reportUpdated;
@@ -303,6 +303,16 @@ public class ChatService {
         response.put("conversation_stopped", false);
         response.put("temporary", true);
         return response;
+    }
+
+    static boolean shouldGenerateGuestTemporaryReport(
+            ReportReadiness readiness,
+            List<Map<String, Object>> confirmationPrompts,
+            List<Message> history
+    ) {
+        if (readiness == null || !readiness.ready()) return false;
+        if (confirmationPrompts == null || confirmationPrompts.isEmpty()) return true;
+        return hasPriorReportSignal(history);
     }
 
     public List<Map<String, Object>> getMessages(Long sessionId, User user) {

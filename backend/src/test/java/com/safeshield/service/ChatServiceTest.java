@@ -558,6 +558,27 @@ class ChatServiceTest {
     }
 
     @Test
+    void guestTemporaryReportUpdatesWhenPriorReportExistsEvenWithNextPrompt() {
+        ReportReadiness readiness = new ReportReadiness(
+                true,
+                "학교폭력 가능성 검토",
+                "리포트 생성 가능",
+                List.of(),
+                List.of("신체 폭력", "증거"),
+                true
+        );
+        Message priorAssistant = new Message();
+        priorAssistant.setRole("assistant");
+        priorAssistant.setContent("리포트가 생성되었습니다. 현재 판단: 학교폭력 가능성 검토, 유형: 신체 폭력, 위험도: 6.8/10입니다.");
+        List<Map<String, Object>> prompts = List.of(Map.of(
+                "id", "impact",
+                "question", "지금 가장 걱정되는 부분은 무엇인가요?"
+        ));
+
+        assertTrue(ChatService.shouldGenerateGuestTemporaryReport(readiness, prompts, List.of(priorAssistant)));
+    }
+
+    @Test
     void doesNotDuplicateConfirmationLeadInWhenAppendingQuestion() {
         String reply = ChatService.connectReplyToConfirmation(
                 "내용 전체가 있다는 점은 중요합니다. 확인을 위해 질문 하나 할게요. 리포트에는 참여자와 시간이 중요합니다.",
