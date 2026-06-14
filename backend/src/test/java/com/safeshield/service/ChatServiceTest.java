@@ -207,7 +207,7 @@ class ChatServiceTest {
     void sanitizesChoiceLessQuestionBeforeValidatingExternalAiReply() {
         String reply = """
                 게시물의 URL이나 링크가 있다는 것은 중요한 증거가 될 수 있습니다.
-                혹시 이 게시물이 올라온 SNS 계정의 주인이 누구인지 짐작 가는 부분이 있으신가요?
+                혹시 이 게시물이 올라온 SNS 계정의 주인이 누구인지 짐작 가는 부분이 있으신가요.
                 지금은 작성자 계정과 게시 시간을 함께 보관하는 것이 중요합니다.
                 """;
 

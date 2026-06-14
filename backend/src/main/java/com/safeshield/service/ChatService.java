@@ -530,7 +530,7 @@ public class ChatService {
     }
 
     private static String stripQuestionFragments(String line) {
-        String result = line == null ? "" : line;
+        String result = removeUncontrolledQuestionSentences(line);
         while (result.contains("?")) {
             int question = result.indexOf('?');
             int start = Math.max(
@@ -2906,7 +2906,9 @@ public class ChatService {
     private static String removeUncontrolledQuestionSentences(String line) {
         if (line == null || line.isBlank()) return "";
         StringBuilder kept = new StringBuilder();
-        for (String sentence : line.split("(?<=[?？])\\s*")) {
+        Matcher sentenceMatcher = Pattern.compile("[^.!?。？]+[.!?。？]?").matcher(line);
+        while (sentenceMatcher.find()) {
+            String sentence = sentenceMatcher.group();
             String trimmed = sentence.trim();
             if (trimmed.isBlank()) continue;
             if (hasUncontrolledQuestion(trimmed)) continue;
