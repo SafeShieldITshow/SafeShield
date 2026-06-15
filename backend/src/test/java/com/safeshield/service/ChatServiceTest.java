@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -21,6 +22,16 @@ class ChatServiceTest {
             제307조 (명예훼손): 명예훼손 규정
             제311조 (모욕): 모욕 규정
             """;
+
+    @Test
+    void forcesLowestCostDeepSeekModelAndTokenDefault() {
+        assertEquals("deepseek-v4-flash", ChatService.cheapestDeepSeekModel("deepseek-reasoner"));
+        assertEquals("deepseek-v4-flash", ChatService.cheapestDeepSeekModel("deepseek-chat"));
+        assertEquals("deepseek-v4-flash", ChatService.cheapestDeepSeekModel(""));
+        assertEquals(700, ChatService.effectiveDeepSeekMaxTokens(0));
+        assertEquals(400, ChatService.effectiveDeepSeekMaxTokens(100));
+        assertEquals(1200, ChatService.effectiveDeepSeekMaxTokens(3000));
+    }
 
     @Test
     void acceptsKoreanReplyWithAllowedCitation() {
@@ -338,6 +349,20 @@ class ChatServiceTest {
     }
 
     @Test
+    void buildsPhysicalContextFollowUpWhenInjuryAndSupportAreKnown() {
+        ReportReadiness readiness = needsMoreContext();
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                readiness,
+                "같은 반 친구가 오늘 밀쳤습니다. 팔이나 다리에 멍 또는 통증이 있습니다. 보건실이나 학교에 기록이 있습니다. 보호자에게 말하려고 합니다.",
+                4
+        );
+
+        assertTrue(questions.stream().anyMatch(question -> question.contains("피해 정도와 당시 상황")));
+        assertTrue(questions.stream().anyMatch(question -> question.contains("상대가 흥분한 상태")));
+    }
+
+    @Test
     void buildsSexualViolenceSpecificQuestionInsteadOfPhysicalOptions() {
         ReportReadiness evidenceMissing = new ReportReadiness(
                 false,
@@ -619,6 +644,8 @@ class ChatServiceTest {
         assertTrue(notice.contains("사건 정리:"));
         assertTrue(notice.contains("우유곽 투척"));
         assertTrue(notice.contains("배설물 행위"));
+        assertTrue(notice.contains("같은 가해자에게 당한 다른 피해"));
+        assertTrue(notice.contains("피해 정도·당시 상황"));
     }
 
     @Test

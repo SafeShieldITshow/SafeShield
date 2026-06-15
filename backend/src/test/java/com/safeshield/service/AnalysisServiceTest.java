@@ -235,6 +235,42 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void physicalRiskReflectsDamageAndSituationContext() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var minor = analysisService.analyze(
+                "같은 반 친구가 오늘 한 번 가볍게 밀쳤고 크게 다치지는 않았습니다. 현재 크게 불편한 점은 없고 증거 정리 방법만 알고 싶습니다.",
+                readiness
+        );
+        var contextualRisk = analysisService.analyze(
+                "같은 반 친구가 오늘 밀쳤고 여러 명이 보거나 친구들이 알고 있습니다. 당시 상대가 흥분하거나 분노한 상태였고 보복이나 다시 맞을까 봐 걱정됩니다.",
+                readiness
+        );
+
+        assertTrue(minor.riskScore() <= 4.5,
+                "1회성이고 큰 부상·위협·생활 영향이 낮은 신체 접촉은 중위험 이하로 제한해야 합니다.");
+        assertTrue(contextualRisk.riskScore() >= minor.riskScore() + 1.0,
+                "주변 인지, 상대 흥분 상태, 보복 우려는 같은 신체 접촉에서도 위험도에 반영되어야 합니다.");
+        assertTrue(contextualRisk.keyFindings().stream().anyMatch(item ->
+                item.startsWith("발생 맥락:") && item.contains("주변 인지") && item.contains("흥분")));
+        assertTrue(contextualRisk.keyFindings().stream().anyMatch(item ->
+                item.contains("가중·완화 단서:") && item.contains("목격·주변 인지") && item.contains("흥분")));
+    }
+
+    @Test
+    void sameActorAdditionalHarmAppearsInReportFindings() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var result = analysisService.analyze(
+                "같은 반 친구가 오늘 밀쳤고 멍이 들었습니다. 확인 답변: 같은 가해자에게 당한 다른 피해가 더 있습니다. 지난주에도 욕설을 들었습니다.",
+                readiness
+        );
+
+        assertTrue(result.keyFindings().stream().anyMatch(item ->
+                item.contains("추가 피해 여부") && item.contains("같은 가해자")));
+    }
+
+    @Test
     void rejectsIrrelevantInputAsNotReadyForReport() {
         ReportReadiness readiness = analysisService.assessReportReadiness("똥싸기", 2);
         var result = analysisService.analyze("똥싸기", readiness);

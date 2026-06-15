@@ -61,6 +61,10 @@ public class ChatService {
     private static final int AI_HISTORY_LIMIT = 18;
     private static final int GUEST_HISTORY_LIMIT = 24;
     private static final int MEMORY_RECENT_USER_LIMIT = 8;
+    private static final String CHEAPEST_DEEPSEEK_MODEL = "deepseek-v4-flash";
+    private static final int DEEPSEEK_DEFAULT_MAX_TOKENS = 700;
+    private static final int DEEPSEEK_MIN_MAX_TOKENS = 400;
+    private static final int DEEPSEEK_HARD_MAX_TOKENS = 1200;
 
     private record PromptContext(String prompt, String lawContext, ReplyMode mode) {}
     private record ConfirmationCandidate(String id, String question, List<Map<String, String>> options) {}
@@ -118,7 +122,7 @@ public class ChatService {
     @Value("${deepseek.model:deepseek-v4-flash}")
     private String deepSeekModel;
 
-    @Value("${deepseek.max-tokens:900}")
+    @Value("${deepseek.max-tokens:700}")
     private int deepSeekMaxTokens;
 
     private final RestTemplate aiClient;
@@ -447,7 +451,7 @@ public class ChatService {
         String types = reportTypesText(report.get("violence_types"));
         String caseSummary = reportCaseSummary(report);
         String summaryLine = caseSummary.isBlank() ? "" : "\n사건 정리: " + caseSummary;
-        return "리포트가 %s되었습니다. 현재 판단: %s, 유형: %s, 위험도: %s/10입니다.%s"
+        return "리포트가 %s되었습니다. 현재 판단: %s, 유형: %s, 위험도: %s/10입니다.%s\n같은 가해자에게 당한 다른 피해가 있거나 피해 정도·당시 상황을 더 설명하고 싶으면 이어서 작성해 주세요."
                 .formatted(action, status, types, risk, summaryLine);
     }
 
@@ -562,7 +566,8 @@ public class ChatService {
         if (id.startsWith("evidence") || id.startsWith("post_trace")) {
             return "리포트 신뢰도를 높이려면 지금 남아 있는 자료가 무엇인지 확인해야 합니다.";
         }
-        if (id.startsWith("impact") || id.startsWith("physical_injury") || id.startsWith("physical_support")) {
+        if (id.startsWith("impact") || id.startsWith("physical_injury") || id.startsWith("physical_support")
+                || id.startsWith("physical_context")) {
             return "보호 조치와 다음 행동의 우선순위를 정하려면 현재 영향과 안전 상태가 필요합니다.";
         }
         if (id.startsWith("goal")) {
@@ -793,6 +798,7 @@ public class ChatService {
         if (id.startsWith("impact")) return "impact";
         if (id.startsWith("goal")) return "goal";
         if (id.startsWith("actor")) return "actor";
+        if (id.startsWith("physical_context")) return "physical_context";
         if (id.startsWith("physical")) return "physical";
         if (id.startsWith("sexual")) return "sexual";
         return id;
@@ -817,6 +823,7 @@ public class ChatService {
             case "post_trace" -> hasAny(content, "URL", "작성자 계정", "게시 시간", "확인 가능한",
                     "누가 올렸", "작성자가 누구", "계정 주인", "용의자", "특정");
             case "physical" -> hasAny(content, "어느 부위", "목격자", "진료", "보건실", "통증");
+            case "physical_context" -> hasAny(content, "피해 정도", "당시 상황", "맞거나 밀친 정도", "친구들이 알고", "상대가 흥분");
             case "sexual" -> hasAny(content, "원하지 않은 성적", "성적으로 불쾌", "신체 접촉", "접촉", "목격", "안전하게 말할");
             case "more_context" -> hasAny(content, "가장 걱정되는 부분", "지금 가장 걱정");
             case "final_check" -> hasAny(content, "하나의 같은 사안", "리포트를 생성");
@@ -872,6 +879,10 @@ public class ChatService {
             case "physical_support" -> hasAny(text,
                     "목격자가 있습니다", "보건실이나 학교에 기록", "병원 진료를 받을 예정",
                     "진료나 목격자 확인은 없습니다");
+            case "physical_context" -> hasAny(text,
+                    "가볍게 밀친", "한 번 가볍게", "한 번이고 크게 다치지", "크게 다치지는",
+                    "멍이나 통증이 있습니다", "여러 번 반복", "여러 명이 보거나", "친구들이 알고 있습니다",
+                    "보복이나 다시 맞을까", "상대가 흥분한 상태", "상대가 흥분하거나", "분노한 상태");
             case "sexual_support" -> hasAny(text,
                     "보호자에게 말할 수", "상담교사나 담임", "117 상담", "누구에게 말해야 할지 어렵");
             case "sexual_context" -> hasAny(text,
@@ -1004,6 +1015,9 @@ public class ChatService {
                 "확인 답변: 담임이나 학교에 알렸", "확인 답변: 공개 게시물",
                 "확인 답변: 게시물 url", "확인 답변: 팔이나 다리",
                 "확인 답변: 목격자가 있습니다", "답변: 친구들이 볼 수 있는 범위",
+                "확인 답변: 한 번 가볍게", "확인 답변: 멍이나 통증",
+                "확인 답변: 비슷한 신체 피해", "확인 답변: 여러 명이 보거나",
+                "확인 답변: 당시 상대가 흥분", "확인 답변: 보복이나 다시 맞",
                 "답변: 공개 게시물", "답변: 다른 사람에게 공유", "추가 설명:");
     }
 
@@ -1213,9 +1227,11 @@ public class ChatService {
     }
 
     private static ConfirmationCandidate finalCheckQuestion() {
-        return candidate("final_check", "지금까지 말한 내용이 하나의 같은 사안이고, 이 내용으로 리포트를 생성해도 되나요?",
-                option("이 내용으로 분석", "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다."),
-                option("추가 설명 필요", "확인 답변: "));
+        return candidate("final_check", "리포트를 생성하기 전에 확인할게요. 같은 가해자에게 당한 다른 피해가 있으면 작성해 주세요. 없다면 지금까지 말한 내용으로 리포트를 생성해도 됩니다.",
+                option("이 내용으로 생성", "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다."),
+                option("다른 피해 추가", "확인 답변: 같은 가해자에게 당한 다른 피해가 더 있습니다. "),
+                option("피해 정도 추가", "확인 답변: 피해 정도나 당시 상황을 더 설명하겠습니다. "),
+                option("직접 입력", "확인 답변: "));
     }
 
     private static ConfirmationCandidate realityCheckQuestion() {
@@ -1336,6 +1352,16 @@ public class ChatService {
                         option("보건실 기록", "확인 답변: 보건실이나 학교에 기록이 있습니다."),
                         option("병원 예정", "확인 답변: 병원 진료를 받을 예정입니다."),
                         option("아직 없음", "확인 답변: 아직 진료나 목격자 확인은 없습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            if (!hasAny(text, "피해 정도", "가볍게", "크게 다치", "친구들이 알고", "여러 명이 보", "상대가 흥분", "상대가 분노", "당시 상황")) {
+                questions.add(candidate("physical_context", "피해 정도와 당시 상황도 위험도 판단에 중요합니다. 맞거나 밀친 정도, 친구들이 알고 있는지, 상대가 흥분한 상태였는지 중 가까운 내용을 골라주세요.",
+                        option("가벼운 1회", "확인 답변: 한 번 가볍게 밀치거나 맞았고 크게 다치지는 않았습니다."),
+                        option("멍·통증 있음", "확인 답변: 멍이나 통증이 있습니다."),
+                        option("반복됨", "확인 답변: 비슷한 신체 피해가 여러 번 반복됐습니다."),
+                        option("친구들이 앎", "확인 답변: 여러 명이 보거나 친구들이 알고 있습니다."),
+                        option("상대가 흥분", "확인 답변: 당시 상대가 흥분하거나 분노한 상태였습니다."),
+                        option("보복 우려", "확인 답변: 보복이나 다시 맞을까 봐 걱정됩니다."),
                         option("직접 입력", "확인 답변: ")));
             }
         }
@@ -2034,13 +2060,11 @@ public class ChatService {
             ));
         }
 
-        String model = deepSeekModel == null || deepSeekModel.isBlank()
-                ? "deepseek-v4-flash"
-                : deepSeekModel.trim();
+        String model = cheapestDeepSeekModel(deepSeekModel);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", model);
         body.put("messages", messages);
-        body.put("max_tokens", Math.max(400, Math.min(deepSeekMaxTokens, 1200)));
+        body.put("max_tokens", effectiveDeepSeekMaxTokens(deepSeekMaxTokens));
         body.put("temperature", 0.1);
         if (model.startsWith("deepseek-v4")) {
             body.put("thinking", Map.of("type", "disabled"));
@@ -2053,6 +2077,15 @@ public class ChatService {
                 Map.class
         );
         return extractOpenAiStyleResponse(res.getBody());
+    }
+
+    static String cheapestDeepSeekModel(String configuredModel) {
+        return CHEAPEST_DEEPSEEK_MODEL;
+    }
+
+    static int effectiveDeepSeekMaxTokens(int configuredMaxTokens) {
+        int selected = configuredMaxTokens > 0 ? configuredMaxTokens : DEEPSEEK_DEFAULT_MAX_TOKENS;
+        return Math.max(DEEPSEEK_MIN_MAX_TOKENS, Math.min(selected, DEEPSEEK_HARD_MAX_TOKENS));
     }
 
     private String callGeminiApi(List<Message> history, String systemPrompt) {
@@ -2594,7 +2627,7 @@ public class ChatService {
             case "incident_post", "chat_pattern" -> Set.of("incident");
             case "post_trace", "evidence_chat", "physical_support", "sexual_context" -> Set.of("evidence");
             case "post_spread" -> Set.of("evidence", "impact");
-            case "chat_support", "physical_injury", "sexual_support", "actor_stop" -> Set.of("impact");
+            case "chat_support", "physical_injury", "physical_context", "sexual_support", "actor_stop" -> Set.of("impact");
             case "actor_recovery" -> Set.of("goal");
             default -> Set.of();
         };
@@ -2606,6 +2639,7 @@ public class ChatService {
         if (hasAny(content, "상대와의 관계", "학교폭력 절차 기준", "같은 반", "같은 학교", "학교 밖", "학교 관계")) return "relationship";
         if (hasAny(content, "언제부터", "몇 번", "어떤 빈도", "한 번인지", "지금도", "반복됐나요")) return "timeline";
         if (hasAny(content, "남아 있는 증거", "증거는 무엇", "캡처", "URL", "작성자 계정", "게시 시간", "확인 가능한 게")) return "evidence";
+        if (hasAny(content, "피해 정도", "당시 상황", "맞거나 밀친 정도", "친구들이 알고", "상대가 흥분")) return "physical_context";
         if (hasAny(content, "영향", "걱정되는 부분", "보복", "등교", "불안", "두려운")) return "impact";
         if (hasAny(content, "필요한 도움", "어떤 도움", "신고", "증거 정리", "안전하게 보호", "거리를 둬야")) return "goal";
         if (hasAny(content, "같은 사안", "리포트를 생성")) return "final_check";
@@ -3222,6 +3256,8 @@ public class ChatService {
                 "groq", groqApiKey != null && !groqApiKey.isBlank(),
                 "gemini", geminiApiKey != null && !geminiApiKey.isBlank(),
                 "deepseek", !effectiveDeepSeekApiKey().isBlank(),
+                "deepseek_model", cheapestDeepSeekModel(deepSeekModel),
+                "deepseek_max_tokens", effectiveDeepSeekMaxTokens(deepSeekMaxTokens),
                 "claude", isClaudeBackupAvailable(),
                 "last_provider", lastProvider,
                 "last_failure_provider", lastProviderFailure,

@@ -38,8 +38,9 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_COMPLETION_TOKENS", "900"))
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 DEEPSEEK_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
-DEEPSEEK_MAX_TOKENS = int(os.getenv("DEEPSEEK_MAX_TOKENS", "900"))
+CHEAPEST_DEEPSEEK_MODEL = "deepseek-v4-flash"
+DEEPSEEK_MODEL = CHEAPEST_DEEPSEEK_MODEL
+DEEPSEEK_MAX_TOKENS = int(os.getenv("DEEPSEEK_MAX_TOKENS", "700"))
 DB = os.path.join(os.path.dirname(__file__), "safeshield.db")
 
 # ── DB ──────────────────────────────────────────────────────────────────────
