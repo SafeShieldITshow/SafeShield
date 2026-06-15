@@ -290,6 +290,8 @@ const SShieldResult = () => {
         !String(item).startsWith('판단 신뢰도:')
         && !String(item).startsWith('예상 조치 근거:')
     ));
+    const primaryAction = (report?.recommended_actions || [])[0] || '상담 내용을 조금 더 보강해 주세요.';
+    const riskPercent = Math.max(0, Math.min(100, Number(score || 0) * 10));
 
     const logout = () => {
         clearSession();
@@ -380,8 +382,14 @@ const SShieldResult = () => {
                                         {reportCreatedAt && <span className="report-date">생성일 {reportCreatedAt}</span>}
                                     </div>
                                     <div className={`report-risk-chip ${riskStatusClass}`}>
-                                        <strong>{score}</strong>
-                                        <span>/10 · {riskLevel(score)}</span>
+                                        <div className="report-risk-number">
+                                            <strong>{score}</strong>
+                                            <span>/10 · {riskLevel(score)}</span>
+                                        </div>
+                                        <div className="report-risk-meter" aria-hidden="true">
+                                            <i style={{ width: `${riskPercent}%` }}></i>
+                                        </div>
+                                        <small>추가 설명에 따라 달라질 수 있습니다.</small>
                                     </div>
                                 </section>
 
@@ -404,6 +412,14 @@ const SShieldResult = () => {
                                         <p>체크한 항목은 화면에서 바로 확인할 수 있습니다.</p>
                                     </div>
                                 </div>
+
+                                <section className="report-next-strip">
+                                    <div>
+                                        <span>먼저 볼 것</span>
+                                        <strong>{primaryAction}</strong>
+                                    </div>
+                                    <button type="button" onClick={goToReportChat}>내용 더 보강하기</button>
+                                </section>
 
                                 <div className="report-main-grid">
                                     <section className="ss-card report-section">

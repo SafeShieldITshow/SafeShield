@@ -85,6 +85,18 @@ function SShieldLogin() {
                 S-<span className="logo-accent">Shield</span>
             </div>
 
+            <main className="login-shell">
+                <section className="login-context-panel" aria-label="S-Shield 계정 안내">
+                    <span className="login-context-eyebrow">SAFE CASE NOTE</span>
+                    <h2>상담 기록을 조용히 이어가는 공간</h2>
+                    <p>진행 중인 상담과 리포트를 같은 흐름으로 확인할 수 있습니다.</p>
+                    <div className="login-context-list" aria-hidden="true">
+                        <span>상담</span>
+                        <span>리포트</span>
+                        <span>기록</span>
+                    </div>
+                </section>
+
             <div className="form-wrapper animated-entrance">
                 <div className="login-heading">
                     <span className="login-kicker">S-SHIELD ACCOUNT</span>
@@ -193,6 +205,7 @@ function SShieldLogin() {
                     Google 로그인
                 </button>
             </div>
+            </main>
         </div>
     );
 }
