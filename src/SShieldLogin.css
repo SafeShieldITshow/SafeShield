@@ -559,3 +559,132 @@
     box-shadow: 0 12px 32px rgba(28, 45, 86, 0.11);
   }
 }
+
+/* Restore S-Shield dark theme while keeping the refreshed layout. */
+.login-container {
+  --bg: #1f1e24;
+  --surface: #27262e;
+  --elevated: #2e2d38;
+  --text: #ffffff;
+  --text-sub: #b7b6c5;
+  --text-muted: #747483;
+  --border: #33323a;
+  --border-faint: rgba(255, 255, 255, 0.08);
+  --accent: #5f52d0;
+  --accent-hover: #7063de;
+  --accent-light: #7e74f0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 44%),
+    #1f1e24;
+  color: var(--text);
+}
+
+.login-container .top-logo {
+  color: #ffffff;
+}
+
+.login-context-panel {
+  background:
+    linear-gradient(160deg, rgba(40, 39, 55, 0.97), rgba(68, 58, 132, 0.9)),
+    #27262e;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+}
+
+.login-context-eyebrow {
+  background: rgba(126, 116, 240, 0.2);
+  color: #d8d2ff;
+}
+
+.login-context-list span {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.form-wrapper {
+  background: rgba(40, 39, 48, 0.98);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 22px 58px rgba(0, 0, 0, 0.28);
+}
+
+.login-kicker {
+  color: #a9a2f2;
+}
+
+.login-heading h1 {
+  color: #ffffff;
+}
+
+.login-heading p,
+.input-label {
+  color: #b7b6c5;
+}
+
+.tab-group-container {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.tab-active-bar {
+  background: rgba(126, 116, 240, 0.34);
+  border-color: rgba(126, 116, 240, 0.28);
+  box-shadow: none;
+}
+
+.tab-btn-item {
+  color: #9a9aab;
+}
+
+.tab-btn-item.selected {
+  color: #ffffff;
+}
+
+.clean-purple-input {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.clean-purple-input::placeholder {
+  color: #9090a0;
+}
+
+.clean-purple-input:focus {
+  border-color: rgba(126, 116, 240, 0.72);
+  box-shadow: 0 0 0 3px rgba(126, 116, 240, 0.14);
+}
+
+.main-action-btn {
+  background: #5f52d0;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.main-action-btn:hover {
+  background: #7063de;
+}
+
+.main-action-btn:disabled {
+  color: #ffffff;
+  opacity: 0.72;
+}
+
+.divider {
+  color: #747483;
+}
+
+.divider::before,
+.divider::after {
+  background: #33323a;
+}
+
+.form-message.error {
+  color: #ffb4b4;
+  background: rgba(255, 107, 107, 0.08);
+  border-color: rgba(255, 107, 107, 0.18);
+}
+
+.form-message.success {
+  color: #c8f4dc;
+  background: rgba(76, 190, 133, 0.09);
+  border-color: rgba(76, 190, 133, 0.2);
+}

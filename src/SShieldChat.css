@@ -1013,3 +1013,307 @@
   }
   .chat-cta-btn { width: 100%; }
 }
+
+/* Restore S-Shield dark chat colors while keeping the refreshed layout. */
+.ss-chat-root {
+  --bg: #1f1e24;
+  --surface: #27262e;
+  --elevated: #2e2d38;
+  --input-bg: #2c2b34;
+  --border: #33323a;
+  --border-faint: rgba(255, 255, 255, 0.08);
+  --accent: #5f52d0;
+  --accent-hover: #7063de;
+  --accent-light: #7e74f0;
+  --accent-dim: rgba(95, 82, 208, 0.12);
+  --text: #ffffff;
+  --text-sub: #b7b6c5;
+  --text-muted: #747483;
+  --danger: #ff5a5a;
+  background: #1f1e24;
+  color: var(--text);
+}
+
+.ss-chat-main {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 220px),
+    #1f1e24;
+}
+
+.ss-chat-root .ss-sidebar {
+  background: #1f1e24;
+  border-right-color: #33323a;
+  box-shadow: none;
+}
+
+.ss-chat-root .ss-menu-circle {
+  background: transparent;
+  border-color: #33323a;
+}
+
+.ss-chat-root .ss-menu-circle span {
+  background: #9a9aab;
+}
+
+.ss-chat-root .ss-nav-item {
+  color: #9a9aab;
+}
+
+.ss-chat-root .ss-nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+}
+
+.ss-chat-root .ss-nav-item.active {
+  background: rgba(95, 82, 208, 0.12);
+  color: #ffffff;
+}
+
+.ss-chat-root .ss-emoji-icon {
+  background: rgba(126, 116, 240, 0.14);
+  color: #7e74f0;
+}
+
+.ss-chat-root .ss-side-action-btn {
+  border-color: #33323a;
+  background: #27262e;
+  color: #ffffff;
+}
+
+.ss-chat-root .ss-side-action-btn:hover {
+  border-color: rgba(126, 116, 240, 0.6);
+  background: rgba(126, 116, 240, 0.16);
+}
+
+.ss-chat-root .ss-logout-btn {
+  color: #ff5a5a;
+}
+
+.ss-chat-header {
+  background: rgba(31, 30, 36, 0.9);
+  border-bottom-color: #33323a;
+}
+
+.ss-chat-logo,
+.ss-top-action {
+  color: #ffffff;
+}
+
+.ss-top-action {
+  border-color: rgba(126, 116, 240, 0.38);
+  background: rgba(126, 116, 240, 0.16);
+  box-shadow: none;
+}
+
+.ss-top-action:hover {
+  border-color: rgba(126, 116, 240, 0.52);
+  background: rgba(126, 116, 240, 0.2);
+}
+
+.ai .ss-msg-bubble {
+  background: #27262e;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.user .ss-msg-bubble {
+  background: #eeeef4;
+  color: #202027;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.markdown-message h4,
+.markdown-message strong {
+  color: #ffffff;
+}
+
+.user .ss-msg-bubble strong,
+.user .ss-msg-bubble h4 {
+  color: #202027;
+}
+
+.markdown-message code {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.typing-indicator {
+  background: #27262e;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+
+.typing-dot {
+  background: #7e74f0;
+}
+
+.confirmation-prompt {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.confirmation-kicker {
+  background: rgba(126, 116, 240, 0.16);
+  color: #efeaff;
+}
+
+.confirmation-prompt p {
+  color: #f7f5ff;
+}
+
+.confirmation-multi-hint,
+.confirmation-submit-row span {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.confirmation-options button {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.confirmation-options button:hover:not(:disabled) {
+  background: rgba(126, 116, 240, 0.34);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
+.confirmation-options button.selected {
+  background: #7e74f0;
+  border-color: rgba(255, 255, 255, 0.42);
+  color: #ffffff;
+}
+
+.confirmation-custom-input {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.confirmation-custom-input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.confirmation-submit-btn,
+.ss-send-btn,
+.chat-cta-btn,
+.guest-history-notice button {
+  background: #5f52d0;
+  color: #ffffff;
+}
+
+.confirmation-submit-btn:hover:not(:disabled),
+.ss-send-btn:hover,
+.chat-cta-btn:hover,
+.guest-history-notice button:hover {
+  background: #7063de;
+}
+
+.example-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #c9c7d5;
+  box-shadow: none;
+}
+
+.example-chip:hover {
+  border-color: rgba(126, 116, 240, 0.46);
+  background: rgba(126, 116, 240, 0.12);
+  color: #ffffff;
+}
+
+.ss-input-box {
+  background: #27262e;
+  border-color: rgba(255, 255, 255, 0.11);
+  box-shadow: none;
+}
+
+.ss-input-box textarea {
+  color: #ffffff;
+}
+
+.ss-input-box textarea::placeholder {
+  color: #8d8d9e;
+}
+
+.ss-send-btn:disabled,
+.example-chip:disabled,
+.chat-cta-btn:disabled,
+.confirmation-submit-btn:disabled {
+  color: #ffffff;
+  opacity: 0.55;
+}
+
+.chat-cta {
+  background: #27262e;
+  border-color: rgba(126, 116, 240, 0.24);
+  box-shadow: none;
+}
+
+.chat-cta p {
+  color: #b7b6c5;
+}
+
+.ss-legal-notice {
+  color: #6f6f7d;
+}
+
+.ss-guest-notice {
+  color: #cfc9ff;
+}
+
+.ss-stopped-notice {
+  border-color: rgba(255, 118, 118, 0.26);
+  background: rgba(255, 118, 118, 0.1);
+  color: #ffe0e0;
+}
+
+.guest-history-notice {
+  border-color: rgba(126, 116, 240, 0.26);
+  background: rgba(126, 116, 240, 0.12);
+  color: #ffffff;
+}
+
+.guest-history-notice strong {
+  color: #ffffff;
+}
+
+.guest-history-notice span {
+  color: #9a9aab;
+}
+
+.confirm-box,
+.topic-confirm-box {
+  background: #27262e;
+  border-color: #33323a;
+  color: #ffffff;
+}
+
+.confirm-box p {
+  color: #ffffff;
+}
+
+.topic-confirm-desc {
+  color: #9a9aab;
+}
+
+@media (max-width: 800px) {
+  .ss-mobile-nav button {
+    background: transparent;
+    border: 0;
+    color: #747483;
+  }
+
+  .ss-mobile-nav button.active {
+    background: rgba(95, 82, 208, 0.12);
+    color: #ffffff;
+  }
+
+  .ss-mobile-nav button:last-child {
+    background: rgba(126, 116, 240, 0.24);
+    border: 1px solid rgba(126, 116, 240, 0.44);
+    color: #ffffff;
+  }
+}
