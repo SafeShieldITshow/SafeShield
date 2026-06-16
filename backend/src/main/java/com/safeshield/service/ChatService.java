@@ -70,9 +70,29 @@ public class ChatService {
     private static final Pattern UNSAFE_GROUP_CHAT_EXIT_SENTENCE_PATTERN = Pattern.compile(
             "[^\\n.!?。！？]*?(?:단체\\s*채팅방|단톡방|채팅방|대화방|단톡)[^\\n.!?。！？]*?(?:나가|퇴장|빠져나오)[^\\n.!?。！？]*(?:[.!?。！？]|$)"
     );
+    private static final Pattern NEXT_QUESTION_BLOCK_PATTERN = Pattern.compile(
+            "(?is)\\[\\[NEXT_QUESTION\\]\\](.*?)\\[\\[/NEXT_QUESTION\\]\\]"
+    );
+    private static final String NEXT_QUESTION_PROTOCOL = """
+
+                # 다음 확인 질문 출력 규칙
+                - 답변 본문이 끝난 뒤 반드시 아래 블록을 붙이세요. 이 블록은 화면 카드로만 쓰이고 사용자에게 본문으로 보이지 않습니다.
+                - 지금 맥락에서 가장 자연스럽고 필요한 사실 확인 질문 1개만 만드세요. 고정 설문 문구를 베끼지 말고, 사용자가 이미 말한 사실은 다시 묻지 마세요.
+                - 질문은 학교폭력 유형을 고르게 하는 것이 아니라 관찰 가능한 사실을 답하게 해야 합니다.
+                - 선택지는 2~4개로 만들고, 사용자가 쉽게 누를 수 있는 사실 답변이어야 합니다. 직접 입력은 화면에 항상 있으므로 선택지에 억지로 넣지 않아도 됩니다.
+                - 더 물을 실익보다 정리 실익이 크거나 사용자가 리포트를 직접 요청한 상황이면 질문에 "없음"이라고 쓰세요.
+
+                [[NEXT_QUESTION]]
+                질문: 지금 확인할 핵심 질문 1개 또는 없음
+                선택지:
+                - 짧은 선택지 | 확인 답변: 사용자가 이 선택지를 골랐을 때 상담 기록에 남길 자연스러운 문장
+                - 짧은 선택지 | 확인 답변: 사용자가 이 선택지를 골랐을 때 상담 기록에 남길 자연스러운 문장
+                [[/NEXT_QUESTION]]
+                """;
 
     private record PromptContext(String prompt, String lawContext, ReplyMode mode) {}
     private record ConfirmationCandidate(String id, String question, List<Map<String, String>> options) {}
+    private record GeneratedReply(String reply, ConfirmationCandidate followUpQuestion) {}
 
     private static final Pattern LAW_HEADER_PATTERN =
             Pattern.compile("^===\\s*(.+?)\\s*===$");
@@ -208,7 +228,8 @@ public class ChatService {
             );
         }
 
-        List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
+        GeneratedReply generatedReply = getAiReply(history);
+        List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history, generatedReply.followUpQuestion());
         boolean explicitReportRequest = isExplicitReportRequest(normalized);
         Map<String, Object> report = null;
         boolean reportGenerated = false;
@@ -220,7 +241,7 @@ public class ChatService {
             reportUpdated = mutation.updated();
         }
         String reply = appendReportSummary(
-                connectReplyToConfirmation(getAiReply(history), confirmationPrompts),
+                connectReplyToConfirmation(generatedReply.reply(), confirmationPrompts),
                 report,
                 reportGenerated,
                 reportUpdated
@@ -278,7 +299,8 @@ public class ChatService {
             response.put("temporary", true);
             return response;
         }
-        List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
+        GeneratedReply generatedReply = getAiReply(history);
+        List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history, generatedReply.followUpQuestion());
         boolean explicitReportRequest = isExplicitReportRequest(normalized);
         Map<String, Object> report = null;
         boolean reportGenerated = false;
@@ -289,7 +311,7 @@ public class ChatService {
             reportGenerated = !reportUpdated;
         }
         String reply = appendReportSummary(
-                connectReplyToConfirmation(getAiReply(history), confirmationPrompts),
+                connectReplyToConfirmation(generatedReply.reply(), confirmationPrompts),
                 report,
                 reportGenerated,
                 reportUpdated
@@ -495,9 +517,28 @@ public class ChatService {
     }
 
     private List<Map<String, Object>> confirmationPrompts(ReportReadiness readiness, List<Message> history) {
+        return confirmationPrompts(readiness, history, null);
+    }
+
+    private List<Map<String, Object>> confirmationPrompts(
+            ReportReadiness readiness,
+            List<Message> history,
+            ConfirmationCandidate aiFollowUpQuestion
+    ) {
         String combined = combinedUserText(history);
         if (needsRealityCheck(combined)) return List.of(confirmationPrompt(realityCheckQuestion()));
         if (readiness.ready() || readiness.missingInfo().isEmpty()) return List.of();
+        List<ConfirmationCandidate> aiCandidates = filterUsableCandidates(
+                aiFollowUpQuestion == null ? List.of() : List.of(aiFollowUpQuestion),
+                combined,
+                history
+        );
+        if (!aiCandidates.isEmpty()) {
+            return aiCandidates.stream()
+                    .limit(1)
+                    .map(ChatService::confirmationPrompt)
+                    .toList();
+        }
         return confirmationCandidates(readiness, combined, userMessageCount(history), history).stream()
                 .limit(1)
                 .map(ChatService::confirmationPrompt)
@@ -529,7 +570,7 @@ public class ChatService {
         }
         String question = firstConfirmationQuestion(prompts);
         if (question.isBlank() || trimmed.contains(question)) return trimmed;
-        return trimmed + "\n\n아래에 이어서 확인할 내용을 하나만 띄워둘게요.";
+        return trimmed + "\n\n아래에 지금 맥락에서 필요한 질문 하나를 띄워둘게요.";
     }
 
     private static String appendReportSummary(
@@ -1628,19 +1669,19 @@ public class ChatService {
         }
     }
 
-    private String getAiReply(List<Message> history) {
+    private GeneratedReply getAiReply(List<Message> history) {
         String latestUserMessage = latestUserMessage(history);
         String userContextText = combinedUserText(history);
         if (isGreetingOnly(latestUserMessage)) {
             lastProvider = "local_greeting";
-            return buildGreetingReply();
+            return new GeneratedReply(buildGreetingReply(), null);
         }
         if (shouldGuardIrrelevantInput(latestUserMessage, hasConversationContext(history), isConversationalFollowUp(latestUserMessage, history))) {
             lastProvider = "guardrail";
             if (isPerpetratorContext(userContextText)) {
-                return buildPerpetratorOffTopicReply();
+                return new GeneratedReply(buildPerpetratorOffTopicReply(), null);
             }
-            return buildIrrelevantInputReply();
+            return new GeneratedReply(buildIrrelevantInputReply(), null);
         }
 
         PromptContext promptContext = buildPromptContext(history);
@@ -1648,7 +1689,7 @@ public class ChatService {
 
         if (!effectiveDeepSeekApiKey().isBlank() && System.currentTimeMillis() > deepSeekDisabledUntil) {
             try {
-                String reply = requireValidGeneratedReply(
+                GeneratedReply reply = requireValidGeneratedReply(
                         callDeepSeekApi(history, promptContext.prompt()),
                         promptContext
                 );
@@ -1664,7 +1705,7 @@ public class ChatService {
         if (geminiApiKey != null && !geminiApiKey.isBlank()
                 && System.currentTimeMillis() > geminiDisabledUntil) {
             try {
-                String reply = requireValidGeneratedReply(
+                GeneratedReply reply = requireValidGeneratedReply(
                         callGeminiApi(history, promptContext.prompt()),
                         promptContext
                 );
@@ -1679,7 +1720,7 @@ public class ChatService {
 
         if (groqApiKey != null && !groqApiKey.isBlank() && System.currentTimeMillis() > groqDisabledUntil) {
             try {
-                String reply = requireValidGeneratedReply(
+                GeneratedReply reply = requireValidGeneratedReply(
                         callGroqApi(history, promptContext.prompt()),
                         promptContext
                 );
@@ -1694,7 +1735,7 @@ public class ChatService {
 
         if (isClaudeBackupAvailable()) {
             try {
-                String reply = requireValidGeneratedReply(
+                GeneratedReply reply = requireValidGeneratedReply(
                         callClaudeApi(history, promptContext.prompt()),
                         promptContext
                 );
@@ -1711,7 +1752,7 @@ public class ChatService {
             lastProvider = "law_fallback";
             System.err.println("[AI] 모든 외부 공급자 실패 후 법령 기반 fallback 응답 반환"
                     + (lastError == null ? "" : " (" + lastError.getClass().getSimpleName() + ")"));
-            return adaptSensitiveReply(fallback, latestUserMessage, userContextText, promptContext);
+            return adaptSensitiveReply(new GeneratedReply(fallback, null), latestUserMessage, userContextText, promptContext);
         }
 
         lastProvider = "unavailable";
@@ -1721,8 +1762,10 @@ public class ChatService {
         );
     }
 
-    private String adaptSensitiveReply(String reply, String latestUserMessage, String userContextText, PromptContext promptContext) {
-        if (reply == null || promptContext == null) return reply;
+    private GeneratedReply adaptSensitiveReply(GeneratedReply generatedReply, String latestUserMessage, String userContextText, PromptContext promptContext) {
+        if (generatedReply == null) return new GeneratedReply("", null);
+        String reply = generatedReply.reply();
+        if (reply == null || promptContext == null) return generatedReply;
         String adapted = adaptCaseDomainWording(reply, userContextText);
         boolean conversationMode = promptContext.mode() == ReplyMode.CONVERSATION;
         boolean sexualContext = hasSexualViolationSignal(userContextText) || hasSexualViolationSignal(latestUserMessage);
@@ -1735,10 +1778,10 @@ public class ChatService {
         }
         if (asksMaleVictimCanConsult(latestUserMessage)
                 && !containsAny(adapted, "남자", "성별", "당연히 상담", "상담해도 됩니다")) {
-            return "남자여도 당연히 상담해도 됩니다. 원하지 않은 성적 접촉이나 말은 성별과 관계없이 도움을 요청할 수 있는 일입니다.\n"
+            adapted = "남자여도 당연히 상담해도 됩니다. 원하지 않은 성적 접촉이나 말은 성별과 관계없이 도움을 요청할 수 있는 일입니다.\n"
                     + adapted;
         }
-        return adapted;
+        return new GeneratedReply(adapted, generatedReply.followUpQuestion());
     }
 
     static String adaptCaseDomainWording(String reply, String userContextText) {
@@ -2440,7 +2483,7 @@ public class ChatService {
                 """ + allowedCitations + """
 
                 # 참고 법령
-                """ + lawContext;
+                """ + lawContext + NEXT_QUESTION_PROTOCOL;
         return new PromptContext(prompt, lawContext, replyMode);
     }
 
@@ -2594,14 +2637,11 @@ public class ChatService {
                 이유: """ + readiness.reason() + """
                 아직 더 필요한 정보: """ + String.join(", ", readiness.missingInfo()) + """
 
-                # 화면에 별도로 제공될 확인 질문
-                """ + nextConfirmationQuestionPreview(readiness, history) + """
-
                 # 인용 가능한 법령 목록
                 """ + allowedCitations + """
 
                 # 참고 법령 원문
-                """ + lawContext;
+                """ + lawContext + NEXT_QUESTION_PROTOCOL;
     }
 
     private String buildConversationPrompt(ReportReadiness readiness, String allowedCitations, String lawContext, List<Message> history) {
@@ -2669,7 +2709,7 @@ public class ChatService {
                 """ + allowedCitations + """
 
                 # 참고 법령
-                """ + lawContext;
+                """ + lawContext + NEXT_QUESTION_PROTOCOL;
     }
 
     private ReportReadiness assessReadiness(List<Message> history) {
@@ -2969,9 +3009,10 @@ public class ChatService {
         return result.toString().trim();
     }
 
-    private String requireValidGeneratedReply(String reply, PromptContext promptContext) {
+    private GeneratedReply requireValidGeneratedReply(String reply, PromptContext promptContext) {
+        GeneratedReply parsed = parseGeneratedReply(reply);
         String sanitized = sanitizeUnsupportedLegalReferences(
-                sanitizeGeneratedReply(reply),
+                sanitizeGeneratedReply(parsed.reply()),
                 promptContext.lawContext()
         );
         if (sanitized.isBlank()
@@ -2980,7 +3021,62 @@ public class ChatService {
                 || hasUnsafePhysicalViolenceAdvice(sanitized)) {
             throw new IllegalStateException("AI 응답이 안전 또는 법령 검증을 통과하지 못했습니다.");
         }
-        return sanitized;
+        return new GeneratedReply(sanitized, parsed.followUpQuestion());
+    }
+
+    static GeneratedReply parseGeneratedReply(String rawReply) {
+        if (rawReply == null || rawReply.isBlank()) return new GeneratedReply("", null);
+        Matcher matcher = NEXT_QUESTION_BLOCK_PATTERN.matcher(rawReply);
+        if (!matcher.find()) return new GeneratedReply(rawReply.trim(), null);
+
+        String visibleReply = (rawReply.substring(0, matcher.start()) + "\n" + rawReply.substring(matcher.end())).trim();
+        ConfirmationCandidate followUp = parseAiFollowUpQuestion(matcher.group(1));
+        return new GeneratedReply(visibleReply, followUp);
+    }
+
+    private static ConfirmationCandidate parseAiFollowUpQuestion(String block) {
+        if (block == null || block.isBlank()) return null;
+        String question = "";
+        List<Map<String, String>> options = new ArrayList<>();
+
+        for (String rawLine : block.split("\\R")) {
+            String line = rawLine == null ? "" : rawLine.trim();
+            if (line.isBlank() || line.equals("선택지:")) continue;
+            String lower = line.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("질문:") || lower.startsWith("question:")) {
+                question = line.substring(line.indexOf(':') + 1).trim();
+                continue;
+            }
+            String optionLine = line.replaceFirst("^[-*•]\\s*", "").replaceFirst("^\\d+[.)]\\s*", "").trim();
+            if (optionLine.isBlank() || optionLine.equals(line) && !line.contains("|")) continue;
+            Map<String, String> option = parseAiOption(optionLine);
+            if (option != null) options.add(option);
+        }
+
+        if (question.isBlank() || "없음".equals(question) || question.length() > 120) return null;
+        options = options.stream()
+                .filter(option -> !option.getOrDefault("label", "").isBlank())
+                .filter(option -> !option.getOrDefault("message", "").isBlank())
+                .limit(4)
+                .toList();
+        if (options.isEmpty()) {
+            options = List.of(option("직접 입력", "확인 답변: "));
+        }
+        return new ConfirmationCandidate("ai_next_question", question, options);
+    }
+
+    private static Map<String, String> parseAiOption(String optionLine) {
+        if (optionLine == null || optionLine.isBlank()) return null;
+        String[] parts = optionLine.split("\\|", 2);
+        String label = parts[0].trim();
+        String message = parts.length > 1 ? parts[1].trim() : "";
+        if (label.endsWith(":")) label = label.substring(0, label.length() - 1).trim();
+        if (message.isBlank()) message = "확인 답변: " + label;
+        if (!message.startsWith("확인 답변:") && !message.startsWith("추가 설명:")) {
+            message = "확인 답변: " + message;
+        }
+        if (label.length() > 24) label = label.substring(0, 24).trim();
+        return option(label, message);
     }
 
     static boolean isGeneratedConversationReplyValid(String reply, String lawContext) {

@@ -661,7 +661,7 @@ class ChatServiceTest {
 
         assertFalse(reply.contains("확인을 위해 질문 하나 할게요."));
         assertFalse(reply.contains("대화 전체가 보이는 캡처나 원본이 있나요?"));
-        assertTrue(reply.contains("아래에 이어서 확인할 내용을 하나만 띄워둘게요."));
+        assertTrue(reply.contains("아래에 지금 맥락에서 필요한 질문 하나를 띄워둘게요."));
     }
 
     @Test
@@ -716,7 +716,38 @@ class ChatServiceTest {
 
         assertFalse(reply.contains("내용 전체가 있다는 점은 중요합니다. 확인을 위해 질문 하나 할게요."));
         assertFalse(reply.contains("상대와의 관계는 어디에 가깝나요?"));
-        assertTrue(reply.endsWith("아래에 이어서 확인할 내용을 하나만 띄워둘게요."));
+        assertTrue(reply.endsWith("아래에 지금 맥락에서 필요한 질문 하나를 띄워둘게요."));
+    }
+
+    @Test
+    void parsesAiGeneratedFollowUpQuestionOutOfVisibleReply() throws Exception {
+        String raw = """
+                말해준 내용은 단톡방에서 가족사를 조롱한 언어폭력·사이버폭력 쟁점으로 볼 수 있습니다.
+
+                [[NEXT_QUESTION]]
+                질문: 그 말을 본 사람이 단톡방 안에 몇 명 정도 있었나요?
+                선택지:
+                - 소수만 봄 | 확인 답변: 단톡방에서 소수만 그 말을 봤습니다.
+                - 여러 명이 봄 | 확인 답변: 단톡방에서 여러 명이 그 말을 봤습니다.
+                [[/NEXT_QUESTION]]
+                """;
+
+        var method = ChatService.class.getDeclaredMethod("parseGeneratedReply", String.class);
+        method.setAccessible(true);
+        Object parsed = method.invoke(null, raw);
+        var replyMethod = parsed.getClass().getDeclaredMethod("reply");
+        var followUpMethod = parsed.getClass().getDeclaredMethod("followUpQuestion");
+        replyMethod.setAccessible(true);
+        followUpMethod.setAccessible(true);
+
+        String visibleReply = (String) replyMethod.invoke(parsed);
+        Object followUp = followUpMethod.invoke(parsed);
+        var questionMethod = followUp.getClass().getDeclaredMethod("question");
+        questionMethod.setAccessible(true);
+
+        assertFalse(visibleReply.contains("NEXT_QUESTION"));
+        assertTrue(visibleReply.contains("언어폭력"));
+        assertEquals("그 말을 본 사람이 단톡방 안에 몇 명 정도 있었나요?", questionMethod.invoke(followUp));
     }
 
     @Test
@@ -726,7 +757,7 @@ class ChatServiceTest {
                 List.of(Map.of("question", "말해준 내용이 실제로 있었던 일인지, 비유나 장난 표현인지 먼저 확인할게요."))
         );
 
-        assertFalse(reply.contains("아래에 실제 사건 여부를 확인할 선택지를 띄워둘게요.\n\n아래에 이어서 확인할 내용을 하나만 띄워둘게요."));
+        assertFalse(reply.contains("아래에 실제 사건 여부를 확인할 선택지를 띄워둘게요.\n\n아래에 지금 맥락에서 필요한 질문 하나를 띄워둘게요."));
     }
 
     @Test
