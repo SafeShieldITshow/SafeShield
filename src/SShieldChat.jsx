@@ -22,7 +22,7 @@ const TEMP_REPORT_UPDATED_EVENT = 'ss_temp_report_updated';
 const initialMessage = () => ({
     id: 'welcome',
     type: 'ai',
-    text: '안녕하세요. S-Shield 법률 상담 AI입니다.\n상황을 자세히 적어주시면 학교폭력 유형, 관련 법령, 증거 준비 방법을 정리해드릴게요.',
+    text: '안녕하세요. S-Shield 법률 상담 AI입니다.\n어떤 일이 있었는지 편하게 적어주세요. 상황을 보면서 필요한 확인은 제가 하나씩 이어가겠습니다.',
     time: now(),
 });
 
@@ -632,8 +632,10 @@ const SShieldChat = () => {
                 if (latestReport) {
                     setReadyReport(latestReport);
                     if (guestSend) storeTemporaryReport(latestReport);
+                } else {
+                    setReadyReport(null);
                 }
-                setShowReport(!stopped && Boolean(data.report_ready || latestReport || readyReport));
+                setShowReport(!stopped && Boolean(latestReport || data.report_suggested || data.report_ready));
                 const reportChanged = latestReport && (data.report_generated || data.report_updated);
                 const notice = reportChanged && !String(data.reply || '').includes('리포트가 ')
                     ? reportNoticeText(latestReport, data.report_updated ? '갱신' : '생성')
@@ -668,7 +670,24 @@ const SShieldChat = () => {
             return;
         }
         if (isGuest) {
-            alert('임시 리포트를 생성하지 못했습니다. 상담을 한 번 더 이어가거나 로그인 후 다시 시도해 주세요.');
+            setGeneratingReport(true);
+            try {
+                const data = await api.post('/chat/guest-message', {
+                    content: '상담 내용을 정리해줘',
+                    history: toGuestHistoryPayload(messages),
+                });
+                if (data.report) {
+                    setReadyReport(data.report);
+                    storeTemporaryReport(data.report);
+                    openReport(data.report);
+                } else {
+                    alert(data.report_reason || '상담을 조금 더 이어간 뒤 정리할 수 있습니다.');
+                }
+            } catch (e) {
+                alert(e.message || '임시 리포트를 생성하지 못했습니다. 상담을 한 번 더 이어가 주세요.');
+            } finally {
+                setGeneratingReport(false);
+            }
             return;
         }
         if (!sessionId || isChatLocked) return;
@@ -909,7 +928,7 @@ const SShieldChat = () => {
                                                     );
                                                     return (
                                                     <div className="confirmation-prompt" key={promptKey}>
-                                                        <span className="confirmation-kicker">이어 볼 내용</span>
+                                                        <span className="confirmation-kicker">다음 확인 질문</span>
                                                         <p>{prompt.question}</p>
                                                         <span className="confirmation-multi-hint">
                                                             {prompt.instruction || '여러 개 선택 가능 · 필요하면 직접 입력도 함께 작성'}
@@ -955,7 +974,7 @@ const SShieldChat = () => {
                                                         onClick={() => handleSendConfirmation(msg)}
                                                         disabled={isChatLocked || !confirmationAnswersForMessage(msg).length}
                                                     >
-                                                        이 내용으로 이어가기
+                                                        이 내용으로 답하기
                                                     </button>
                                                     <span>답하기 편한 만큼만 골라도 됩니다.</span>
                                                 </div>
@@ -993,11 +1012,11 @@ const SShieldChat = () => {
                         <div className="chat-cta">
                             <p>
                                 {readyReport
-                                    ? '분석 리포트가 생성되었습니다. 바로 확인해 보세요.'
-                                    : '핵심 정보가 확인되었습니다. 분석 리포트를 생성해 확인해 보세요.'}
+                                    ? '상담 내용을 정리한 리포트를 열 수 있습니다.'
+                                    : '상담 흐름이 어느 정도 정리됐습니다. 필요하면 지금까지 내용을 정리할 수 있어요.'}
                             </p>
                             <button className="chat-cta-btn" onClick={handleGenerateReport} disabled={generatingReport || isChatLocked}>
-                                {generatingReport ? '생성 중...' : '리포트 보기'}
+                                {generatingReport ? '정리 중...' : readyReport ? '정리 열기' : '상담 내용 정리하기'}
                             </button>
                         </div>
                     )}

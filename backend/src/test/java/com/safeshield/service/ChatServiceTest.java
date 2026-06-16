@@ -686,7 +686,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void guestTemporaryReportUpdatesWhenPriorReportExistsEvenWithNextPrompt() {
+    void guestTemporaryReportRequiresExplicitRequestEvenWithPriorReport() {
         ReportReadiness readiness = new ReportReadiness(
                 true,
                 "학교폭력 가능성 검토",
@@ -703,7 +703,8 @@ class ChatServiceTest {
                 "question", "지금 가장 걱정되는 부분은 무엇인가요?"
         ));
 
-        assertTrue(ChatService.shouldGenerateGuestTemporaryReport(readiness, prompts, List.of(priorAssistant)));
+        assertFalse(ChatService.shouldGenerateGuestTemporaryReport(readiness, prompts, List.of(priorAssistant)));
+        assertTrue(ChatService.shouldGenerateGuestTemporaryReport(readiness, prompts, List.of(priorAssistant), true));
     }
 
     @Test

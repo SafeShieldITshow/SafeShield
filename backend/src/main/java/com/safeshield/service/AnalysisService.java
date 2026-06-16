@@ -5,8 +5,10 @@ import com.safeshield.dto.ReportReadiness;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 @Service
 public class AnalysisService {
@@ -86,12 +88,7 @@ public class AnalysisService {
         boolean relevantInput = isRelevantConsultationInput(t);
         boolean bodilyWasteIncident = hasBodilyWasteIncidentSignal(t);
 
-        boolean hasConcreteIncident = containsAny(t, "때렸", "맞았", "욕", "모욕", "비방", "사진", "게시", "댓글", "협박",
-                "따돌", "돈", "갈취", "성희롱", "성추행", "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는",
-                "괴롭", "놀림", "밀쳤", "던졌", "던지", "우유곽", "들이붓", "끼얹", "부었", "뿌렸", "사과",
-                "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는",
-                "스토킹", "따라", "기다리", "집 앞", "계속 연락", "찾아와", "하교길")
-                || bodilyWasteIncident;
+        boolean hasConcreteIncident = hasConcreteIncidentSignal(t) || bodilyWasteIncident;
         boolean hasRelationshipAnswer = hasDefiniteSchoolRelationship(t)
                 || hasConfirmedNonSchoolRelationship(t)
                 || hasUnknownActorSignal(t)
@@ -170,6 +167,70 @@ public class AnalysisService {
         return new ReportReadiness(ready, status, reason, missing.stream().distinct().toList(), facts, relevantInput && !lowSchoolViolence);
     }
 
+    public Map<String, String> assessCounselingDimensions(String text, ReportReadiness readiness, long userMessageCount) {
+        String t = normalize(text);
+        List<String> types = detectViolenceTypes(t);
+        Map<String, String> dimensions = new LinkedHashMap<>();
+
+        dimensions.put("incident_understanding", dimensionState(hasConcreteIncidentSignal(t), isRelevantConsultationInput(t)));
+        dimensions.put("relationship_context", dimensionState(
+                hasDefiniteSchoolRelationship(t) || hasConfirmedNonSchoolRelationship(t)
+                        || hasUnknownActorSignal(t) || hasUnknownSchoolRelationshipSignal(t)
+                        || hasUnclearPersonalRelationshipSignal(t),
+                hasSchoolContext(t) || containsAny(t, "친구", "상대", "학교", "학원")
+        ));
+        dimensions.put("repeat_duration", dimensionState(
+                hasRepeatSignal(t) || hasNoRepeatSignal(t)
+                        || containsAny(t, "오늘", "어제", "며칠", "몇 번", "한 번", "지난", "개월", "주일", "동안"),
+                containsAny(t, "계속", "반복", "최근", "지속", "오래", "지금도")
+        ));
+        dimensions.put("publicity_spread", dimensionState(
+                containsAny(t, "공개", "퍼졌", "유포", "공유", "여러 명", "단체", "댓글", "친구들이 알고", "친구들 앞"),
+                containsAny(t, "sns", "카톡", "단톡", "게시", "사진", "온라인")
+        ));
+        dimensions.put("evidence_possibility", dimensionState(
+                containsAny(t, "캡처", "녹음", "사진", "진단", "병원", "목격", "메시지", "증거", "기록", "메모", "일지", "통화",
+                        "아직 확보한 증거는 없습니다", "증거는 없습니다"),
+                containsAny(t, "sns", "카톡", "단톡", "댓글", "게시")
+        ));
+        dimensions.put("impact_safety", impactSafetyState(t, types));
+        dimensions.put("user_goal", dimensionState(hasUserGoal(t), containsAny(t, "어떻게", "걱정", "도움", "상담")));
+        dimensions.put("legal_issues", types.isEmpty()
+                ? (isRelevantConsultationInput(t) ? "partial" : "unknown")
+                : (types.contains("성폭력") || containsAny(t, "보복", "협박", "자살", "자해") ? "sensitive" : "sufficient"));
+        dimensions.put("counseling_depth", readiness != null && readiness.ready()
+                ? "sufficient"
+                : userMessageCount >= 3 ? "partial" : "unknown");
+
+        return dimensions;
+    }
+
+    private String dimensionState(boolean sufficient, boolean partial) {
+        if (sufficient) return "sufficient";
+        if (partial) return "partial";
+        return "unknown";
+    }
+
+    private boolean hasConcreteIncidentSignal(String text) {
+        return containsAny(text, "때렸", "맞았", "욕", "모욕", "비방", "사진", "게시", "댓글", "협박",
+                "따돌", "돈", "갈취", "성희롱", "성추행", "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는",
+                "괴롭", "놀림", "밀쳤", "던졌", "던지", "우유곽", "들이붓", "끼얹", "부었", "뿌렸", "사과",
+                "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는",
+                "스토킹", "따라", "기다리", "집 앞", "계속 연락", "찾아와", "하교길")
+                || hasDemeaningSpeechSignal(text)
+                || hasBodilyWasteIncidentSignal(text);
+    }
+
+    private String impactSafetyState(String text, List<String> types) {
+        if (containsAny(text, "자살", "자해", "죽고 싶", "보복", "협박", "찾아와", "무서", "두려")
+                || types.contains("성폭력")) {
+            return "sensitive";
+        }
+        if (hasImpactOrRecovery(text)) return "sufficient";
+        if (containsAny(text, "불안", "걱정", "힘들", "등교", "피해")) return "partial";
+        return "unknown";
+    }
+
     private boolean hasImpactOrRecovery(String text) {
         return hasNoMeaningfulImpact(text) || containsAny(text,
                 "무서", "불안", "힘들", "괴롭", "잠", "등교", "학교 가기", "상처", "멍", "병원", "치료",
@@ -203,7 +264,7 @@ public class AnalysisService {
 
     private boolean isRelevantConsultationInput(String text) {
         if (text.isBlank()) return false;
-        return containsAny(text,
+        return hasDemeaningSpeechSignal(text) || containsAny(text,
                 "학교", "같은 반", "반 친구", "친구", "선배", "후배", "동급생", "학생", "담임", "선생", "학원",
                 "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
                 "던졌", "던지", "우유곽", "들이붓", "끼얹", "부었", "뿌렸",
@@ -222,7 +283,8 @@ public class AnalysisService {
                 || hasBodilyWasteIncidentSignal(t)) {
             types.add("신체 폭력");
         }
-        if (!mildExpressionOnly && containsAny(t, "욕", "협박", "모욕", "비하", "비방", "놀림", "죽이", "꺼져", "소문", "명예훼손")) {
+        if (!mildExpressionOnly && (containsAny(t, "욕", "협박", "모욕", "비하", "비방", "놀림", "죽이", "꺼져", "소문", "명예훼손")
+                || hasDemeaningSpeechSignal(t))) {
             types.add("언어 폭력");
         }
         if (containsAny(t, "sns", "카톡", "카카오", "단톡", "단체 채팅", "디엠", "dm", "인스타", "게시", "댓글", "사진 올", "온라인")) {
@@ -571,12 +633,12 @@ public class AnalysisService {
         boolean severePhrase = containsAny(text,
                 "협박", "죽이", "꺼져", "욕을", "욕했", "욕설과", "욕설을", "비하", "비방", "모욕", "명예훼손", "유포", "게시", "사진", "영상",
                 "때렸", "맞았", "밀쳤", "멍", "상처", "따돌", "왕따", "돈", "갈취", "성추행", "성희롱");
-        return mildPhrase && !severePhrase;
+        return mildPhrase && !severePhrase && !hasDemeaningSpeechSignal(text);
     }
 
     private boolean hasSevereVerbalHumiliationSignal(String text) {
         String t = normalize(text);
-        return containsAny(t,
+        return hasDemeaningSpeechSignal(t) || containsAny(t,
                 "패드립", "부모 욕", "가족 욕", "엄마 욕", "아빠 욕",
                 "외모 비하", "몸매 비하", "장애 비하", "장애인 비하",
                 "성적인 욕", "성적 욕", "성희롱성 욕", "성희롱 욕",
@@ -585,6 +647,23 @@ public class AnalysisService {
                 "수위가 올라", "수위 올라", "점점 심", "더 심해", "갈수록 심", "강도가 세",
                 "인격 모독", "인신공격",
                 "죽어라", "죽으라", "자살해", "뒤져", "꺼져", "벌레", "쓰레기");
+    }
+
+    private boolean hasDemeaningSpeechSignal(String text) {
+        String t = normalize(text);
+        boolean directPhrase = containsAny(t,
+                "엄마 없", "엄마가 없", "아빠 없", "아빠가 없", "부모 없", "부모님 없",
+                "고아", "패드립", "부모 욕", "가족 욕", "엄마 욕", "아빠 욕", "가정사 조롱",
+                "외모 비하", "몸매 비하", "얼굴 비하", "못생", "돼지", "뚱뚱", "키 작", "키가 작",
+                "장애 비하", "장애인 비하", "특수학급 비하",
+                "성적 모욕", "성적인 욕", "성희롱성 욕", "성희롱 욕",
+                "사생활 조롱", "비밀을 퍼뜨", "소문을 퍼뜨", "소문 유포",
+                "인격 모독", "인신공격");
+        boolean categoryMockery = containsAny(t, "가족", "엄마", "아빠", "부모", "가정사", "외모", "몸매", "얼굴", "장애", "특수학급", "사생활", "비밀")
+                && containsAny(t, "비하", "조롱", "놀림", "놀렸", "모욕", "욕", "드립", "없대", "없다고", "퍼뜨", "소문");
+        boolean groupChatMockery = containsAny(t, "단톡", "단체 채팅", "채팅방", "카톡")
+                && containsAny(t, "비하", "조롱", "놀림", "모욕", "소문", "퍼뜨");
+        return directPhrase || categoryMockery || groupChatMockery;
     }
 
     private boolean containsAny(String text, String... words) {

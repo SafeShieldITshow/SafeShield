@@ -150,6 +150,30 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void treatsIdentityAndPrivateLifeMockeryAsVerbalViolence() {
+        ReportReadiness readiness = readySchoolViolence();
+        record Scenario(String text, boolean cyberExpected) {}
+        List<Scenario> scenarios = List.of(
+                new Scenario("같은 반 친구가 단톡방에서 저한테 엄마가 없대요라고 조롱했고 캡처가 있습니다.", true),
+                new Scenario("같은 반 친구가 외모 비하를 여러 번 했고 친구들 앞에서 놀렸습니다.", false),
+                new Scenario("같은 학교 학생이 장애 비하 표현을 댓글로 남겼고 캡처가 있습니다.", true),
+                new Scenario("반 친구들이 성적 모욕을 담은 소문을 퍼뜨렸습니다.", false),
+                new Scenario("친구가 제 사생활 조롱과 비밀을 퍼뜨리는 말을 했습니다.", false)
+        );
+
+        for (Scenario scenario : scenarios) {
+            var result = analysisService.analyze(scenario.text(), readiness);
+
+            assertTrue(result.violenceTypes().contains("언어 폭력"),
+                    "인격·정체성·사생활 비하를 언어폭력으로 봐야 합니다: " + scenario.text());
+            if (scenario.cyberExpected()) {
+                assertTrue(result.violenceTypes().contains("사이버 폭력"),
+                        "온라인/단톡방 맥락은 사이버폭력 쟁점도 함께 봐야 합니다: " + scenario.text());
+            }
+        }
+    }
+
+    @Test
     void differentiatesSameConductByVictimImpactAndSafetyConcern() {
         ReportReadiness readiness = readySchoolViolence();
 

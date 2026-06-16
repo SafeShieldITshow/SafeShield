@@ -208,18 +208,16 @@ public class ChatService {
             );
         }
 
+        List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
+        boolean explicitReportRequest = isExplicitReportRequest(normalized);
         Map<String, Object> report = null;
         boolean reportGenerated = false;
         boolean reportUpdated = false;
-        List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
-        if (readiness.ready() && confirmationPrompts.isEmpty()) {
+        if (explicitReportRequest && readiness.ready()) {
             ReportService.ReportMutation mutation = reportService.generateOrUpdateForSessionMutation(user, session, "", readiness);
             report = mutation.report();
             reportGenerated = mutation.generated();
             reportUpdated = mutation.updated();
-        } else {
-            report = reportService.refreshReportForSession(user, session, readiness);
-            reportUpdated = report != null;
         }
         String reply = appendReportSummary(
                 connectReplyToConfirmation(getAiReply(history), confirmationPrompts),
@@ -242,11 +240,14 @@ public class ChatService {
         response.put("report_generated", reportGenerated);
         response.put("report_updated", reportUpdated);
         response.put("report", report);
-        response.put("report_ready", readiness.ready() && confirmationPrompts.isEmpty());
+        response.put("report_ready", reportGenerated || reportUpdated || shouldSuggestReport(readiness, history));
+        response.put("report_requested", explicitReportRequest);
+        response.put("report_suggested", shouldSuggestReport(readiness, history));
         response.put("report_status", readiness.status());
         response.put("report_reason", readiness.reason());
         response.put("missing_info", readiness.missingInfo());
         response.put("confirmation_prompts", confirmationPrompts);
+        putCounselingMetadata(response, readiness, history, confirmationPrompts);
         response.put("conversation_stopped", false);
         return response;
     }
@@ -277,11 +278,12 @@ public class ChatService {
             response.put("temporary", true);
             return response;
         }
+        List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
+        boolean explicitReportRequest = isExplicitReportRequest(normalized);
         Map<String, Object> report = null;
         boolean reportGenerated = false;
         boolean reportUpdated = false;
-        List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history);
-        if (shouldGenerateGuestTemporaryReport(readiness, confirmationPrompts, history)) {
+        if (shouldGenerateGuestTemporaryReport(readiness, confirmationPrompts, history, explicitReportRequest)) {
             report = reportService.generateTemporary(history, "", readiness);
             reportUpdated = hasPriorReportSignal(history);
             reportGenerated = !reportUpdated;
@@ -301,11 +303,14 @@ public class ChatService {
         response.put("report_generated", reportGenerated);
         response.put("report_updated", reportUpdated);
         response.put("report", report);
-        response.put("report_ready", readiness.ready() && confirmationPrompts.isEmpty());
+        response.put("report_ready", reportGenerated || reportUpdated || shouldSuggestReport(readiness, history));
+        response.put("report_requested", explicitReportRequest);
+        response.put("report_suggested", shouldSuggestReport(readiness, history));
         response.put("report_status", readiness.status());
         response.put("report_reason", readiness.reason());
         response.put("missing_info", readiness.missingInfo());
         response.put("confirmation_prompts", confirmationPrompts);
+        putCounselingMetadata(response, readiness, history, confirmationPrompts);
         response.put("conversation_stopped", false);
         response.put("temporary", true);
         return response;
@@ -316,9 +321,18 @@ public class ChatService {
             List<Map<String, Object>> confirmationPrompts,
             List<Message> history
     ) {
+        return shouldGenerateGuestTemporaryReport(readiness, confirmationPrompts, history, false);
+    }
+
+    static boolean shouldGenerateGuestTemporaryReport(
+            ReportReadiness readiness,
+            List<Map<String, Object>> confirmationPrompts,
+            List<Message> history,
+            boolean explicitReportRequest
+    ) {
+        if (!explicitReportRequest) return false;
         if (readiness == null || !readiness.ready()) return false;
-        if (confirmationPrompts == null || confirmationPrompts.isEmpty()) return true;
-        return hasPriorReportSignal(history);
+        return confirmationPrompts == null || confirmationPrompts.isEmpty() || hasPriorReportSignal(history);
     }
 
     public List<Map<String, Object>> getMessages(Long sessionId, User user) {
@@ -367,15 +381,18 @@ public class ChatService {
     private Map<String, Object> readinessToMap(ReportReadiness readiness, List<Message> history) {
         boolean stopped = isConversationStopped(history);
         List<Map<String, Object>> prompts = stopped ? List.of() : confirmationPrompts(readiness, history);
-        return Map.of(
-                "ready", !stopped && readiness.ready() && prompts.isEmpty(),
-                "status", stopped ? "대화 중단" : readiness.status(),
-                "reason", stopped ? "학교폭력 상담과 무관한 입력으로 상담이 중단되었습니다." : readiness.reason(),
-                "missing_info", stopped ? List.of() : readiness.missingInfo(),
-                "confirmation_prompts", prompts,
-                "school_violence_likely", !stopped && readiness.schoolViolenceLikely(),
-                "conversation_stopped", stopped
-        );
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("ready", !stopped && shouldSuggestReport(readiness, history));
+        response.put("status", stopped ? "대화 중단" : readiness.status());
+        response.put("reason", stopped ? "학교폭력 상담과 무관한 입력으로 상담이 중단되었습니다." : readiness.reason());
+        response.put("missing_info", stopped ? List.of() : readiness.missingInfo());
+        response.put("confirmation_prompts", prompts);
+        response.put("school_violence_likely", !stopped && readiness.schoolViolenceLikely());
+        response.put("conversation_stopped", stopped);
+        if (!stopped) {
+            putCounselingMetadata(response, readiness, history, prompts);
+        }
+        return response;
     }
 
     private Map<String, Object> stoppedResponse(Session session, String reply, long userMessageCount, ReportReadiness readiness) {
@@ -392,6 +409,89 @@ public class ChatService {
         response.put("confirmation_prompts", List.of());
         response.put("conversation_stopped", true);
         return response;
+    }
+
+    private void putCounselingMetadata(
+            Map<String, Object> response,
+            ReportReadiness readiness,
+            List<Message> history,
+            List<Map<String, Object>> confirmationPrompts
+    ) {
+        Map<String, Object> metadata = buildCounselingMetadata(readiness, history, confirmationPrompts);
+        response.put("counseling_state", metadata);
+        response.put("counseling_stage", metadata.get("stage"));
+        response.put("case_understanding", metadata.get("case_understanding"));
+        response.put("next_question", metadata.get("next_question"));
+    }
+
+    private Map<String, Object> buildCounselingMetadata(
+            ReportReadiness readiness,
+            List<Message> history,
+            List<Map<String, Object>> confirmationPrompts
+    ) {
+        String combined = combinedUserText(history);
+        List<String> types = detectTypes(combined);
+        AnalysisResult analysis = combined.isBlank()
+                ? null
+                : analysisService.analyze(combined, readiness);
+        String nextQuestion = firstConfirmationQuestion(confirmationPrompts);
+
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("stage", counselingStage(readiness, history));
+        metadata.put("case_understanding", buildCaseUnderstanding(combined, types, readiness));
+        metadata.put("possible_types", types);
+        metadata.put("legal_issues", legalIssueSummary(types, combined, readiness));
+        metadata.put("immediate_evidence", analysis == null ? List.of() : analysis.evidenceGuide().stream().limit(4).toList());
+        metadata.put("next_question", nextQuestion);
+        metadata.put("dimensions", analysisService.assessCounselingDimensions(combined, readiness, userMessageCount(history)));
+        metadata.put("report_suggested", shouldSuggestReport(readiness, history));
+        return metadata;
+    }
+
+    private static String counselingStage(ReportReadiness readiness, List<Message> history) {
+        if (readiness == null) return "상담 방향 확인";
+        long userMessages = userMessageCount(history);
+        if (!readiness.schoolViolenceLikely() && readiness.ready()) return "학교폭력 해당성 검토";
+        if (!readiness.ready()) {
+            if (userMessages <= 2) return "사건 구조 파악";
+            return "핵심 맥락 보완";
+        }
+        if (shouldSuggestReport(readiness, history)) return "상담 내용 정리 가능";
+        return "상담 깊이 보강";
+    }
+
+    private static String buildCaseUnderstanding(String combined, List<String> types, ReportReadiness readiness) {
+        if (combined == null || combined.isBlank()) {
+            return "아직 사건 내용이 충분히 확인되지 않았습니다.";
+        }
+        String typeText = types == null || types.isEmpty()
+                ? "학교폭력 유형은 아직 특정 전"
+                : String.join(", ", types) + " 가능성";
+        String status = readiness == null ? "상담 내용을 더 확인하는 중입니다." : readiness.reason();
+        return typeText + "을 중심으로 보고 있으며, " + status;
+    }
+
+    private static List<String> legalIssueSummary(List<String> types, String text, ReportReadiness readiness) {
+        List<String> issues = new ArrayList<>();
+        String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        if (types == null || types.isEmpty()) {
+            issues.add("구체적 행동과 학교 관계가 확인되면 학교폭력 해당성과 관련 법령을 좁힐 수 있습니다.");
+        } else {
+            if (types.contains("언어 폭력")) issues.add("모욕·비하·소문 유포의 표현 수위와 공개성 확인이 필요합니다.");
+            if (types.contains("사이버 폭력")) issues.add("게시물·단톡방의 전파 범위, 작성자 특정, 원본 보존 여부가 쟁점입니다.");
+            if (types.contains("신체 폭력")) issues.add("부상 정도, 반복성, 목격자와 즉시 안전 여부가 중요합니다.");
+            if (types.contains("따돌림")) issues.add("배제 방식, 지속 기간, 집단성, 학교 인지 여부가 쟁점입니다.");
+            if (types.contains("성폭력")) issues.add("원하지 않은 성적 말·접촉의 구체성, 안전 확보, 상담 연결이 우선입니다.");
+            if (types.contains("스토킹")) issues.add("반복 접근·연락 기록과 접근 차단 이후의 지속 여부가 중요합니다.");
+            if (types.contains("갈취")) issues.add("요구 금액·물건, 강요 방식, 결제·전달 기록이 쟁점입니다.");
+        }
+        if (isPerpetratorText(t)) {
+            issues.add("본인이 한 행동의 중단, 삭제 전 원본 보존, 사과와 피해 회복 가능성이 핵심입니다.");
+        }
+        if (readiness != null && !readiness.schoolViolenceLikely()) {
+            issues.add("학교 관계가 약하면 학교폭력 절차보다 일반 신고·플랫폼 신고 경로가 더 맞을 수 있습니다.");
+        }
+        return issues.stream().distinct().limit(5).toList();
     }
 
     private List<Map<String, Object>> confirmationPrompts(ReportReadiness readiness, List<Message> history) {
@@ -511,6 +611,32 @@ public class ChatService {
                 .anyMatch(content -> content.contains("리포트가 생성되었습니다")
                         || content.contains("리포트가 갱신되었습니다")
                         || content.contains("리포트 보기 버튼"));
+    }
+
+    private static boolean shouldSuggestReport(ReportReadiness readiness, List<Message> history) {
+        if (readiness == null || !readiness.ready() || !readiness.missingInfo().isEmpty()) return false;
+        if (isConversationStopped(history)) return false;
+        long userMessages = userMessageCount(history);
+        if (userMessages < 5) return false;
+        String text = combinedUserText(history);
+        boolean hasEvidenceImpactOrGoal = hasAny(text,
+                "캡처", "증거", "사진", "목격", "진단", "기록", "메시지", "url",
+                "불안", "무서", "두려", "힘들", "보복", "등교", "피해",
+                "신고", "상담", "정리", "보호", "멈추", "사과", "삭제");
+        return !text.isBlank() && hasEvidenceImpactOrGoal;
+    }
+
+    private static boolean isExplicitReportRequest(String text) {
+        String t = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+        if (t.isBlank()) return false;
+        boolean reportWord = containsAny(t, "리포트", "보고서", "결과", "문서", "정리");
+        boolean actionWord = containsAny(t, "만들", "생성", "보여", "열어", "작성", "정리해", "정리해줘", "정리해 주세요", "뽑아", "출력");
+        if (reportWord && actionWord) return true;
+        return containsAny(t,
+                "리포트 만들어줘", "리포트 만들어 주세요", "리포트 생성해줘", "리포트 보여줘",
+                "분석 리포트", "결과 보여줘", "결과 보여 주세요",
+                "지금까지 내용 정리해줘", "상담 내용 정리해줘", "상담 내용을 정리해줘",
+                "이 내용으로 정리해줘", "이 내용 정리해줘");
     }
 
     private static String stripDanglingConfirmationLeadIn(String reply) {
@@ -1094,6 +1220,23 @@ public class ChatService {
 
     private static boolean hasStalkingSignal(String text) {
         return hasAny(text, "스토킹", "따라", "기다리", "집 앞", "계속 연락", "찾아와");
+    }
+
+    private static boolean hasDemeaningSpeechSignal(String text) {
+        String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        boolean directPhrase = containsAny(t,
+                "엄마 없", "엄마가 없", "아빠 없", "아빠가 없", "부모 없", "부모님 없",
+                "고아", "패드립", "부모 욕", "가족 욕", "엄마 욕", "아빠 욕", "가정사 조롱",
+                "외모 비하", "몸매 비하", "얼굴 비하", "못생", "돼지", "뚱뚱", "키 작", "키가 작",
+                "장애 비하", "장애인 비하", "특수학급 비하",
+                "성적 모욕", "성적인 욕", "성희롱성 욕", "성희롱 욕",
+                "사생활 조롱", "비밀을 퍼뜨", "소문을 퍼뜨", "소문 유포",
+                "인격 모독", "인신공격");
+        boolean categoryMockery = containsAny(t, "가족", "엄마", "아빠", "부모", "가정사", "외모", "몸매", "얼굴", "장애", "특수학급", "사생활", "비밀")
+                && containsAny(t, "비하", "조롱", "놀림", "놀렸", "모욕", "욕", "드립", "없대", "없다고", "퍼뜨", "소문");
+        boolean groupChatMockery = containsAny(t, "단톡", "단체 채팅", "채팅방", "카톡")
+                && containsAny(t, "비하", "조롱", "놀림", "모욕", "소문", "퍼뜨");
+        return directPhrase || categoryMockery || groupChatMockery;
     }
 
     private static ConfirmationCandidate incidentQuestion(String text) {
@@ -1716,9 +1859,9 @@ public class ChatService {
         }
 
         if (!readiness.ready() && !readiness.missingInfo().isEmpty()) {
-            reply.append("\n아래 확인 답변을 선택하거나 직접 입력하면 리포트 판단이 갱신됩니다.\n");
+            reply.append("\n아래 질문은 지금 상담 흐름에서 가장 필요한 확인입니다. 선택지에 없어도 직접 적어도 됩니다.\n");
         } else {
-            reply.append("\n리포트를 생성할 수 있습니다. 새 사안이 추가되면 별도 상담으로 나누는 것이 좋습니다.\n");
+            reply.append("\n상담 내용이 어느 정도 정리됐습니다. 원하면 지금까지 내용을 리포트로 정리할 수 있습니다.\n");
         }
 
         return reply.toString().trim();
@@ -1806,15 +1949,15 @@ public class ChatService {
 
         if (containsAny(latest, "고마워", "감사", "알겠", "응", "네", "ㅇㅋ", "오케이")) {
             if (readiness.ready()) {
-                return "알겠습니다. 지금까지 확인된 내용은 상담 기록에 남아 있어서 리포트에도 반영됩니다.\n추가로 생각나는 변화가 있으면 이어서 말해 주세요.";
+                return "알겠습니다. 지금까지 확인된 내용은 상담 기록에 남아 있습니다.\n추가로 생각나는 변화가 있으면 이어서 말해 주세요. 원하면 나중에 이 흐름을 리포트로 정리할 수 있습니다.";
             }
-            return "알겠습니다. 아직 리포트에는 몇 가지 확인이 더 필요합니다.\n생각나는 만큼만 이어서 말해 주면, 그 내용까지 상담 기록에 반영하겠습니다.";
+            return "알겠습니다. 아직은 몇 가지 맥락을 더 확인하는 단계입니다.\n생각나는 만큼만 이어서 말해 주면, 그 내용까지 상담 기록에 반영하겠습니다.";
         }
 
         if (containsAny(latest, "힘들", "무서", "불안", "짜증", "괴롭", "말하기", "모르겠", "걱정")) {
             return """
                     바로 분석부터 밀어붙이지 않고, 먼저 상황을 정리해 보겠습니다.
-                    지금 말한 감정과 어려움도 상담 기록에 남고, 리포트에서는 피해 정도나 대응 필요성을 판단할 때 함께 반영됩니다.
+                    지금 말한 감정과 어려움도 상담 기록에 남고, 나중에 내용을 정리할 때 피해 정도나 대응 필요성을 판단하는 단서가 됩니다.
                     당장 한 가지만 고르면 됩니다. 지금 가장 걱정되는 게 상대의 보복, 증거 부족, 학교에 말하는 것 중 어디에 가까운가요?
                     """.trim();
         }
@@ -1822,14 +1965,14 @@ public class ChatService {
         if (readiness.ready()) {
             return """
                     방금 말한 내용은 기존 상담에 추가로 반영됩니다.
-                    리포트를 만들면 현재까지의 대화 전체를 기준으로 유형, 증거 상태, 권장 조치가 다시 계산됩니다.
+                    원하면 현재까지의 대화 전체를 기준으로 유형, 증거 상태, 권장 조치를 정리할 수 있습니다.
                     더 이어서 말해도 되고, 새 사건이라면 새 상담으로 분리하는 게 좋습니다.
                     """.trim();
         }
 
         return """
                 이 내용도 상담 기록에 반영해 두겠습니다.
-                리포트를 정확히 만들려면 아직 사건 내용, 학교 관계, 시점, 증거 중 빠진 부분을 더 확인해야 합니다.
+                지금은 사건 내용, 학교 관계, 시점, 증거 중 빠진 부분을 더 확인하는 단계입니다.
                 편하게 이어서 말해 주세요. 길게 정리하지 않아도 됩니다.
                 """.trim();
     }
@@ -1962,7 +2105,7 @@ public class ChatService {
     }
 
     private static boolean hasConsultationSignal(String text) {
-        return containsAny(text,
+        return hasDemeaningSpeechSignal(text) || containsAny(text,
                 "학교", "같은 반", "반 친구", "친구", "선배", "후배", "학생", "담임", "선생", "학원",
                 "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
                 "괴롭", "괴롭힘", "놀림", "놀렸", "놀려", "비하", "무시", "소외", "패드립",
@@ -2250,8 +2393,9 @@ public class ChatService {
                 10-1. 단체 채팅방, 단톡방, 카톡 욕설·놀림 사안에서는 대화방을 나가거나 내용을 지우라고 먼저 안내하지 마세요. 참여자 목록, 보낸 시간, 앞뒤 맥락, 대화 내보내기 원본을 먼저 보관하라고 안내하세요.
                 11. 생명·신체에 즉각적인 위험이 있을 때만 112를, 일반 학교폭력 상담에는 '117에 상담을 요청하세요'라고 안내하세요.
                 12. 법률상담 대체 여부에 관한 면책 문구는 화면에 별도로 표시되므로 답변에 쓰지 마세요.
-                13. 확인 질문은 화면의 선택·주관식 입력 UI로 별도 제공됩니다. 답변 본문에는 '❓ 확인 질문' 섹션이나 질문 문장을 쓰지 마세요.
-                14. 내부 리포트 상태가 '추가 확인 필요'가 아니면 "리포트를 생성할 수 있습니다"라고만 짧게 안내하세요.
+                13. 답변에는 매 턴 현재 이해한 사건 요약, 가능한 학교폭력 유형, 법적 쟁점, 지금 준비할 증거, 다음에 확인할 핵심 사실 1개가 자연스럽게 포함되어야 합니다.
+                13-1. 확인 질문은 화면의 선택·주관식 입력 UI로도 제공됩니다. 답변 본문에는 '❓ 확인 질문' 같은 고정 섹션을 만들지 말고, 다음에 확인할 방향만 짧게 연결하세요.
+                14. 리포트를 자동으로 만들거나 준비 완료처럼 압박하지 마세요. 충분히 정리된 뒤 사용자가 원할 때 상담 내용을 정리할 수 있다고만 낮은 압박으로 안내하세요.
                 15. '리포트 준비 상태', '추가 확인 필요가 아니므로', '추가 확인 질문 없이' 같은 내부 판단 문구를 답변에 그대로 쓰지 마세요.
                 16. 사용자가 본인이 한 행동을 말하면 비난하지 말고, 피해 회복·게시물 삭제·사과·보호자/담임 공유 중심으로 안내하세요.
                 17. 학교폭력 해당성이 낮으면 억지로 학폭으로 단정하지 말고, 해당성이 낮은 이유와 다른 대응 경로를 말하세요.
@@ -2334,7 +2478,7 @@ public class ChatService {
     }
 
     private boolean hasCaseFactSignal(String text) {
-        return containsAny(text,
+        return hasDemeaningSpeechSignal(text) || containsAny(text,
                 "학교", "같은 반", "반 친구", "친구", "선배", "후배", "학생", "담임", "선생", "학원",
                 "때렸", "맞았", "폭행", "밀쳤", "멍", "상처", "욕", "모욕", "비방", "협박", "따돌", "왕따",
                 "던졌", "던지", "우유곽", "들이붓", "끼얹", "부었", "뿌렸",
@@ -2418,11 +2562,11 @@ public class ChatService {
                 1. 첫 문장은 사용자의 감정이나 부담을 먼저 받아주세요.
                 2. 사용자가 말한 내용을 복사하지 말고, 핵심만 1문장으로 부드럽게 정리하세요.
                 3. 지금 바로 할 수 있는 행동은 직전 입력에 맞게 1개만 말하세요. 매번 같은 안전 확인 문장이나 "작은 행동 2가지" 형식을 반복하지 마세요.
-                4. 답변 본문에서는 새 질문을 직접 만들지 마세요. 필요한 확인은 화면의 선택·주관식 확인 카드에만 맡기고, 이미 말한 내용은 다시 묻지 마세요.
+                4. 답변에는 현재 이해한 사건 요약, 가능한 유형, 법적 쟁점, 지금 준비할 증거, 다음에 확인할 핵심 사실 1개를 자연스럽게 포함하세요. 이미 말한 내용은 다시 묻지 마세요.
                 5. 선생님이나 어른이 채팅방에 있는지 묻지 마세요. 단체 채팅방 사안에서 필요한 관계 확인은 '같은 학교/같은 반/선배·후배/학원 관계인지'입니다.
                 5-1. 단체 채팅방, 단톡방, 카톡 욕설·놀림 사안에서는 대화방을 나가거나 내용을 지우라고 먼저 안내하지 마세요. 참여자 목록, 보낸 시간, 앞뒤 맥락, 대화 내보내기 원본을 먼저 보관하라고 안내하세요.
                 6. '관련 법률', '증거 정보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
-                7. 리포트는 충분히 확인한 뒤 만들겠다고 설명하고, 준비 완료라고 말하지 마세요.
+                7. 리포트는 충분히 상담한 뒤 사용자가 원할 때 정리되는 결과입니다. 자동 생성되었거나 준비 완료라고 말하지 마세요.
                 8. 모든 문장은 자연스러운 한국어로 쓰고, 딱딱한 조사표나 설문지처럼 보이지 않게 하세요.
                 9. 전체 답변은 3~6문장 안에서 끝내세요.
                 10. 제3자가 사건을 평가하는 보고서 말투가 아니라, 지금 대화 중인 사람에게 직접 건네는 상담 말투로 쓰세요.
@@ -2487,7 +2631,7 @@ public class ChatService {
                 1. '관련 법률', '증거 확보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
                 2. 2~5문장으로 답하고, 필요할 때만 짧은 목록 2개 이하를 쓰세요.
                 3. 사용자의 직전 말을 그대로 복사하지 말고, 새로 반영할 의미만 짚으세요.
-                4. 답변 끝에서 새 질문을 직접 만들지 마세요. 필요한 확인은 화면의 선택·주관식 확인 카드에만 맡기고, 이미 답한 내용은 다시 묻지 마세요.
+                4. 답변 끝에서 질문을 여러 개 만들지 마세요. 필요한 경우 다음에 확인할 핵심 사실 1개만 짧게 연결하고, 이미 답한 내용은 다시 묻지 마세요.
                 5. 확인 질문 UI가 따로 제공되므로 '❓ 확인 질문' 섹션은 쓰지 마세요.
                 5-1. 단체 채팅방, 단톡방, 카톡 욕설·놀림 사안에서는 대화방을 나가거나 내용을 지우라고 먼저 안내하지 마세요. 참여자 목록, 보낸 시간, 앞뒤 맥락, 대화 내보내기 원본을 먼저 보관하라고 안내하세요.
                 6. 법령명과 조문은 사용자가 직접 묻지 않았으면 쓰지 마세요.
@@ -2737,6 +2881,7 @@ public class ChatService {
                 || hasSocialExclusionSignal(text)
                 || hasExtortionSignal(text)
                 || hasStalkingSignal(text)
+                || hasDemeaningSpeechSignal(text)
                 || hasAny(text, "욕", "협박", "모욕", "비하", "비방", "놀림", "소문", "명예훼손");
     }
 
@@ -3330,7 +3475,7 @@ public class ChatService {
         String t = text.toLowerCase(Locale.ROOT);
         List<String> types = new ArrayList<>();
         if (hasPhysicalViolenceSignal(t) || containsAny(t, "폭행", "병원")) types.add("신체 폭력");
-        if (containsAny(t, "욕", "협박", "모욕", "놀림", "비하")) types.add("언어 폭력");
+        if (containsAny(t, "욕", "협박", "모욕", "놀림", "비하") || hasDemeaningSpeechSignal(t)) types.add("언어 폭력");
         if (containsAny(t, "sns", "카톡", "단톡", "dm", "게시", "댓글", "사진")) types.add("사이버 폭력");
         if (containsAny(t, "따돌", "왕따", "무시", "소외")) types.add("따돌림");
         if (containsAny(t, "성추행", "성희롱", "성적", "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는", "불쾌", "수치심")) types.add("성폭력");
