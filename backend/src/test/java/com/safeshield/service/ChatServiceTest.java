@@ -66,9 +66,9 @@ class ChatServiceTest {
         assertEquals("deepseek-v4-flash", ChatService.cheapestDeepSeekModel("deepseek-reasoner"));
         assertEquals("deepseek-v4-flash", ChatService.cheapestDeepSeekModel("deepseek-chat"));
         assertEquals("deepseek-v4-flash", ChatService.cheapestDeepSeekModel(""));
-        assertEquals(1300, ChatService.effectiveDeepSeekMaxTokens(0));
-        assertEquals(900, ChatService.effectiveDeepSeekMaxTokens(100));
-        assertEquals(2200, ChatService.effectiveDeepSeekMaxTokens(3000));
+        assertEquals(900, ChatService.effectiveDeepSeekMaxTokens(0));
+        assertEquals(500, ChatService.effectiveDeepSeekMaxTokens(100));
+        assertEquals(1400, ChatService.effectiveDeepSeekMaxTokens(3000));
     }
 
     @Test
@@ -717,7 +717,7 @@ class ChatServiceTest {
 
         assertFalse(reply.contains("확인을 위해 질문 하나 할게요."));
         assertFalse(reply.contains("대화 전체가 보이는 캡처나 원본이 있나요?"));
-        assertTrue(reply.contains("아래에 지금 맥락에서 필요한 질문 하나를 띄워둘게요."));
+        assertTrue(reply.contains("필요하면 아래 빠른 답변으로 이어갈 수 있어요."));
     }
 
     @Test
@@ -772,7 +772,7 @@ class ChatServiceTest {
 
         assertFalse(reply.contains("내용 전체가 있다는 점은 중요합니다. 확인을 위해 질문 하나 할게요."));
         assertFalse(reply.contains("상대와의 관계는 어디에 가깝나요?"));
-        assertTrue(reply.endsWith("아래에 지금 맥락에서 필요한 질문 하나를 띄워둘게요."));
+        assertTrue(reply.endsWith("필요하면 아래 빠른 답변으로 이어갈 수 있어요."));
     }
 
     @Test
@@ -848,7 +848,7 @@ class ChatServiceTest {
                 List.of(Map.of("question", "말해준 내용이 실제로 있었던 일인지, 비유나 장난 표현인지 먼저 확인할게요."))
         );
 
-        assertFalse(reply.contains("아래에 실제 사건 여부를 확인할 선택지를 띄워둘게요.\n\n아래에 지금 맥락에서 필요한 질문 하나를 띄워둘게요."));
+        assertFalse(reply.contains("아래에 실제 사건 여부를 확인할 선택지를 띄워둘게요.\n\n필요하면 아래 빠른 답변으로 이어갈 수 있어요."));
     }
 
     @Test

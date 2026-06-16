@@ -331,6 +331,7 @@ const SShieldChat = () => {
     const [conversationKey, setConversationKey] = useState(initialConversationKey);
     const [pendingKeys, setPendingKeys] = useState(() => new Set());
     const [confirmationDrafts, setConfirmationDrafts] = useState({});
+    const [expandedPromptMessages, setExpandedPromptMessages] = useState(() => new Set());
     const [showReport, setShowReport] = useState(false);
     const [readyReport, setReadyReport] = useState(null);
     const [generatingReport, setGeneratingReport] = useState(false);
@@ -404,6 +405,8 @@ const SShieldChat = () => {
             const draftKey = `draft:${Date.now()}`;
             localStorage.removeItem('ss_session');
             activateConversation(null, draftKey);
+            setConfirmationDrafts({});
+            setExpandedPromptMessages(new Set());
             setMessages([initialMessage()]);
             setShowReport(false);
             setReadyReport(null);
@@ -413,6 +416,7 @@ const SShieldChat = () => {
         activateConversation(id);
         setIsSessionLoading(true);
         setConfirmationDrafts({});
+        setExpandedPromptMessages(new Set());
         setShowReport(false);
         setReadyReport(null);
         shouldAutoScrollRef.current = true;
@@ -434,6 +438,8 @@ const SShieldChat = () => {
             localStorage.removeItem('ss_session');
             const draftKey = `draft:${Date.now()}`;
             activateConversation(null, draftKey);
+            setConfirmationDrafts({});
+            setExpandedPromptMessages(new Set());
             setMessages([initialMessage()]);
             setShowReport(false);
             setReadyReport(null);
@@ -455,6 +461,7 @@ const SShieldChat = () => {
         setIsSessionLoading(false);
         setIsReplyTyping(false);
         setConfirmationDrafts({});
+        setExpandedPromptMessages(new Set());
         shouldAutoScrollRef.current = true;
         setShowReport(false);
         setReadyReport(null);
@@ -596,6 +603,7 @@ const SShieldChat = () => {
 
         setInput('');
         setConfirmationDrafts({});
+        setExpandedPromptMessages(new Set());
         shouldAutoScrollRef.current = true;
         if (options.forceNewSession) {
             messageLoadSequenceRef.current += 1;
@@ -701,6 +709,18 @@ const SShieldChat = () => {
         } finally {
             setGeneratingReport(false);
         }
+    };
+
+    const togglePromptMessage = (messageId) => {
+        setExpandedPromptMessages((prev) => {
+            const next = new Set(prev);
+            if (next.has(messageId)) {
+                next.delete(messageId);
+            } else {
+                next.add(messageId);
+            }
+            return next;
+        });
     };
 
     const handleConfirmationOption = (messageId, prompt, promptIndex, option) => {
@@ -933,65 +953,79 @@ const SShieldChat = () => {
                                                 ))}
                                         </div>
                                         {msg.type === 'ai' && msg.confirmationPrompts?.length > 0 && (
-                                            <div className="confirmation-prompts">
-                                                {msg.confirmationPrompts.map((prompt, promptIndex) => {
-                                                    const promptKey = confirmationPromptKey(msg.id, prompt, promptIndex);
-                                                    const draft = confirmationDrafts[promptKey];
-                                                    const selectedOptionKeys = new Set(
-                                                        selectedConfirmationOptions(draft).map(confirmationOptionKey)
-                                                    );
-                                                    return (
-                                                    <div className="confirmation-prompt" key={promptKey}>
-                                                        <span className="confirmation-kicker">다음 확인 질문</span>
-                                                        <p>{prompt.question}</p>
-                                                        <span className="confirmation-multi-hint">
-                                                            {prompt.instruction || '여러 개 선택 가능 · 필요하면 직접 입력도 함께 작성'}
-                                                        </span>
-                                                        <div className="confirmation-options">
-                                                            {prompt.options.map((option) => {
-                                                                const optionKey = confirmationOptionKey(option);
-                                                                const selected = selectedOptionKeys.has(optionKey);
-                                                                return (
-                                                                    <button
-                                                                        key={`${prompt.id}-${option.label}`}
-                                                                        className={selected ? 'selected' : ''}
-                                                                        type="button"
-                                                                        aria-pressed={selected}
-                                                                        onClick={() => handleConfirmationOption(msg.id, prompt, promptIndex, option)}
+                                            <div className={`confirmation-prompts ${expandedPromptMessages.has(msg.id) ? 'expanded' : 'collapsed'}`}>
+                                                <button
+                                                    type="button"
+                                                    className="confirmation-toggle"
+                                                    aria-expanded={expandedPromptMessages.has(msg.id)}
+                                                    onClick={() => togglePromptMessage(msg.id)}
+                                                    disabled={isChatLocked}
+                                                >
+                                                    <span>빠른 답변</span>
+                                                    <strong>{msg.confirmationPrompts[0]?.question}</strong>
+                                                </button>
+                                                {expandedPromptMessages.has(msg.id) && (
+                                                    <>
+                                                        {msg.confirmationPrompts.map((prompt, promptIndex) => {
+                                                            const promptKey = confirmationPromptKey(msg.id, prompt, promptIndex);
+                                                            const draft = confirmationDrafts[promptKey];
+                                                            const selectedOptionKeys = new Set(
+                                                                selectedConfirmationOptions(draft).map(confirmationOptionKey)
+                                                            );
+                                                            return (
+                                                                <div className="confirmation-prompt" key={promptKey}>
+                                                                    <span className="confirmation-kicker">필요하면 답하기</span>
+                                                                    <p>{prompt.question}</p>
+                                                                    <span className="confirmation-multi-hint">
+                                                                        {prompt.instruction || '선택하지 않고 직접 입력해도 됩니다.'}
+                                                                    </span>
+                                                                    <div className="confirmation-options">
+                                                                        {prompt.options.map((option) => {
+                                                                            const optionKey = confirmationOptionKey(option);
+                                                                            const selected = selectedOptionKeys.has(optionKey);
+                                                                            return (
+                                                                                <button
+                                                                                    key={`${prompt.id}-${option.label}`}
+                                                                                    className={selected ? 'selected' : ''}
+                                                                                    type="button"
+                                                                                    aria-pressed={selected}
+                                                                                    onClick={() => handleConfirmationOption(msg.id, prompt, promptIndex, option)}
+                                                                                    disabled={isChatLocked}
+                                                                                >
+                                                                                    {option.label}
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                    <input
+                                                                        className="confirmation-custom-input"
+                                                                        type="text"
+                                                                        value={draft?.customText || ''}
+                                                                        placeholder="선택지에 없으면 짧게 적어도 괜찮아요"
+                                                                        onChange={(e) => handleConfirmationCustomChange(msg.id, prompt, promptIndex, e.target.value)}
+                                                                        onKeyDown={(e) => {
+                                                                            if (e.key === 'Enter' && confirmationAnswersForMessage(msg).length) {
+                                                                                handleSendConfirmation(msg);
+                                                                            }
+                                                                        }}
                                                                         disabled={isChatLocked}
-                                                                    >
-                                                                        {option.label}
-                                                                    </button>
-                                                                );
-                                                            })}
+                                                                    />
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        <div className="confirmation-submit-row">
+                                                            <button
+                                                                type="button"
+                                                                className="confirmation-submit-btn"
+                                                                onClick={() => handleSendConfirmation(msg)}
+                                                                disabled={isChatLocked || !confirmationAnswersForMessage(msg).length}
+                                                            >
+                                                                이 내용으로 답하기
+                                                            </button>
+                                                            <span>선택지는 건너뛰어도 됩니다.</span>
                                                         </div>
-                                                        <input
-                                                            className="confirmation-custom-input"
-                                                            type="text"
-                                                            value={draft?.customText || ''}
-                                                            placeholder="선택지에 없으면 짧게 적어도 괜찮아요"
-                                                            onChange={(e) => handleConfirmationCustomChange(msg.id, prompt, promptIndex, e.target.value)}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter' && confirmationAnswersForMessage(msg).length) {
-                                                                    handleSendConfirmation(msg);
-                                                                }
-                                                            }}
-                                                            disabled={isChatLocked}
-                                                        />
-                                                    </div>
-                                                    );
-                                                })}
-                                                <div className="confirmation-submit-row">
-                                                    <button
-                                                        type="button"
-                                                        className="confirmation-submit-btn"
-                                                        onClick={() => handleSendConfirmation(msg)}
-                                                        disabled={isChatLocked || !confirmationAnswersForMessage(msg).length}
-                                                    >
-                                                        이 내용으로 답하기
-                                                    </button>
-                                                    <span>답하기 편한 만큼만 골라도 됩니다.</span>
-                                                </div>
+                                                    </>
+                                                )}
                                             </div>
                                         )}
                                         <span className="msg-time">{msg.time}</span>

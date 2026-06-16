@@ -194,6 +194,72 @@
   margin-top: 2px;
 }
 
+.confirmation-prompts.collapsed {
+  gap: 0;
+}
+
+.confirmation-toggle {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-family: var(--font);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--ease), border-color var(--ease), transform var(--ease);
+}
+
+.confirmation-toggle:hover:not(:disabled) {
+  background: rgba(126, 116, 240, 0.16);
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.confirmation-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.confirmation-toggle span {
+  padding: 3px 7px;
+  border-radius: var(--r-xs);
+  background: rgba(126, 116, 240, 0.16);
+  color: #efeaff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.confirmation-toggle strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.confirmation-toggle::after {
+  content: ">";
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 800;
+  transition: transform var(--ease);
+}
+
+.confirmation-prompts.expanded .confirmation-toggle::after {
+  transform: rotate(90deg);
+}
+
 .confirmation-prompt {
   width: 100%;
   padding: 12px;
@@ -695,6 +761,31 @@
 .confirmation-prompts {
   margin-top: 8px;
   gap: 10px;
+}
+
+.confirmation-toggle {
+  border-color: #dfe7f2;
+  background: #ffffff;
+  color: #172033;
+  box-shadow: 0 8px 22px rgba(30, 41, 59, 0.04);
+}
+
+.confirmation-toggle:hover:not(:disabled) {
+  background: #f7faff;
+  border-color: rgba(40, 88, 216, 0.24);
+}
+
+.confirmation-toggle span {
+  background: #eff6ff;
+  color: #2858d8;
+}
+
+.confirmation-toggle strong {
+  color: #202637;
+}
+
+.confirmation-toggle::after {
+  color: #667085;
 }
 
 .confirmation-prompt {
