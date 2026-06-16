@@ -128,6 +128,28 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void cyberVerbalRiskIncreasesWhenInsultSeverityEscalates() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var repeatedInsult = analysisService.analyze(
+                "같은 반 친구들이 단톡방에서 욕설과 비방을 여러 번 했고 캡처가 있습니다. " +
+                        "불안해서 증거 정리와 신고 절차를 알고 싶습니다.",
+                readiness
+        );
+        var severeInsult = analysisService.analyze(
+                "같은 반 친구들이 단톡방에서 욕설과 비방을 여러 번 했고 캡처가 있습니다. " +
+                        "패드립과 외모 비하가 있고 욕설 수위가 점점 심해져서 불안합니다. " +
+                        "증거 정리와 신고 절차를 알고 싶습니다.",
+                readiness
+        );
+
+        assertTrue(severeInsult.riskScore() >= repeatedInsult.riskScore() + 0.5,
+                "같은 단톡방 욕설이라도 모욕 수위가 높아지면 위험도에 반영되어야 합니다.");
+        assertTrue(severeInsult.keyFindings().stream().anyMatch(item ->
+                item.contains("가중·완화 단서:") && item.contains("욕설·모욕 수위 높음")));
+    }
+
+    @Test
     void differentiatesSameConductByVictimImpactAndSafetyConcern() {
         ReportReadiness readiness = readySchoolViolence();
 

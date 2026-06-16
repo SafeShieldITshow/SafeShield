@@ -199,6 +199,30 @@ class ChatServiceTest {
     }
 
     @Test
+    void sanitizesGroupChatExitAdviceIntoEvidencePreservation() {
+        String reply = """
+                그런 상황은 정말 힘들고 불편할 텐데요. 혼자 감당하지 않아도 된다는 걸 기억해 주세요.
+                이 경우 지금 바로 할 수 있는 행동은, 그 단체 채팅방에서 나가는 것이겠죠.
+                """;
+
+        String sanitized = ChatService.sanitizeGeneratedReply(reply);
+
+        assertTrue(sanitized.contains("참여자 목록"));
+        assertTrue(sanitized.contains("보낸 시간"));
+        assertTrue(sanitized.contains("앞뒤 대화 맥락"));
+        assertTrue(sanitized.contains("대화 내보내기 원본"));
+        assertFalse(sanitized.contains("채팅방에서 나가"));
+        assertTrue(ChatService.isGeneratedConversationReplyValid(sanitized, LAW_CONTEXT));
+    }
+
+    @Test
+    void rejectsRawGroupChatExitAdviceBeforeEvidencePreservation() {
+        String reply = "친구들이 욕하면 그 단체 채팅방에서 나가는 것이 좋습니다.";
+
+        assertFalse(ChatService.isGeneratedConversationReplyValid(reply, LAW_CONTEXT));
+    }
+
+    @Test
     void rejectsVictimBlamingReasonQuestion() {
         String reply = """
                 같은 반 학생이라면 학교에서 함께 지내는 관계가 중요한 부분입니다.

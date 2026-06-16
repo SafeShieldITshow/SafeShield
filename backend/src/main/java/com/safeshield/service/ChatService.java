@@ -65,6 +65,11 @@ public class ChatService {
     private static final int DEEPSEEK_DEFAULT_MAX_TOKENS = 700;
     private static final int DEEPSEEK_MIN_MAX_TOKENS = 400;
     private static final int DEEPSEEK_HARD_MAX_TOKENS = 1200;
+    private static final String GROUP_CHAT_EVIDENCE_FIRST_ADVICE =
+            "단체 채팅방에서는 먼저 참여자 목록·보낸 시간·앞뒤 대화 맥락이 보이게 캡처하고, 가능하면 대화 내보내기 원본을 따로 보관하는 것이 중요합니다.";
+    private static final Pattern UNSAFE_GROUP_CHAT_EXIT_SENTENCE_PATTERN = Pattern.compile(
+            "[^\\n.!?。！？]*?(?:단체\\s*채팅방|단톡방|채팅방|대화방|단톡)[^\\n.!?。！？]*?(?:나가|퇴장|빠져나오)[^\\n.!?。！？]*(?:[.!?。！？]|$)"
+    );
 
     private record PromptContext(String prompt, String lawContext, ReplyMode mode) {}
     private record ConfirmationCandidate(String id, String question, List<Map<String, String>> options) {}
@@ -1596,7 +1601,14 @@ public class ChatService {
     static String adaptCaseDomainWording(String reply, String userContextText) {
         String adapted = adaptSexualViolenceWording(reply, userContextText);
         adapted = adaptVictimPhotoWording(adapted, userContextText);
+        adapted = adaptGroupChatEvidenceWording(adapted, userContextText);
         return adapted;
+    }
+
+    static String adaptGroupChatEvidenceWording(String reply, String userContextText) {
+        if (reply == null || reply.isBlank()) return reply;
+        if (!hasGroupChatHarassmentSignal(userContextText)) return reply;
+        return sanitizeGroupChatExitAdvice(reply);
     }
 
     static String adaptSexualViolenceWording(String reply, String userContextText) {
@@ -1641,6 +1653,12 @@ public class ChatService {
                 .replace("sns에 올린 게시물을 삭제", capturePost)
                 .replace("SNS에 올린 사진을 삭제", capturePhoto)
                 .replace("sns에 올린 사진을 삭제", capturePhoto);
+    }
+
+    private static boolean hasGroupChatHarassmentSignal(String text) {
+        String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        return containsAny(t, "단체 채팅방", "단톡", "단톡방", "채팅방", "카톡")
+                && containsAny(t, "욕", "욕설", "놀림", "비방", "모욕", "괴롭", "따돌", "협박", "조롱");
     }
 
     private static boolean asksMaleVictimCanConsult(String text) {
@@ -2221,6 +2239,7 @@ public class ChatService {
                 8. 법률 설명은 참고 법령 내용의 범위를 벗어나 단정하지 말고, "적용 가능성이 있습니다", "확인이 필요합니다"처럼 말하세요.
                 9. 가해자 나이나 형사책임을 사용자가 묻지 않았다면 소년법을 언급하지 마세요.
                 10. 증거는 현재 상황에 맞는 항목 3~4개를 구체적으로 안내하세요.
+                10-1. 단체 채팅방, 단톡방, 카톡 욕설·놀림 사안에서는 대화방을 나가거나 내용을 지우라고 먼저 안내하지 마세요. 참여자 목록, 보낸 시간, 앞뒤 맥락, 대화 내보내기 원본을 먼저 보관하라고 안내하세요.
                 11. 생명·신체에 즉각적인 위험이 있을 때만 112를, 일반 학교폭력 상담에는 '117에 상담을 요청하세요'라고 안내하세요.
                 12. 법률상담 대체 여부에 관한 면책 문구는 화면에 별도로 표시되므로 답변에 쓰지 마세요.
                 13. 확인 질문은 화면의 선택·주관식 입력 UI로 별도 제공됩니다. 답변 본문에는 '❓ 확인 질문' 섹션이나 질문 문장을 쓰지 마세요.
@@ -2393,6 +2412,7 @@ public class ChatService {
                 3. 지금 바로 할 수 있는 행동은 직전 입력에 맞게 1개만 말하세요. 매번 같은 안전 확인 문장이나 "작은 행동 2가지" 형식을 반복하지 마세요.
                 4. 답변 본문에서는 새 질문을 직접 만들지 마세요. 필요한 확인은 화면의 선택·주관식 확인 카드에만 맡기고, 이미 말한 내용은 다시 묻지 마세요.
                 5. 선생님이나 어른이 채팅방에 있는지 묻지 마세요. 단체 채팅방 사안에서 필요한 관계 확인은 '같은 학교/같은 반/선배·후배/학원 관계인지'입니다.
+                5-1. 단체 채팅방, 단톡방, 카톡 욕설·놀림 사안에서는 대화방을 나가거나 내용을 지우라고 먼저 안내하지 마세요. 참여자 목록, 보낸 시간, 앞뒤 맥락, 대화 내보내기 원본을 먼저 보관하라고 안내하세요.
                 6. '관련 법률', '증거 정보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
                 7. 리포트는 충분히 확인한 뒤 만들겠다고 설명하고, 준비 완료라고 말하지 마세요.
                 8. 모든 문장은 자연스러운 한국어로 쓰고, 딱딱한 조사표나 설문지처럼 보이지 않게 하세요.
@@ -2461,6 +2481,7 @@ public class ChatService {
                 3. 사용자의 직전 말을 그대로 복사하지 말고, 새로 반영할 의미만 짚으세요.
                 4. 답변 끝에서 새 질문을 직접 만들지 마세요. 필요한 확인은 화면의 선택·주관식 확인 카드에만 맡기고, 이미 답한 내용은 다시 묻지 마세요.
                 5. 확인 질문 UI가 따로 제공되므로 '❓ 확인 질문' 섹션은 쓰지 마세요.
+                5-1. 단체 채팅방, 단톡방, 카톡 욕설·놀림 사안에서는 대화방을 나가거나 내용을 지우라고 먼저 안내하지 마세요. 참여자 목록, 보낸 시간, 앞뒤 맥락, 대화 내보내기 원본을 먼저 보관하라고 안내하세요.
                 6. 법령명과 조문은 사용자가 직접 묻지 않았으면 쓰지 마세요.
                 7. 모든 문장은 자연스러운 한국어로 쓰고, AI, SNS, URL, DM, CCTV, PDF, ID, IP 외 외국어 단어는 쓰지 마세요.
                 8. 법률상담 대체 면책 문구는 화면에 별도로 표시되므로 답변에 쓰지 마세요.
@@ -2893,13 +2914,14 @@ public class ChatService {
                 || reply.contains("맞음, 밀침, 넘어짐, 상처")
                 || reply.contains("선생님이나 어른이 계신가요")
                 || reply.contains("채팅방에 참여하고 있는 친구들 중에 선생님")
+                || containsUnsafeGroupChatExitAdvice(reply)
                 || (reply.contains("채팅방") && (reply.contains("어른") || reply.contains("선생님"))
                 && (reply.contains("있") || reply.contains("계신")));
     }
 
     static String sanitizeGeneratedReply(String reply) {
         if (reply == null) return "";
-        return stripConfirmationQuestionSection(reply).lines()
+        return sanitizeGroupChatExitAdvice(stripConfirmationQuestionSection(reply)).lines()
                 .filter(line -> !(line.contains("일반적인 법률 정보") && line.contains("대체하지")))
                 .filter(line -> !(line.contains("리포트 준비 상태") && line.contains("추가 확인 필요")))
                 .filter(line -> !line.contains("추가 확인 질문 없이"))
@@ -2921,6 +2943,37 @@ public class ChatService {
                         .replace("당신은 ", ""))
                 .collect(Collectors.joining("\n"))
                 .trim();
+    }
+
+    static String sanitizeGroupChatExitAdvice(String reply) {
+        if (reply == null || reply.isBlank() || !containsUnsafeGroupChatExitAdvice(reply)) return reply == null ? "" : reply;
+
+        Matcher matcher = UNSAFE_GROUP_CHAT_EXIT_SENTENCE_PATTERN.matcher(reply);
+        StringBuffer sanitized = new StringBuffer();
+        boolean replaced = false;
+        while (matcher.find()) {
+            replaced = true;
+            matcher.appendReplacement(sanitized, Matcher.quoteReplacement(GROUP_CHAT_EVIDENCE_FIRST_ADVICE));
+        }
+        matcher.appendTail(sanitized);
+
+        String result = replaced ? sanitized.toString() : GROUP_CHAT_EVIDENCE_FIRST_ADVICE;
+        while (result.contains(GROUP_CHAT_EVIDENCE_FIRST_ADVICE + "\n" + GROUP_CHAT_EVIDENCE_FIRST_ADVICE)) {
+            result = result.replace(GROUP_CHAT_EVIDENCE_FIRST_ADVICE + "\n" + GROUP_CHAT_EVIDENCE_FIRST_ADVICE,
+                    GROUP_CHAT_EVIDENCE_FIRST_ADVICE);
+        }
+        return result.trim();
+    }
+
+    private static boolean containsUnsafeGroupChatExitAdvice(String reply) {
+        String text = reply == null ? "" : reply.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+        return containsAny(text,
+                "단체 채팅방에서 나가", "단체 채팅방을 나가",
+                "단톡방에서 나가", "단톡방을 나가", "단톡에서 나가", "단톡을 나가",
+                "채팅방에서 나가", "채팅방을 나가", "대화방에서 나가", "대화방을 나가",
+                "채팅방 나가기", "대화방 나가기", "단톡방 나가기",
+                "채팅방에서 퇴장", "대화방에서 퇴장", "단톡방에서 퇴장",
+                "채팅방에서 빠져나오", "대화방에서 빠져나오", "단톡방에서 빠져나오");
     }
 
     static String sanitizeUnsupportedLegalReferences(String reply, String lawContext) {

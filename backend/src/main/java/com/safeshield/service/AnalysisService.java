@@ -174,7 +174,8 @@ public class AnalysisService {
         return hasNoMeaningfulImpact(text) || containsAny(text,
                 "무서", "불안", "힘들", "괴롭", "잠", "등교", "학교 가기", "상처", "멍", "병원", "치료",
                 "사과", "삭제", "멈췄", "그만", "담임", "보호자", "부모", "상담", "신고", "말했", "공유",
-                "회복", "반성", "재발", "차단", "울", "스트레스", "죄책감", "미안");
+                "회복", "반성", "재발", "차단", "울", "스트레스", "죄책감", "미안",
+                "모욕감", "모멸감", "수치심");
     }
 
     private boolean hasNoMeaningfulImpact(String text) {
@@ -290,6 +291,7 @@ public class AnalysisService {
         boolean physicalPublicContext = physicalType && containsAny(t, "친구들이 알고", "친구들 앞", "친구들이 다", "다 알고", "여럿이 봤", "여러 명이 보");
         boolean actorAgitated = physicalType && containsAny(t, "흥분", "분노", "화가 나", "통제 안", "통제가 안", "술", "약물", "날뛰");
         boolean retaliationConcern = physicalType && containsAny(t, "보복", "다시 맞", "또 맞", "다시 마주칠", "또 그럴");
+        boolean severeVerbalHumiliation = hasSevereVerbalHumiliationSignal(t);
         boolean resolved = containsAny(t, "삭제", "사과", "멈췄", "그만뒀", "해결");
         boolean mildExpression = isMildExpressionOrMisunderstanding(t);
         boolean noMeaningfulImpact = hasNoMeaningfulImpact(t);
@@ -309,6 +311,7 @@ public class AnalysisService {
         if (physicalPublicContext) score += 0.35;
         if (actorAgitated) score += 0.3;
         if (retaliationConcern) score += 0.45;
+        if (severeVerbalHumiliation) score += 0.55;
         if (bodilyWastePhysical) score += 0.9;
         if (distress) score += 0.75;
         if (severeDistress) score += 1.0;
@@ -387,17 +390,19 @@ public class AnalysisService {
             cap = noMeaningfulImpact ? 2.6 : 3.2;
         } else if (verbalOrCyberOnly && oneOff && !repeated && !ongoing && !publicSpread && !identityExposure && !severeSignal
                 && (noMeaningfulImpact || minorContext || resolved)) {
-            cap = 3.0;
+            cap = severeVerbalHumiliation ? 3.8 : 3.0;
         } else if (verbalOrCyberOnly && oneOff && !repeated && !ongoing && !publicSpread && !identityExposure && !severeSignal) {
-            cap = 3.8;
+            cap = severeVerbalHumiliation ? 4.8 : 3.8;
         } else if (verbalOrCyberOnly && !repeated && !severeSignal) {
             cap = publicSpread || identityExposure ? 5.0 : 4.2;
+            if (severeVerbalHumiliation) cap = Math.max(cap, publicSpread || identityExposure ? 5.8 : 5.2);
         } else if (verbalOrCyberOnly && !severeSignal) {
             cap = 5.8;
             if (repeated) cap = Math.max(cap, 6.4);
             if (ongoing || longTerm) cap = Math.max(cap, 6.8);
             if (publicSpread && identityExposure) cap = Math.max(cap, 6.7);
             if (distress) cap = Math.max(cap, 7.0);
+            if (severeVerbalHumiliation) cap = Math.max(cap, 7.2);
             if (containsAny(t, "보복", "학교 못", "등교 못")) cap = Math.max(cap, 7.2);
             cap = Math.min(cap, 7.4);
         } else if (minorPhysicalOnly) {
@@ -485,10 +490,13 @@ public class AnalysisService {
     private MeasureFactors assessMeasureFactors(List<String> types, String text) {
         String t = normalize(text);
         int seriousness = 0;
+        boolean severeVerbalHumiliation = hasSevereVerbalHumiliationSignal(t);
 
-        if (types.contains("언어 폭력")) seriousness = Math.max(seriousness, 1);
+        if (types.contains("언어 폭력")) seriousness = Math.max(seriousness, severeVerbalHumiliation ? 2 : 1);
         if (types.contains("사이버 폭력")) {
-            seriousness = Math.max(seriousness, containsAny(t, "사진", "영상", "신상", "얼굴", "유포", "공개", "게시") ? 2 : 1);
+            int cyberSeriousness = containsAny(t, "사진", "영상", "신상", "얼굴", "유포", "공개", "게시") ? 2 : 1;
+            if (severeVerbalHumiliation) cyberSeriousness = Math.max(cyberSeriousness, 2);
+            seriousness = Math.max(seriousness, cyberSeriousness);
         }
         if (types.contains("따돌림")) seriousness = Math.max(seriousness, 2);
         if (types.contains("갈취")) seriousness = Math.max(seriousness, containsAny(t, "만원", "송금", "계좌", "여러 번") ? 3 : 2);
@@ -518,6 +526,7 @@ public class AnalysisService {
                 "던졌", "던지", "들이붓", "끼얹", "부었", "뿌렸", "친구들이 알고", "친구들 앞", "친구들이 다")) {
             intent = Math.max(intent, 3);
         }
+        if (severeVerbalHumiliation) intent = Math.max(intent, 3);
         if (containsAny(t, "보복", "신고하면", "흉기", "칼", "강제로", "촬영", "퍼뜨", "흥분", "분노", "통제 안", "통제가 안")) {
             intent = 4;
         }
@@ -565,6 +574,19 @@ public class AnalysisService {
         return mildPhrase && !severePhrase;
     }
 
+    private boolean hasSevereVerbalHumiliationSignal(String text) {
+        String t = normalize(text);
+        return containsAny(t,
+                "패드립", "부모 욕", "가족 욕", "엄마 욕", "아빠 욕",
+                "외모 비하", "몸매 비하", "장애 비하", "장애인 비하",
+                "성적인 욕", "성적 욕", "성희롱성 욕", "성희롱 욕",
+                "심한 욕", "심하게 욕", "심한 욕설", "심하게 욕설",
+                "욕설 수위", "모욕 수위", "수위가 높", "수위 높", "수위가 세", "수위 세",
+                "수위가 올라", "수위 올라", "점점 심", "더 심해", "갈수록 심", "강도가 세",
+                "인격 모독", "인신공격",
+                "죽어라", "죽으라", "자살해", "뒤져", "꺼져", "벌레", "쓰레기");
+    }
+
     private boolean containsAny(String text, String... words) {
         for (String word : words) {
             if (text.contains(word)) return true;
@@ -598,13 +620,15 @@ public class AnalysisService {
         String t = normalize(text);
         if (containsAny(t,
                 "여러 번", "몇 번", "매일", "자꾸", "계속 연락", "계속 따라", "계속 따돌",
-                "또 했", "또 당", "또 연락", "또 올", "또다시")) {
+                "또 했", "또 당", "또 연락", "또 올", "또다시",
+                "점점 심", "더 심해", "갈수록 심", "수위가 올라", "수위 올라", "수위가 높아")) {
             return true;
         }
         if (hasNoRepeatSignal(t)) return false;
         return containsAny(t,
                 "계속", "매일", "반복", "여러 번", "지속", "몇 번", "자꾸",
-                "또 했", "또 당", "또 연락", "또 올", "또다시");
+                "또 했", "또 당", "또 연락", "또 올", "또다시",
+                "점점 심", "더 심해", "갈수록 심", "수위가 올라", "수위 올라", "수위가 높아");
     }
 
     private String detectRole(String text) {
@@ -753,7 +777,7 @@ public class AnalysisService {
         if (containsAny(t, "불안", "두려", "무서")) impacts.add("불안·두려움");
         if (containsAny(t, "등교", "학교 못", "학교 가기")) impacts.add("등교·생활 영향");
         if (containsAny(t, "보복", "반복이 걱정", "또 그럴", "재발")) impacts.add("보복·재발 우려");
-        if (containsAny(t, "잠을 못", "스트레스", "울", "괴롭", "힘들")) impacts.add("정서적 고통");
+        if (containsAny(t, "잠을 못", "스트레스", "울", "괴롭", "힘들", "모욕감", "모멸감", "수치심")) impacts.add("정서적 고통");
         if (containsAny(t, "멍", "상처", "통증", "아프", "아픔", "아팠", "아파") || hasMedicalRecordSignal(t)) {
             impacts.add(hasMedicalRecordSignal(t) ? "신체 피해 또는 진료 필요" : "신체 통증 또는 피해");
         }
@@ -794,6 +818,7 @@ public class AnalysisService {
 
         if (hasRepeatSignal(t) || containsAny(t, "지금도", "아직도")) aggravating.add("반복·지속");
         if (containsAny(t, "공개", "퍼졌", "유포", "공유", "여러 명", "단체", "댓글")) aggravating.add("확산·집단성");
+        if (hasSevereVerbalHumiliationSignal(t)) aggravating.add("욕설·모욕 수위 높음");
         if (containsAny(t, "사진", "영상", "얼굴", "신상", "이름", "학교명")) aggravating.add("신원·이미지 노출");
         if (containsAny(t, "협박", "보복", "죽이", "때리겠", "찾아가")) aggravating.add("위협·보복 우려");
         if (types.contains("성폭력")) aggravating.add("성적 침해");
@@ -900,7 +925,7 @@ public class AnalysisService {
         }
         if (types.contains("사이버 폭력")) {
             if (containsAny(t, "단톡", "단체 채팅", "채팅방", "카톡", "메시지")) {
-                actions.add("단톡방은 앞뒤 맥락, 참여자 목록, 보낸 시간이 같이 보이게 저장하고 대화방을 바로 나가기 전에 원본을 확보하세요.");
+                actions.add("단톡방은 앞뒤 맥락, 참여자 목록, 보낸 시간이 같이 보이게 저장하고 대화 내보내기 원본까지 확보하세요.");
             } else if (containsAny(t, "사진", "영상", "sns", "인스타", "게시")) {
                 actions.add("SNS 사진·게시물은 URL, 작성자, 게시 시간, 댓글 흐름을 한 번에 남기고 원본 사진이 퍼진 경로도 따로 적어두세요.");
             } else {
