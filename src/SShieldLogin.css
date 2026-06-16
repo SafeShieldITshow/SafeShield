@@ -688,3 +688,122 @@
   background: rgba(76, 190, 133, 0.09);
   border-color: rgba(76, 190, 133, 0.2);
 }
+
+/* Minimal login: no extra panel, no form box background. */
+.login-container {
+  padding: 72px 24px 34px;
+  overflow: hidden;
+}
+
+.login-shell {
+  width: min(100%, 420px);
+  display: block;
+}
+
+.login-context-panel {
+  display: none;
+}
+
+.form-wrapper {
+  width: 100%;
+  max-width: 420px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.login-heading {
+  margin-bottom: 18px;
+}
+
+.login-heading h1 {
+  margin-bottom: 8px;
+  font-size: 28px;
+}
+
+.login-heading p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tab-group-container {
+  margin-bottom: 18px;
+}
+
+.tab-btn-item {
+  height: 38px;
+}
+
+.signup-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.signup-fields.visible {
+  max-height: 76px;
+}
+
+.input-group-container {
+  margin-bottom: 12px;
+}
+
+.signup-fields .input-group-container {
+  margin-bottom: 0;
+}
+
+.last-input {
+  margin-bottom: 16px;
+}
+
+.input-label {
+  margin-bottom: 6px;
+}
+
+.clean-purple-input {
+  height: 44px;
+  border-radius: 10px;
+  padding: 0 13px;
+}
+
+.main-action-btn {
+  height: 46px;
+  border-radius: 10px;
+}
+
+.divider {
+  margin: 13px 0;
+}
+
+.google-login-btn {
+  height: 44px;
+  border-radius: 10px;
+}
+
+.form-message {
+  margin-bottom: 10px;
+}
+
+@media (max-width: 600px) {
+  .login-container {
+    padding: 72px 20px 24px;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .top-logo {
+    top: 28px;
+    left: 24px;
+  }
+
+  .form-wrapper {
+    width: 100%;
+    padding: 0;
+  }
+
+  .login-heading h1 {
+    font-size: 26px;
+  }
+}

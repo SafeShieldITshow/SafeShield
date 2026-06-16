@@ -72,6 +72,8 @@ const SShieldMypage = () => {
 
     const formatDate = (iso) => formatKoreanNumericDateTime(iso);
     const startNewChat = () => navigate('/chat?new=1');
+    const recentSessions = sessions.slice(0, 4);
+    const recentReports = reports.slice(0, 4);
 
     return (
         <div className="wrapper">
@@ -166,47 +168,49 @@ const SShieldMypage = () => {
                         )}
                     </section>
 
-                    <section className="section" id="session-history">
-                        <div className="sectionHeader">
-                            <h2 className="label">상담 기록</h2>
-                            <button className="btnDetail" onClick={startNewChat}>새 상담</button>
-                        </div>
-                        <SessionHistory sessions={sessions} variant="page" />
-                    </section>
+                    <div className="mypage-history-grid">
+                        <section className="section" id="session-history">
+                            <div className="sectionHeader">
+                                <h2 className="label">상담 기록</h2>
+                                <button className="btnDetail" onClick={startNewChat}>새 상담</button>
+                            </div>
+                            <SessionHistory sessions={recentSessions} variant="page" />
+                        </section>
 
-                    <section className="section">
-                        <div className="sectionHeader">
-                            <h2 className="label">리포트 기록</h2>
-                        </div>
+                        <section className="section">
+                            <div className="sectionHeader">
+                                <h2 className="label">리포트 기록</h2>
+                            </div>
 
-                        <div className="reportList">
-                            {reports.length === 0 ? (
-                                <p style={{ color: '#aaa', textAlign: 'center', padding: '24px' }}>
-                                    아직 리포트가 없습니다.
-                                </p>
-                            ) : reports.map((item) => {
-                                const risk = getRiskLevel(item.risk_score);
-                                return (
-                                    <div key={item.id} className="reportCard">
-                                        <div className="reportText">
-                                            <span className="date">{formatDate(item.created_at)}</span>
-                                            <span className={`risk-badge ${risk.cls}`}>{risk.label}</span>
-                                            <h3 className="title">{item.title}</h3>
-                                            <div className="tags">
-                                                {(item.violence_types || []).map((tag) => (
-                                                    <span key={tag} className="tag">{tag}</span>
-                                                ))}
+                            <div className="reportList">
+                                {reports.length === 0 ? (
+                                    <p style={{ color: '#aaa', textAlign: 'center', padding: '24px' }}>
+                                        아직 리포트가 없습니다.
+                                    </p>
+                                ) : recentReports.map((item) => {
+                                    const risk = getRiskLevel(item.risk_score);
+                                    return (
+                                        <div key={item.id} className="reportCard">
+                                            <div className="reportText">
+                                                <span className="date">{formatDate(item.created_at)}</span>
+                                                <span className={`risk-badge ${risk.cls}`}>{risk.label}</span>
+                                                <h3 className="title">{item.title}</h3>
+                                                <div className="tags">
+                                                    {(item.violence_types || []).map((tag) => (
+                                                        <span key={tag} className="tag">{tag}</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="actions">
+                                                <button className="btnDetail" onClick={() => navigate(`/result?id=${item.id}`)}>상세 보기</button>
+                                                <button className="btnDelete" onClick={() => setShowDeleteConfirm(item.id)}>삭제</button>
                                             </div>
                                         </div>
-                                        <div className="actions">
-                                            <button className="btnDetail" onClick={() => navigate(`/result?id=${item.id}`)}>상세 보기</button>
-                                            <button className="btnDelete" onClick={() => setShowDeleteConfirm(item.id)}>삭제</button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </section>
+                                    );
+                                })}
+                            </div>
+                        </section>
+                    </div>
 
                     <footer className="accountSettings">
                         <h3>계정 설정</h3>
