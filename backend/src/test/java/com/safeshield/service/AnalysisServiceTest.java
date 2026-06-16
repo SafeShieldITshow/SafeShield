@@ -716,6 +716,97 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void verbalCaseWithIncidentMemoBecomesReadyForReport() {
+        String text = "저는 피해를 당한 입장입니다. 상대는 같은 반 학생입니다. " +
+                "어제 복도에서 한 번 욕설과 비하 표현을 들었습니다. 계속 반복된 일은 아니고 상대가 짧게 사과했습니다. " +
+                "친구 한 명이 들었고 제가 사건 메모를 남겼습니다. 생활 영향은 크지 않지만 기분이 상했고 다시 말이 나올까 걱정됩니다. " +
+                "학교에 어떻게 설명하고 기록해야 하는지 알고 싶습니다. " +
+                "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.";
+
+        ReportReadiness readiness = analysisService.assessReportReadiness(text, 7);
+        var result = analysisService.analyze(text, readiness);
+
+        assertTrue(readiness.ready(), "사건 메모와 목격 단서가 있으면 언어폭력 리포트 생성 조건을 충족해야 합니다.");
+        assertTrue(result.violenceTypes().contains("언어 폭력"));
+        assertTrue(result.riskScore() <= 4.0, "1회성 욕설, 사과, 생활 영향 낮음은 반복 사안처럼 중위험 이상으로 부풀리면 안 됩니다.");
+        assertTrue(result.keyFindings().stream().anyMatch(item ->
+                item.startsWith("발생 양상:") && item.contains("1회성")));
+    }
+
+    @Test
+    void stalkingCaseBecomesReadyAndUsesStalkingSnapshot() {
+        String text = "저는 피해 학생입니다. 상대는 같은 학교 선배입니다. " +
+                "3주 동안 하교길에 계속 따라오고 집 앞에서 기다리는 일이 있었습니다. " +
+                "계속 연락이 와서 차단했지만 다른 계정으로 또 연락했습니다. " +
+                "통화 기록, 메시지 캡처, 접근한 날짜와 시간을 기록해 두었습니다. " +
+                "무섭고 보복이 걱정돼서 등교와 귀가가 불안합니다. 안전 확보와 신고 상담 절차를 알고 싶습니다. " +
+                "확인 답변: 위 내용은 하나의 같은 사안이며 이 내용으로 리포트를 생성해도 됩니다.";
+
+        ReportReadiness readiness = analysisService.assessReportReadiness(text, 9);
+        var result = analysisService.analyze(text, readiness);
+
+        assertTrue(readiness.ready(), "스토킹 접근·대기·연락 단서도 구체 사건으로 인정해야 합니다. missing=" + readiness.missingInfo());
+        assertFalse(readiness.missingInfo().contains("무슨 일이 있었는지"));
+        assertTrue(result.violenceTypes().contains("스토킹"));
+        assertTrue(result.keyFindings().stream().anyMatch(item ->
+                item.startsWith("핵심 상황:") && item.contains("반복 접근이나 연락")));
+    }
+
+    @Test
+    void negatedHospitalVisitDoesNotCreateMedicalRecordFinding() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var result = analysisService.analyze(
+                "같은 반 학생이 오늘 한 번 가볍게 밀쳤습니다. 병원은 가지 않았지만 어깨가 조금 아팠습니다. " +
+                        "친구 두 명이 봤고 담임에게 말한 기록이 있습니다.",
+                readiness
+        );
+
+        assertFalse(result.keyFindings().stream().anyMatch(item ->
+                item.startsWith("증거 수준:") && item.contains("진단·치료 기록")),
+                "병원에 가지 않았다는 부정 표현을 진료 기록 있음으로 요약하면 안 됩니다.");
+        assertFalse(result.evidenceGuide().contains("진단서·진료 기록"),
+                "부정된 병원 표현만으로 진단서 항목을 권하면 안 됩니다.");
+        assertTrue(result.recommendedActions().stream().anyMatch(item -> item.contains("통증 부위와 지속 시간")),
+                "부상 단서가 약하고 통증만 있으면 상태 기록 후 지속 시 진료로 안내해야 합니다.");
+    }
+
+    @Test
+    void noAdditionalSameActorHarmDoesNotAppearAsAdditionalHarmFinding() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var result = analysisService.analyze(
+                "같은 반 친구가 오늘 한 번 밀쳤고 어깨가 아팠습니다. " +
+                        "같은 가해자에게 당한 다른 피해는 없습니다. 담임 상담 절차를 알고 싶습니다.",
+                readiness
+        );
+
+        assertFalse(result.keyFindings().stream().anyMatch(item -> item.startsWith("추가 피해 여부:")),
+                "추가 피해가 없다고 답한 경우 추가 피해 있음으로 표시하면 안 됩니다.");
+    }
+
+    @Test
+    void caseSnapshotPrioritizesSpecificTypeOverAdditionalVerbalHarm() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var extortion = analysisService.analyze(
+                "같은 반 학생이 한 달 동안 돈을 내놓으라고 강요했고 물건도 빼앗았습니다. 같은 가해자에게 욕설도 들었습니다.",
+                readiness
+        );
+        var exclusion = analysisService.analyze(
+                "같은 반 학생 여러 명이 한 달 동안 급식과 모둠 활동에서 계속 따돌림을 했습니다. 언어적으로 놀림도 들었습니다.",
+                readiness
+        );
+
+        assertTrue(extortion.keyFindings().stream().anyMatch(item ->
+                item.startsWith("핵심 상황:") && item.contains("금품 요구나 강요")),
+                "갈취 리포트의 핵심 상황은 부가 욕설보다 금품 요구를 먼저 보여줘야 합니다.");
+        assertTrue(exclusion.keyFindings().stream().anyMatch(item ->
+                item.startsWith("핵심 상황:") && item.contains("따돌림이나 배제")),
+                "따돌림 리포트의 핵심 상황은 부가 놀림보다 배제를 먼저 보여줘야 합니다.");
+    }
+
+    @Test
     void doesNotAskUserToSelfLabelVictimOrPerpetrator() {
         ReportReadiness readiness = analysisService.assessReportReadiness(
                 "같은 반 친구한테 맞아서 신고하려고 찾아봤습니다. 오늘 한 번 있었고 멍 사진이 있습니다. 너무 불안해서 어떻게 해야 할지 알고 싶습니다.",

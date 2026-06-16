@@ -78,7 +78,7 @@ public class EvidenceGuideService {
 
         if (types.contains("신체 폭력")) {
             evidence.add("상처 사진 촬영");
-            if (containsAny(text, "병원", "진단", "치료", "상해", "멍", "출혈", "골절")) evidence.add("진단서·진료 기록");
+            if (hasMedicalRecordSignal(text) || containsAny(text, "상해", "멍", "출혈", "골절")) evidence.add("진단서·진료 기록");
             evidence.add("목격자 이름과 연락처");
             if (containsAny(text, "학교", "담임", "보건실", "선생")) evidence.add("보건실·담임 기록");
             handledTypes.add("신체 폭력");
@@ -199,5 +199,19 @@ public class EvidenceGuideService {
             if (text.contains(word)) return true;
         }
         return false;
+    }
+
+    private boolean hasNegatedMedicalSignal(String text) {
+        return containsAny(text,
+                "병원 안", "병원은 안", "병원 가지", "병원은 가지", "병원에 가지", "병원에는 가지",
+                "병원 안 갔", "병원은 안 갔", "병원은 안감", "병원 안감",
+                "치료 안", "치료는 안", "진단서 없", "진단서는 없", "진료 기록 없",
+                "보건실 안", "보건실은 안");
+    }
+
+    private boolean hasMedicalRecordSignal(String text) {
+        if (hasNegatedMedicalSignal(text)) return false;
+        return containsAny(text, "진단", "진단서", "치료", "진료", "병원 기록", "병원 치료", "응급실", "보건실")
+                || (containsAny(text, "병원") && !hasNegatedMedicalSignal(text));
     }
 }

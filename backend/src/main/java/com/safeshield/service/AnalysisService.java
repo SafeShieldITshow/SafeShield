@@ -89,7 +89,8 @@ public class AnalysisService {
         boolean hasConcreteIncident = containsAny(t, "때렸", "맞았", "욕", "모욕", "비방", "사진", "게시", "댓글", "협박",
                 "따돌", "돈", "갈취", "성희롱", "성추행", "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는",
                 "괴롭", "놀림", "밀쳤", "던졌", "던지", "우유곽", "들이붓", "끼얹", "부었", "뿌렸", "사과",
-                "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는")
+                "욕설", "신체 폭력", "사진이나 게시물", "때리거나 밀치는",
+                "스토킹", "따라", "기다리", "집 앞", "계속 연락", "찾아와", "하교길")
                 || bodilyWasteIncident;
         boolean hasRelationshipAnswer = hasDefiniteSchoolRelationship(t)
                 || hasConfirmedNonSchoolRelationship(t)
@@ -100,7 +101,8 @@ public class AnalysisService {
                 "방금", "언제", "개월", "주일", "몇 주", "주 이상", "한 달", "달 정도", "동안", "최근", "지속", "오래",
                 "현재까지는 한 번", "여러 번", "지금도 계속", "정확한 시점");
         boolean hasEvidenceOrChannel = containsAny(t, "캡처", "녹음", "사진", "진단", "병원", "목격", "sns", "카톡", "단톡",
-                "댓글", "게시", "메시지", "증거", "아직 확보한 증거는 없습니다", "증거는 없습니다");
+                "댓글", "게시", "메시지", "증거", "기록", "메모", "일지", "통화",
+                "아직 확보한 증거는 없습니다", "증거는 없습니다");
         boolean hasImpactOrRecovery = hasImpactOrRecovery(t);
         boolean hasUserGoal = hasUserGoal(t);
         boolean hasFinalConfirmation = hasFinalConfirmation(t);
@@ -265,7 +267,7 @@ public class AnalysisService {
         if (violenceTypes.size() > 1) score += Math.min(1.0, (violenceTypes.size() - 1) * 0.35);
 
         boolean oneOff = containsAny(t, "한 번", "1번", "처음", "처음으로");
-        boolean repeated = containsAny(t, "계속", "매일", "반복", "여러 번", "지속", "몇 번", "또", "자꾸");
+        boolean repeated = hasRepeatSignal(t);
         boolean longTerm = containsAny(t, "몇 달", "몇 개월", "몇 주", "개월", "학기", "작년부터");
         boolean ongoing = containsAny(t, "아직도", "지금도", "계속하고", "멈추지", "또 올");
         boolean publicSpread = containsAny(t, "공개", "퍼졌", "유포", "공유", "단톡", "단체", "여러 명", "댓글", "게시",
@@ -273,6 +275,7 @@ public class AnalysisService {
         boolean identityExposure = containsAny(t, "사진", "영상", "얼굴", "신상", "이름", "학교명", "전화번호");
         boolean severeDistress = containsAny(t, "죽고", "자살", "자해", "극단");
         boolean noMedicalOrInjury = containsAny(t, "병원 안", "병원은 안", "병원 가지", "치료 안", "진단서 없",
+                "병원은 가지", "병원에 가지", "병원에는 가지", "병원 안 갔", "병원은 안 갔",
                 "멍 없음", "멍은 없", "상처 없음", "상처는 없", "다친 곳 없", "다친 곳은 없", "크게 다치지", "다치지는 않");
         boolean noThreat = containsAny(t, "협박 없", "협박은 없", "보복 걱정 없", "때리겠다는 말은 없", "위협은 없");
         boolean distress = severeDistress
@@ -460,7 +463,8 @@ public class AnalysisService {
         boolean verbalOrCyberOnly = !types.isEmpty()
                 && types.stream().allMatch(type -> type.equals("언어 폭력") || type.equals("사이버 폭력"));
         boolean oneOff = containsAny(t, "한 번", "1번", "처음", "처음으로")
-                && !containsAny(t, "계속", "반복", "여러 번", "매일", "몇 달", "몇 개월");
+                && !hasRepeatSignal(t)
+                && !containsAny(t, "몇 달", "몇 개월");
 
         if (!factors.expelCandidate()) {
             end = Math.min(end, 7);
@@ -504,8 +508,8 @@ public class AnalysisService {
 
         int persistence = 0;
         if (containsAny(t, "한 번", "1번", "처음", "처음으로")) persistence = 0;
-        if (containsAny(t, "몇 번", "여러 번", "반복", "매일", "또")) persistence = Math.max(persistence, 2);
-        if (containsAny(t, "계속", "몇 주", "몇 달", "몇 개월", "학기", "작년부터", "지금도", "아직도")) persistence = Math.max(persistence, 3);
+        if (hasRepeatSignal(t)) persistence = Math.max(persistence, 2);
+        if ((hasRepeatSignal(t) && containsAny(t, "계속", "매일", "자꾸")) || containsAny(t, "몇 주", "몇 달", "몇 개월", "학기", "작년부터", "지금도", "아직도")) persistence = Math.max(persistence, 3);
         if (containsAny(t, "몇 달 동안 계속", "몇 개월 동안 계속", "매일 계속")) persistence = 4;
 
         int intent = 1;
@@ -556,7 +560,7 @@ public class AnalysisService {
         boolean mildPhrase = containsAny(text,
                 "귀엽", "귀엽다고", "예쁘", "잘생겼", "칭찬", "장난", "농담", "오해", "기분 때문", "기분이 상");
         boolean severePhrase = containsAny(text,
-                "협박", "죽이", "꺼져", "비방", "모욕", "명예훼손", "유포", "게시", "사진", "영상",
+                "협박", "죽이", "꺼져", "욕을", "욕했", "욕설과", "욕설을", "비하", "비방", "모욕", "명예훼손", "유포", "게시", "사진", "영상",
                 "때렸", "맞았", "밀쳤", "멍", "상처", "따돌", "왕따", "돈", "갈취", "성추행", "성희롱");
         return mildPhrase && !severePhrase;
     }
@@ -566,6 +570,41 @@ public class AnalysisService {
             if (text.contains(word)) return true;
         }
         return false;
+    }
+
+    private boolean hasNegatedMedicalSignal(String text) {
+        return containsAny(text,
+                "병원 안", "병원은 안", "병원 가지", "병원은 가지", "병원에 가지", "병원에는 가지",
+                "병원 안 갔", "병원은 안 갔", "병원은 안감", "병원 안감",
+                "치료 안", "치료는 안", "진단서 없", "진단서는 없", "진료 기록 없",
+                "보건실 안", "보건실은 안");
+    }
+
+    private boolean hasMedicalRecordSignal(String text) {
+        if (hasNegatedMedicalSignal(text)) return false;
+        return containsAny(text, "진단", "진단서", "치료", "진료", "병원 기록", "병원 치료", "응급실", "보건실")
+                || (containsAny(text, "병원") && !hasNegatedMedicalSignal(text));
+    }
+
+    private boolean hasNoRepeatSignal(String text) {
+        return containsAny(text,
+                "반복된 일은 아니", "반복은 아니", "반복이 아니", "반복되지", "반복되지는",
+                "계속된 일은 아니", "계속된 건 아니", "계속 반복된 일은 아니",
+                "한 번뿐", "한번뿐", "한 번만", "1번만", "현재까지는 한 번",
+                "반복이 걱정", "반복될까", "또 그럴까", "또 그럴까 봐");
+    }
+
+    private boolean hasRepeatSignal(String text) {
+        String t = normalize(text);
+        if (containsAny(t,
+                "여러 번", "몇 번", "매일", "자꾸", "계속 연락", "계속 따라", "계속 따돌",
+                "또 했", "또 당", "또 연락", "또 올", "또다시")) {
+            return true;
+        }
+        if (hasNoRepeatSignal(t)) return false;
+        return containsAny(t,
+                "계속", "매일", "반복", "여러 번", "지속", "몇 번", "자꾸",
+                "또 했", "또 당", "또 연락", "또 올", "또다시");
     }
 
     private String detectRole(String text) {
@@ -715,7 +754,9 @@ public class AnalysisService {
         if (containsAny(t, "등교", "학교 못", "학교 가기")) impacts.add("등교·생활 영향");
         if (containsAny(t, "보복", "반복이 걱정", "또 그럴", "재발")) impacts.add("보복·재발 우려");
         if (containsAny(t, "잠을 못", "스트레스", "울", "괴롭", "힘들")) impacts.add("정서적 고통");
-        if (containsAny(t, "멍", "상처", "통증", "병원", "진단", "치료")) impacts.add("신체 피해 또는 진료 필요");
+        if (containsAny(t, "멍", "상처", "통증", "아프", "아픔", "아팠", "아파") || hasMedicalRecordSignal(t)) {
+            impacts.add(hasMedicalRecordSignal(t) ? "신체 피해 또는 진료 필요" : "신체 통증 또는 피해");
+        }
         if (containsAny(t, "친구들이 알고", "친구들 앞", "친구들이 다", "다 알고", "여럿이 봤", "여러 명이 보")) impacts.add("목격·주변 인지");
         if (hasNoMeaningfulImpact(t)) impacts.add("현재 생활 영향은 낮다고 진술");
         if (impacts.isEmpty()) return "구체적 영향은 아직 제한적으로 확인됐습니다.";
@@ -727,8 +768,8 @@ public class AnalysisService {
         List<String> details = new ArrayList<>();
         if (containsAny(t, "한 번", "1번", "처음", "가볍게")) details.add("1회성 또는 가벼운 접촉 진술");
         if (containsAny(t, "멍", "상처", "다쳤")) details.add("멍·상처 단서");
-        if (containsAny(t, "통증", "아프", "아픔")) details.add("통증 호소");
-        if (containsAny(t, "병원", "진단", "치료", "보건실")) details.add("진료·기록 단서");
+        if (containsAny(t, "통증", "아프", "아픔", "아팠", "아파")) details.add("통증 호소");
+        if (hasMedicalRecordSignal(t)) details.add("진료·기록 단서");
         if (containsAny(t, "출혈", "골절", "응급실", "수술", "기절")) details.add("중한 상해 단서");
         if (containsAny(t, "다친 곳 없", "멍 없음", "상처 없음", "크게 다치지", "다치지는 않")) details.add("큰 부상은 없다고 진술");
         if (details.isEmpty()) return "구체적인 부상 정도는 아직 제한적으로 확인됐습니다.";
@@ -738,7 +779,7 @@ public class AnalysisService {
     private String buildPhysicalContextSummary(String text) {
         String t = normalize(text);
         List<String> contexts = new ArrayList<>();
-        if (containsAny(t, "계속", "반복", "여러 번", "매일", "지금도", "아직도")) contexts.add("반복·지속");
+        if (hasRepeatSignal(t) || containsAny(t, "지금도", "아직도")) contexts.add("반복·지속");
         if (containsAny(t, "친구들이 알고", "친구들 앞", "친구들이 다", "다 알고", "여럿이 봤", "여러 명이 보")) contexts.add("목격자 또는 주변 인지");
         if (containsAny(t, "보복", "다시 맞", "또 맞", "다시 마주칠", "또 그럴")) contexts.add("보복·재발 우려");
         if (containsAny(t, "흥분", "분노", "화가 나", "통제 안", "통제가 안", "술", "약물", "날뛰")) contexts.add("상대의 흥분·통제 곤란 상태 진술");
@@ -751,7 +792,7 @@ public class AnalysisService {
         List<String> aggravating = new ArrayList<>();
         List<String> mitigating = new ArrayList<>();
 
-        if (containsAny(t, "계속", "반복", "여러 번", "매일", "지금도", "아직도")) aggravating.add("반복·지속");
+        if (hasRepeatSignal(t) || containsAny(t, "지금도", "아직도")) aggravating.add("반복·지속");
         if (containsAny(t, "공개", "퍼졌", "유포", "공유", "여러 명", "단체", "댓글")) aggravating.add("확산·집단성");
         if (containsAny(t, "사진", "영상", "얼굴", "신상", "이름", "학교명")) aggravating.add("신원·이미지 노출");
         if (containsAny(t, "협박", "보복", "죽이", "때리겠", "찾아가")) aggravating.add("위협·보복 우려");
@@ -761,7 +802,7 @@ public class AnalysisService {
         if (types.contains("신체 폭력") && containsAny(t, "던졌", "던진", "던지", "우유곽", "물건을 던")) aggravating.add("물건 투척");
         if (types.contains("신체 폭력") && containsAny(t, "들이붓", "끼얹", "부었", "뿌렸", "우유를")) aggravating.add("액체를 붓거나 끼얹은 행위");
         if (types.contains("신체 폭력") && hasBodilyWasteIncidentSignal(t)) aggravating.add("배설물 관련 신체적 모욕");
-        if (types.contains("신체 폭력") && containsAny(t, "진단", "병원", "치료", "출혈", "골절")) aggravating.add("상해·진료 단서");
+        if (types.contains("신체 폭력") && (hasMedicalRecordSignal(t) || containsAny(t, "출혈", "골절"))) aggravating.add("상해·진료 단서");
 
         if (containsAny(t, "한 번", "처음", "1번")) mitigating.add("1회성 진술");
         if (types.contains("신체 폭력") && containsAny(t, "가볍게", "크게 다치지", "다친 곳 없", "멍 없음", "상처 없음")) mitigating.add("경상 또는 큰 부상 없음 진술");
@@ -776,6 +817,18 @@ public class AnalysisService {
 
     private boolean hasAdditionalSameActorHarm(String text) {
         String t = normalize(text);
+        if (containsAny(t,
+                "같은 가해자에게 당한 다른 피해는 없습니다",
+                "같은 가해자에게 당한 다른 피해는 없",
+                "같은 가해자에게 당한 다른 피해 없음",
+                "다른 피해는 없습니다",
+                "다른 피해는 없",
+                "추가 피해는 없습니다",
+                "추가 피해는 없",
+                "더 기억나는 것은 없습니다",
+                "더 기억나는 것은 없")) {
+            return false;
+        }
         return containsAny(t, "같은 가해자에게 당한 다른 피해", "같은 가해자", "다른 피해가 더", "추가 피해", "또 당한", "더 있습니다");
     }
 
@@ -839,6 +892,8 @@ public class AnalysisService {
             }
             if (containsAny(t, "멍", "상처", "출혈")) {
                 actions.add("멍이나 상처는 오늘 날짜가 남게 가까운 사진과 전체 위치 사진을 나눠 찍고, 통증이 지속되면 병원 기록을 남기세요.");
+            } else if (containsAny(t, "통증", "아프", "아픔", "아팠", "아파") && !hasMedicalRecordSignal(t)) {
+                actions.add("보이는 상처가 없더라도 통증 부위와 지속 시간을 메모하고, 통증이 이어지면 보호자와 보건실 또는 병원 기록을 남기세요.");
             } else {
                 actions.add("상처 사진과 진료 기록을 먼저 확보하고, 통증이나 상해가 있으면 보호자와 병원 기록을 남기세요.");
             }
@@ -878,7 +933,7 @@ public class AnalysisService {
                 : hasUnclearPersonalRelationshipSignal(t) ? "개인적으로 알고 지내던 상대" : "상대";
         String channel = detectChannel(t);
         String conduct = detectConductSummary(t, types);
-        String pattern = containsAny(t, "지금도", "아직도", "계속", "반복", "매일", "여러 번", "몇 번")
+        String pattern = hasRepeatSignal(t) || containsAny(t, "지금도", "아직도")
                 ? "반복·지속되는 형태"
                 : containsAny(t, "한 번", "1번", "처음")
                 ? "현재 정보상 1회성에 가까운 형태"
@@ -921,6 +976,7 @@ public class AnalysisService {
 
     private String detectChannel(String text) {
         if (containsAny(text, "단톡", "단체 채팅", "채팅방")) return "단체 채팅방";
+        if (containsAny(text, "하교길", "등교길", "집 앞", "따라", "기다리", "찾아와", "계속 연락")) return "등하교길 또는 생활 공간";
         if (containsAny(text, "카톡", "메시지", "dm", "디엠")) return "개별 메시지";
         if (containsAny(text, "sns", "인스타", "게시", "댓글", "온라인")) return "SNS 또는 온라인 공간";
         if (containsAny(text, "교실", "학교", "복도", "운동장", "학원")) return "학교 또는 학원 공간";
@@ -947,11 +1003,12 @@ public class AnalysisService {
             if (!physicalActs.isEmpty()) return String.join(", ", physicalActs);
             return "신체 폭력";
         }
+        if (types.contains("성폭력")) return "원하지 않는 성적 접촉이나 성적 발언";
+        if (types.contains("갈취") || containsAny(text, "돈", "갈취", "빼앗", "강요", "심부름")) return "금품 요구나 강요";
+        if (types.contains("스토킹") || containsAny(text, "스토킹", "따라", "기다리", "찾아와", "계속 연락")) return "반복 접근이나 연락";
+        if (types.contains("따돌림") || containsAny(text, "따돌", "왕따", "무시", "배제", "혼자", "끼워주지")) return "따돌림이나 배제";
         if (types.contains("사이버 폭력") && containsAny(text, "사진", "영상", "유포", "올렸", "게시")) return "사진·게시물 관련 괴롭힘";
         if (containsAny(text, "욕", "욕설", "비방", "모욕", "놀림")) return "욕설·비방·조롱";
-        if (containsAny(text, "따돌", "왕따", "무시", "배제", "혼자")) return "따돌림이나 배제";
-        if (containsAny(text, "돈", "갈취", "빼앗", "강요")) return "금품 요구나 강요";
-        if (containsAny(text, "스토킹", "따라", "기다리", "찾아와")) return "반복 접근이나 연락";
         if (!types.isEmpty()) return String.join("·", types);
         return "구체적 행위";
     }
@@ -974,7 +1031,7 @@ public class AnalysisService {
         }
 
         String pattern;
-        if (containsAny(t, "지금도 계속", "아직도", "계속", "반복", "매일", "여러 번", "몇 번")) {
+        if (hasRepeatSignal(t) || containsAny(t, "지금도 계속", "아직도")) {
             pattern = "반복 또는 지속 가능성이 확인되어 단발 사안보다 위험도를 높게 봅니다.";
         } else if (containsAny(t, "한 번", "현재까지는 한 번", "1번", "처음")) {
             pattern = "현재 정보상 1회성 사안으로 보며, 추가 반복 여부 확인이 중요합니다.";
@@ -989,9 +1046,9 @@ public class AnalysisService {
             } else {
                 evidence = "본인이 한 행동과 피해 회복 조치를 시간순으로 정리할 자료가 아직 부족합니다.";
             }
-        } else if (containsAny(t, "진단", "병원", "치료", "진단서")) {
+        } else if (hasMedicalRecordSignal(t)) {
             evidence = "진단·치료 기록이 있어 신체 피해 입증력이 비교적 높습니다.";
-        } else if (containsAny(t, "캡처", "url", "녹음", "사진", "메시지", "목격")) {
+        } else if (containsAny(t, "캡처", "url", "녹음", "사진", "메시지", "목격", "기록", "메모", "일지", "통화")) {
             evidence = "캡처·사진·메시지·목격 등 직접 증거 단서가 확인됩니다.";
         } else if (containsAny(t, "아직 확보한 증거는 없습니다", "증거는 없습니다", "아직 없음")) {
             evidence = "증거가 없다고 확인되어 사실관계 입증력은 낮습니다.";
@@ -1003,7 +1060,8 @@ public class AnalysisService {
         if (!types.isEmpty()) confirmed++;
         if (hasDefiniteSchoolRelationship(t) || hasConfirmedNonSchoolRelationship(t)) confirmed++;
         if (containsAny(t, "한 번", "여러 번", "계속", "반복", "오늘", "어제", "지난", "방금", "개월", "주일")) confirmed++;
-        if (containsAny(t, "캡처", "url", "녹음", "사진", "진단", "병원", "목격", "증거", "아직 확보한 증거는 없습니다")) confirmed++;
+        if (containsAny(t, "캡처", "url", "녹음", "사진", "목격", "증거", "기록", "메모", "일지", "통화", "아직 확보한 증거는 없습니다")
+                || hasMedicalRecordSignal(t)) confirmed++;
         if (readiness.ready()) confirmed++;
 
         String confidenceLevel;
