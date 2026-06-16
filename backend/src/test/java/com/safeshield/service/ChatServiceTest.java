@@ -786,6 +786,53 @@ class ChatServiceTest {
     }
 
     @Test
+    void suggestsReportBeforeSixTurnsWhenCoreAnswersAreComplete() {
+        ReportReadiness readiness = new ReportReadiness(
+                true,
+                "학교폭력 가능성 검토",
+                "리포트 생성 가능",
+                List.of(),
+                List.of(
+                        "구체적인 사건 내용 확인",
+                        "상대방과 학교 관계 확인",
+                        "시점 또는 반복성 단서 확인",
+                        "증거 또는 발생 경로 단서 확인",
+                        "피해 영향 또는 회복 노력 확인",
+                        "요청한 도움 방향 확인"
+                ),
+                true
+        );
+
+        List<Message> history = reportReadyHistoryUnderSixTurns();
+
+        assertTrue(ChatService.shouldSuggestReport(readiness, history));
+        assertTrue(ChatService.canGenerateReportFromExplicitRequest(readiness, List.of(), history, true));
+    }
+
+    @Test
+    void doesNotSuggestReportWhenCoreAnswersAreMissingEvenAfterManyTurns() {
+        ReportReadiness readiness = new ReportReadiness(
+                true,
+                "학교폭력 가능성 검토",
+                "리포트 생성 가능",
+                List.of(),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+        List<Message> history = List.of(
+                transientMessage("user", "같은 반 친구가 단톡방에서 욕설을 했습니다."),
+                transientMessage("user", "자세한 건 아직 잘 모르겠습니다."),
+                transientMessage("user", "그냥 그런 일이 있었습니다."),
+                transientMessage("user", "친구들이 조금 그랬습니다."),
+                transientMessage("user", "더 말하기 어렵습니다."),
+                transientMessage("user", "아직 정리되지 않았습니다.")
+        );
+
+        assertFalse(ChatService.shouldSuggestReport(readiness, history));
+        assertFalse(ChatService.canGenerateReportFromExplicitRequest(readiness, List.of(), history, true));
+    }
+
+    @Test
     void doesNotDuplicateConfirmationLeadInWhenAppendingQuestion() {
         String reply = ChatService.connectReplyToConfirmation(
                 "내용 전체가 있다는 점은 중요합니다. 확인을 위해 질문 하나 할게요. 리포트에는 참여자와 시간이 중요합니다.",
@@ -1227,6 +1274,37 @@ class ChatServiceTest {
     }
 
     @Test
+    void coreAnswersCanCompleteConversationDepthWithoutMinimumTurnCount() {
+        ReportReadiness raw = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "리포트 생성 전에 사안 구조와 요청한 도움 방향을 더 확인해야 합니다.",
+                List.of("상담 내용을 조금 더 들은 뒤 리포트 생성"),
+                List.of(
+                        "구체적인 사건 내용 확인",
+                        "상대방과 학교 관계 확인",
+                        "시점 또는 반복성 단서 확인",
+                        "증거 또는 발생 경로 단서 확인",
+                        "피해 영향 또는 회복 노력 확인",
+                        "요청한 도움 방향 확인"
+                ),
+                true
+        );
+        List<Message> history = List.of(transientMessage(
+                "user",
+                "같은 반 친구가 단톡방에서 욕설과 비방을 했고 며칠 동안 반복됐습니다. " +
+                        "참여자 목록과 시간이 보이는 캡처가 있고, 불안해서 등교가 힘듭니다. " +
+                        "신고 절차를 알고 싶고 안전하게 보호받고 싶습니다."
+        ));
+        String combined = history.get(0).getContent();
+
+        ReportReadiness effective = ChatService.applyHistoryAnswerState(raw, combined, 1, history);
+
+        assertTrue(effective.ready());
+        assertTrue(effective.missingInfo().isEmpty());
+    }
+
+    @Test
     void schoolLocationKeepsEffectiveStatusLikelyWhenRelationshipIsLimited() {
         ReportReadiness raw = new ReportReadiness(
                 false,
@@ -1311,6 +1389,16 @@ class ChatServiceTest {
                 transientMessage("user", "불안하고 등교가 힘듭니다."),
                 transientMessage("user", "신고 절차를 알고 싶고 안전하게 보호받고 싶습니다."),
                 transientMessage("user", "이 내용으로 리포트를 만들어줘.")
+        );
+    }
+
+    private static List<Message> reportReadyHistoryUnderSixTurns() {
+        return List.of(
+                transientMessage("user", "같은 반 친구가 단톡방에서 욕설과 비방을 했습니다."),
+                transientMessage("user", "며칠 동안 반복됐고 지금도 계속됩니다."),
+                transientMessage("user", "참여자 목록과 보낸 시간이 보이는 캡처가 있습니다."),
+                transientMessage("user", "불안하고 등교가 힘듭니다."),
+                transientMessage("user", "신고 절차를 알고 싶고 안전하게 보호받고 싶습니다.")
         );
     }
 

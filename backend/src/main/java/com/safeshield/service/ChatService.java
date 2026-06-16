@@ -718,14 +718,13 @@ public class ChatService {
                         || content.contains("리포트 보기 버튼"));
     }
 
-    private static boolean shouldSuggestReport(ReportReadiness readiness, List<Message> history) {
+    static boolean shouldSuggestReport(ReportReadiness readiness, List<Message> history) {
         return strictReportContextReady(readiness, history);
     }
 
     private static boolean strictReportContextReady(ReportReadiness readiness, List<Message> history) {
         if (readiness == null || !readiness.ready() || !readiness.missingInfo().isEmpty()) return false;
         if (isConversationStopped(history)) return false;
-        if (userMessageCount(history) < 6) return false;
 
         String text = combinedUserText(history);
         if (text.isBlank()) return false;
@@ -2929,7 +2928,7 @@ public class ChatService {
     ) {
         String family = missingInfoFamily(missingInfo);
         if ("conversation_depth".equals(family)) {
-            return userMessageCount >= 3 && hasCoreReportAnswers(text, answeredFamilies);
+            return hasCoreReportAnswers(text, answeredFamilies);
         }
         if (family.isBlank()) return false;
         return answeredFamilies.contains(family) || isConfirmationCandidateAnswered(family, text);

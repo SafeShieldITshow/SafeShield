@@ -334,6 +334,7 @@ const SShieldChat = () => {
     const [expandedPromptMessages, setExpandedPromptMessages] = useState(() => new Set());
     const [showReport, setShowReport] = useState(false);
     const [readyReport, setReadyReport] = useState(null);
+    const [reportNeedsRefresh, setReportNeedsRefresh] = useState(false);
     const [generatingReport, setGeneratingReport] = useState(false);
     const [isSessionLoading, setIsSessionLoading] = useState(false);
     const [isSessionsLoading, setIsSessionsLoading] = useState(false);
@@ -433,6 +434,7 @@ const SShieldChat = () => {
             setMessages(attachPromptsToLatestAiMessage(uiMessages, readiness.confirmation_prompts));
             setConversationStopped(Boolean(readiness.conversation_stopped) || hasStoppedConversation(uiMessages));
             setShowReport(Boolean(readiness.ready));
+            setReportNeedsRefresh(false);
         } catch {
             if (loadSequence !== messageLoadSequenceRef.current) return;
             localStorage.removeItem('ss_session');
@@ -443,6 +445,7 @@ const SShieldChat = () => {
             setMessages([initialMessage()]);
             setShowReport(false);
             setReadyReport(null);
+            setReportNeedsRefresh(false);
         } finally {
             if (loadSequence === messageLoadSequenceRef.current) {
                 setIsSessionLoading(false);
@@ -465,6 +468,7 @@ const SShieldChat = () => {
         shouldAutoScrollRef.current = true;
         setShowReport(false);
         setReadyReport(null);
+        setReportNeedsRefresh(false);
         setMessages([initialMessage()]);
         setInput('');
         setTopicPrompt(null);
@@ -563,6 +567,11 @@ const SShieldChat = () => {
                     setMessages((prev) => prev.map((message) => (
                         message.id === id ? { ...message, confirmationPrompts: prompts } : message
                     )));
+                    setExpandedPromptMessages((prev) => {
+                        const next = new Set(prev);
+                        next.add(id);
+                        return next;
+                    });
                 }
             }
         }, 16);
@@ -603,7 +612,6 @@ const SShieldChat = () => {
 
         setInput('');
         setConfirmationDrafts({});
-        setExpandedPromptMessages(new Set());
         shouldAutoScrollRef.current = true;
         if (options.forceNewSession) {
             messageLoadSequenceRef.current += 1;
@@ -612,7 +620,11 @@ const SShieldChat = () => {
             setIsSessionLoading(false);
             setShowReport(false);
             setReadyReport(null);
+            setReportNeedsRefresh(false);
             setConversationStopped(false);
+            setExpandedPromptMessages(new Set());
+        } else if (readyReport) {
+            setReportNeedsRefresh(true);
         }
         setMessages((prev) => [
             ...(options.forceNewSession ? [] : clearConfirmationPrompts(prev)),
@@ -639,8 +651,9 @@ const SShieldChat = () => {
                 setConversationStopped(stopped);
                 if (latestReport) {
                     setReadyReport(latestReport);
+                    setReportNeedsRefresh(false);
                     if (guestSend) storeTemporaryReport(latestReport);
-                } else {
+                } else if (!readyReport) {
                     setReadyReport(null);
                 }
                 setShowReport(!stopped && Boolean(latestReport || data.report_suggested || data.report_ready));
@@ -673,7 +686,7 @@ const SShieldChat = () => {
     };
 
     const handleGenerateReport = async () => {
-        if (readyReport) {
+        if (readyReport && !reportNeedsRefresh) {
             openReport(readyReport);
             return;
         }
@@ -686,6 +699,7 @@ const SShieldChat = () => {
                 });
                 if (data.report) {
                     setReadyReport(data.report);
+                    setReportNeedsRefresh(false);
                     storeTemporaryReport(data.report);
                     openReport(data.report);
                 } else {
@@ -703,6 +717,7 @@ const SShieldChat = () => {
         try {
             const report = await api.post('/reports/generate', { sessionId, title: '' });
             setReadyReport(report);
+            setReportNeedsRefresh(false);
             openReport(report);
         } catch (e) {
             alert(e.message);
@@ -1060,11 +1075,15 @@ const SShieldChat = () => {
                         <div className="chat-cta">
                             <p>
                                 {readyReport
-                                    ? '상담 내용을 정리한 리포트를 열 수 있습니다.'
+                                    ? (reportNeedsRefresh
+                                        ? '추가 대화가 반영된 리포트로 갱신할 수 있습니다.'
+                                        : '상담 내용을 정리한 리포트를 열 수 있습니다.')
                                     : '상담 흐름이 어느 정도 정리됐습니다. 필요하면 지금까지 내용을 정리할 수 있어요.'}
                             </p>
                             <button className="chat-cta-btn" onClick={handleGenerateReport} disabled={generatingReport || isChatLocked}>
-                                {generatingReport ? '정리 중...' : readyReport ? '정리 열기' : '상담 내용 정리하기'}
+                                {generatingReport
+                                    ? '정리 중...'
+                                    : readyReport && !reportNeedsRefresh ? '리포트 열기' : readyReport ? '리포트 갱신하기' : '상담 내용 정리하기'}
                             </button>
                         </div>
                     )}
