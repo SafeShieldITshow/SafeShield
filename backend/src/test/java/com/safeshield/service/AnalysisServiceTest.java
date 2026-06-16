@@ -208,12 +208,12 @@ class AnalysisServiceTest {
                 readiness
         );
 
-        assertTrue(base.riskScore() <= 5.9,
+        assertTrue(base.riskScore() <= 5.5,
                 "반복 단톡방 모욕만으로 고위험권에 쉽게 올라가면 안 됩니다. risk=" + base.riskScore());
         assertTrue(withConcern.riskScore() >= base.riskScore(),
                 "이미 발생한 반복 행위는 재발 걱정 표현이 붙어도 반복 사실로 유지되어야 합니다. base="
                         + base.riskScore() + ", concern=" + withConcern.riskScore());
-        assertTrue(withConcern.riskScore() <= 6.3,
+        assertTrue(withConcern.riskScore() <= 5.6,
                 "재발 걱정만으로 중대 신체·협박 사건처럼 과측정하면 안 됩니다. risk=" + withConcern.riskScore());
     }
 

@@ -452,6 +452,10 @@ public class AnalysisService {
                 || violenceTypes.contains("갈취");
         boolean verbalOrCyberOnly = !violenceTypes.isEmpty()
                 && violenceTypes.stream().allMatch(type -> type.equals("언어 폭력") || type.equals("사이버 폭력"));
+        boolean seriousVerbalCyberImpact = verbalOrCyberOnly && (severeDistress
+                || containsAny(t, "학교 못", "학교를 못", "학교에 못", "등교 못", "등교를 못", "등교하지 못", "잠을 못", "전학", "상담")
+                || (publicSpread && identityExposure
+                && containsAny(t, "신상", "이름", "학교명", "전화번호", "얼굴", "사진", "영상", "유포", "퍼졌")));
 
         double cap = 10.0;
         if (mildExpression && !repeated && !severeSignal) {
@@ -465,14 +469,15 @@ public class AnalysisService {
             cap = publicSpread || identityExposure ? 4.6 : 4.0;
             if (severeVerbalHumiliation) cap = Math.max(cap, publicSpread || identityExposure ? 5.4 : 4.9);
         } else if (verbalOrCyberOnly && !severeSignal) {
-            cap = 5.4;
-            if (repeated) cap = Math.max(cap, 5.9);
-            if (ongoing || longTerm) cap = Math.max(cap, 6.2);
-            if (publicSpread && identityExposure) cap = Math.max(cap, 6.1);
-            if (distress) cap = Math.max(cap, 6.3);
-            if (severeVerbalHumiliation) cap = Math.max(cap, 6.6);
-            if (containsAny(t, "학교 못", "등교 못")) cap = Math.max(cap, 6.8);
-            cap = Math.min(cap, 6.9);
+            cap = 4.9;
+            if (repeated) cap = Math.max(cap, 5.2);
+            if (ongoing || longTerm) cap = Math.max(cap, 5.4);
+            if (publicSpread && identityExposure) cap = Math.max(cap, 5.5);
+            if (distress) cap = Math.max(cap, 5.5);
+            if (severeVerbalHumiliation) cap = Math.max(cap, 5.5);
+            if (seriousVerbalCyberImpact) cap = Math.max(cap, 5.9);
+            if (seriousVerbalCyberImpact && (repeated || ongoing || longTerm || severeVerbalHumiliation)) cap = Math.max(cap, 6.1);
+            cap = Math.min(cap, 6.2);
         } else if (minorPhysicalOnly) {
             cap = noMeaningfulImpact ? 3.8 : 4.3;
         } else if (physicalType && oneOff && injuryScore <= 0.5 && !directThreat && !dangerousWeaponOrPhysicalGroup && !aggravatedPhysical) {
