@@ -346,7 +346,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void buildsContextSpecificFollowUpQuestionForGroupChat() {
+    void asksGroupChatTimelineBeforePatternOrSupportQuestion() {
         ReportReadiness readiness = needsMoreContext();
 
         List<String> questions = ChatService.previewConfirmationQuestions(
@@ -355,21 +355,39 @@ class ChatServiceTest {
                 4
         );
 
-        assertTrue(questions.get(0).contains("단톡방에서는 괴롭힘이 어떤 방식"));
+        assertTrue(questions.get(0).contains("얼마나 자주, 언제부터"));
+        assertFalse(questions.get(0).contains("어른이나 학교 담당자"));
     }
 
     @Test
-    void changesFollowUpQuestionAfterGroupChatPatternIsAnswered() {
+    void asksGroupChatScaleAfterTimelineIsAnswered() {
         ReportReadiness readiness = needsMoreContext();
 
         List<String> questions = ChatService.previewConfirmationQuestions(
                 readiness,
                 "같은 반 친구들이 단톡방에서 계속 욕설과 비방을 하고 있습니다. " +
-                        "확인 답변: 여러 명이 함께 조롱하거나 비방했습니다. 캡처가 있고 불안합니다.",
+                        "확인 답변: 며칠 전부터 가끔씩 그래요. 캡처가 있고 불안합니다.",
                 5
         );
 
-        assertTrue(questions.get(0).contains("알고 있는 어른이나 학교 담당자"));
+        assertTrue(questions.get(0).contains("몇 명 정도"));
+        assertFalse(questions.get(0).contains("어른이나 학교 담당자"));
+    }
+
+    @Test
+    void asksGroupChatPatternAfterTimelineAndScaleAreAnswered() {
+        ReportReadiness readiness = needsMoreContext();
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                readiness,
+                "같은 반 친구들이 단톡방에서 계속 욕설과 비방을 하고 있습니다. " +
+                        "확인 답변: 며칠 전부터 가끔씩 그래요. " +
+                        "확인 답변: 단체 채팅방에서 여러 명이 그 말을 봤습니다. 캡처가 있고 불안합니다.",
+                6
+        );
+
+        assertTrue(questions.get(0).contains("괴롭힘이 어떤 방식"));
+        assertFalse(questions.get(0).contains("어른이나 학교 담당자"));
     }
 
     @Test
@@ -466,7 +484,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void routesChatContextToChatQuestionInsteadOfGenericIncidentSurvey() {
+    void routesChatContextToTimelineQuestionInsteadOfGenericIncidentSurvey() {
         ReportReadiness incidentMissing = new ReportReadiness(
                 false,
                 "추가 확인 필요",
@@ -482,7 +500,7 @@ class ChatServiceTest {
                 3
         );
 
-        assertTrue(questions.get(0).contains("단톡방에서는"));
+        assertTrue(questions.get(0).contains("얼마나 자주, 언제부터"));
         assertFalse(questions.get(0).contains("말, 게시물, 신체 접촉"));
     }
 

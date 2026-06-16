@@ -756,6 +756,12 @@ public class ChatService {
         if (id.startsWith("chat_pattern")) {
             return "단체 채팅방에서는 누가 주도했는지와 반복 방식이 판단에 중요해서 확인하는 것입니다.";
         }
+        if (id.startsWith("chat_timeline")) {
+            return "단체 채팅방 사안은 시작 시점과 반복 빈도에 따라 대응 우선순위가 달라져서 확인하는 것입니다.";
+        }
+        if (id.startsWith("chat_scale")) {
+            return "단체 채팅방에서 몇 명이 보거나 참여했는지는 공개성과 피해 규모를 판단하는 데 중요합니다.";
+        }
         if (id.startsWith("chat_support")) {
             return "보복 걱정과 안전 조치를 보려면 보호자나 학교에 공유됐는지 확인해야 합니다.";
         }
@@ -975,6 +981,8 @@ public class ChatService {
         if (id.startsWith("physical_context")) return "physical_context";
         if (id.startsWith("physical")) return "physical";
         if (id.startsWith("sexual")) return "sexual";
+        if (id.startsWith("chat_timeline")) return "timeline";
+        if (id.startsWith("chat_scale")) return "chat_scale";
         return id;
     }
 
@@ -991,6 +999,7 @@ public class ChatService {
             case "evidence" -> hasAny(content, "증거", "캡처", "원본", "대화 증거", "확인할 자료");
             case "impact" -> hasAny(content, "영향", "걱정되는 부분", "불안", "등교", "보복");
             case "goal" -> hasAny(content, "필요한 도움", "신고", "증거 정리", "안전 확보", "관계 정리");
+            case "chat_scale" -> hasAny(content, "몇 명", "몇명", "참여자", "본 사람", "방에 있는 사람", "대화방 인원");
             case "chat_pattern" -> hasAny(content, "단톡방에서는", "괴롭힘이 어떤 방식", "한 명이 주도", "여러 명");
             case "chat_support" -> hasAny(content, "알고 있는 어른", "학교 담당자", "보호자", "담임");
             case "post_spread" -> hasAny(content, "공개 범위", "어느 범위", "친구들이 볼 수 있는 범위", "누가 볼 수");
@@ -1031,6 +1040,8 @@ public class ChatService {
             case "goal" -> hasGoalAnswer(text);
             case "final_check" -> hasFinalCheckAnswer(text);
             case "role_conflict" -> hasRoleConflictAnswer(text);
+            case "chat_timeline" -> hasGroupChatTimelineDetailAnswer(text);
+            case "chat_scale" -> hasGroupChatScaleAnswer(text);
             case "actor_stop", "impact_actor" -> hasAny(text,
                     "완전히 중단", "문제 행동은 완전히 중단", "중단했습니다",
                     "삭제함", "삭제했습니다", "남아 있는 게시물", "남아 있는지", "아직 남아",
@@ -1113,6 +1124,26 @@ public class ChatService {
                 "한 달", "달 정도", "주 이상", "처음", "어제", "방금", "지난");
     }
 
+    private static boolean hasGroupChatTimelineDetailAnswer(String text) {
+        String answer = confirmationAnswerBody(text);
+        String target = answer.isBlank() ? text : answer;
+        return hasAny(target,
+                "오늘 처음", "오늘 처음 일어난", "며칠 전부터", "며칠 동안", "며칠 이상", "몇 주",
+                "한 달", "달 정도", "오래전부터", "오래 전부터", "지속적으로", "매일", "자주",
+                "가끔씩", "가끔", "한 번 발생", "한 번만", "몇 번", "여러 번", "반복됐습니다",
+                "반복되었습니다", "지금도 계속되고", "지금도 이어지고", "어제부터", "지난주",
+                "최근 며칠", "최근 몇 주");
+    }
+
+    private static boolean hasGroupChatScaleAnswer(String text) {
+        String answer = confirmationAnswerBody(text);
+        String target = answer.isBlank() ? text : answer;
+        return hasAny(target,
+                "소수만", "2~3명", "두세 명", "몇 명", "여러 명", "반 전체", "10명 이상",
+                "많은 친구", "참여자 목록", "참여자가", "방에 있던", "방에 있는", "본 사람",
+                "친구들이 볼 수", "친구들이 봤", "대화방 인원");
+    }
+
     private static boolean hasEvidenceAnswer(String text) {
         return hasAny(text,
                 "캡처", "url", "링크", "참여자 목록", "보낸 시간", "앞뒤 대화",
@@ -1185,7 +1216,10 @@ public class ChatService {
                 "확인 답변: 문제 행동은 완전히 중단", "확인 답변: 남아 있던 게시물", "확인 답변: 아직 남아",
                 "확인 답변: 남아 있는지 아직 확인", "확인 답변: 학교나 담임을 통해 사과",
                 "확인 답변: 보호자와 먼저 상의", "확인 답변: 여러 명이 함께",
-                "확인 답변: 한 명이 주도", "확인 답변: 보호자에게 알렸",
+                "확인 답변: 한 명이 주도", "확인 답변: 오늘 처음 일어난", "확인 답변: 며칠 전부터",
+                "확인 답변: 꽤 오래전부터", "확인 답변: 지금도 계속되고", "확인 답변: 단체 채팅방에서 소수",
+                "확인 답변: 단체 채팅방에서 여러 명", "확인 답변: 반 전체에 가까운",
+                "확인 답변: 대화방 인원", "확인 답변: 보호자에게 알렸",
                 "확인 답변: 담임이나 학교에 알렸", "확인 답변: 공개 게시물",
                 "확인 답변: 게시물 url", "확인 답변: 팔이나 다리",
                 "확인 답변: 목격자가 있습니다", "답변: 친구들이 볼 수 있는 범위",
@@ -1490,7 +1524,23 @@ public class ChatService {
         }
 
         if (groupChat) {
-            if (!hasAny(text, "주도", "여러 명", "몇 명", "참여자", "강퇴", "초대 제외", "읽씹")) {
+            if (!hasGroupChatTimelineDetailAnswer(text)) {
+                questions.add(candidate("chat_timeline", "이 단체 채팅방에서 이런 일이 얼마나 자주, 언제부터 일어났나요?",
+                        option("오늘 처음", "확인 답변: 오늘 처음 일어난 일입니다."),
+                        option("며칠 전부터", "확인 답변: 며칠 전부터 가끔씩 있었습니다."),
+                        option("오래 지속", "확인 답변: 꽤 오래전부터 지속적으로 일어났습니다."),
+                        option("지금도 계속", "확인 답변: 지금도 계속되고 있습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            if (!hasGroupChatScaleAnswer(text)) {
+                questions.add(candidate("chat_scale", "그 말을 보거나 대화방에 함께 있던 사람이 몇 명 정도였나요?",
+                        option("소수만 봄", "확인 답변: 단체 채팅방에서 소수만 그 말을 봤습니다."),
+                        option("여러 명이 봄", "확인 답변: 단체 채팅방에서 여러 명이 그 말을 봤습니다."),
+                        option("반 전체 수준", "확인 답변: 반 전체에 가까운 인원이 볼 수 있는 대화방이었습니다."),
+                        option("잘 모르겠음", "확인 답변: 대화방 인원이나 본 사람 수는 아직 잘 모르겠습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            if (!hasAny(text, "주도", "여러 명이 같이", "여러 명이 함께", "한 명이 주도", "강퇴", "초대 제외", "읽씹", "단체로 무시")) {
                 questions.add(candidate("chat_pattern", "단톡방에서는 괴롭힘이 어떤 방식으로 반복됐나요? 여러 명이 같이 한 건지, 한 명이 주도한 건지, 배제도 있었는지 확인해야 합니다.",
                         option("여러 명이 같이", "확인 답변: 여러 명이 함께 조롱하거나 비방했습니다."),
                         option("한 명이 주도", "확인 답변: 한 명이 주도하고 다른 친구들이 반응했습니다."),
@@ -1498,7 +1548,7 @@ public class ChatService {
                         option("읽씹·무시", "확인 답변: 단체로 무시하거나 읽씹하는 일이 있었습니다."),
                         option("직접 입력", "확인 답변: ")));
             }
-            if (!hasAny(text, "담임", "선생", "보호자", "부모", "117", "신고")) {
+            if (userMessageCount >= 4 && !hasAny(text, "담임", "선생", "보호자", "부모", "117", "신고")) {
                 questions.add(candidate("chat_support", "이 대화방 일을 지금 알고 있는 어른이나 학교 담당자가 있나요?",
                         option("보호자에게 알림", "확인 답변: 보호자에게 알렸습니다."),
                         option("담임에게 알림", "확인 답변: 담임이나 학교에 알렸습니다."),
@@ -2607,14 +2657,14 @@ public class ChatService {
                 1. 첫 문장은 사용자의 감정이나 부담을 먼저 받아주세요.
                 2. 사용자가 말한 내용을 복사하지 말고, 핵심만 1문장으로 부드럽게 정리하세요.
                 3. 지금 바로 할 수 있는 행동은 직전 입력에 맞게 우선순위 2~3개로 안내하세요. 증거가 사라질 수 있는 상황이면 가장 시급한 행동을 먼저 말하세요.
-                4. 답변에는 현재 이해한 사건 요약, 가능한 유형, 법적 쟁점, 지금 준비할 증거, 다음에 확인할 핵심 사실 1개를 자연스럽게 포함하세요. 각 항목을 한 문장에 몰아넣지 말고 사건 구조, 법적 쟁점, 증거, 다음 행동을 각각 1~2문장씩 풀어서 설명하세요. 이미 말한 내용은 다시 묻지 마세요.
+                4. 답변에는 현재 이해한 사건 요약, 가능한 유형, 법적 쟁점, 지금 준비할 증거, 다음에 확인할 핵심 사실 1개를 자연스럽게 포함하세요. 첫 턴에서는 각 항목을 길게 풀지 말고 핵심만 1문장씩 압축하세요. 이미 말한 내용은 다시 묻지 마세요.
                 5. 선생님이나 어른이 채팅방에 있는지 묻지 마세요. 단체 채팅방 사안에서 필요한 관계 확인은 '같은 학교/같은 반/선배·후배/학원 관계인지'입니다.
                 5-1. 단체 채팅방, 단톡방, 카톡 욕설·놀림 사안에서는 대화방을 나가거나 내용을 지우라고 먼저 안내하지 마세요. 참여자 목록, 보낸 시간, 앞뒤 맥락, 대화 내보내기 원본을 먼저 보관하라고 안내하세요.
                 6. '관련 법률', '증거 정보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
                 7. 리포트는 충분히 상담한 뒤 사용자가 원할 때 정리되는 결과입니다. 자동 생성되었거나 준비 완료라고 말하지 마세요.
                 8. 모든 문장은 자연스러운 한국어로 쓰고, 딱딱한 조사표나 설문지처럼 보이지 않게 하세요.
-                9. 전체 답변은 보통 900~1500자, 3~5개의 단락으로 작성하세요. 사용자가 단순 확인만 한 턴이 아니라면 850자 미만으로 끝내지 마세요.
-                9-1. 첫 상담 턴이어도 감정 인정에서 바로 질문으로 넘어가지 말고, 현재 이해한 사건 구조·가능한 유형·법적 쟁점·증거 확보·오늘 할 일을 모두 설명하세요.
+                9. 첫 상담 턴은 보통 500~850자, 3~4개의 짧은 단락으로 작성하세요. 이미 대화가 쌓였거나 사용자가 분석을 요청한 턴은 700~1200자 안에서 충분히 설명하세요.
+                9-1. 첫 상담 턴이어도 감정 인정에서 바로 질문으로 넘어가지 말고, 사건 구조·가능한 유형·법적 쟁점·증거 확보·오늘 할 일을 각각 가장 중요한 내용 1개씩만 설명하세요.
                 10. 제3자가 사건을 평가하는 보고서 말투가 아니라, 지금 대화 중인 사람에게 직접 건네는 상담 말투로 쓰세요.
                 11. '사용자', '피해자', '가해자' 같은 라벨로 상대를 부르지 말고, 필요하면 '지금 상황', '이 경우', '말해준 내용'처럼 표현하세요.
                 12. 프롬프트의 제목, 규칙, 상태값, 허용 인용 목록, 참고 법령 원문을 답변에 노출하지 마세요.
@@ -2672,8 +2722,8 @@ public class ChatService {
 
                 # 답변 규칙
                 1. '관련 법률', '증거 확보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
-                2. 보통 800~1300자, 3~5개의 단락으로 답하고, 필요하면 짧은 목록을 사용하세요. 상담 맥락, 판단 변화, 증거, 다음 행동이 빠지지 않게 하세요.
-                2-1. 사용자가 단순 확인만 한 턴이 아니라면 700자 미만으로 끝내지 말고, 방금 말한 내용이 법적·증거상 어떤 의미인지까지 설명하세요.
+                2. 보통 600~1100자, 3~5개의 단락으로 답하고, 필요하면 짧은 목록을 사용하세요. 상담 맥락, 판단 변화, 증거, 다음 행동이 빠지지 않게 하되 같은 말을 반복하지 마세요.
+                2-1. 사용자가 단순 확인만 한 턴이 아니라면 550자 미만으로 끝내지 말고, 방금 말한 내용이 법적·증거상 어떤 의미인지까지 설명하세요.
                 3. 사용자의 직전 말을 그대로 복사하지 말고, 새로 반영할 의미만 짚으세요.
                 4. 답변 끝에서 질문을 여러 개 만들지 마세요. 필요한 경우 다음에 확인할 핵심 사실 1개만 자연스럽게 연결하고, 이미 답한 내용은 다시 묻지 마세요.
                 5. 확인 질문 UI가 따로 제공되므로 '❓ 확인 질문' 섹션은 쓰지 마세요.
@@ -2842,6 +2892,8 @@ public class ChatService {
     private static Set<String> relatedAnswerFamilies(String family) {
         return switch (family) {
             case "incident_post", "chat_pattern" -> Set.of("incident");
+            case "chat_timeline" -> Set.of("timeline");
+            case "chat_scale" -> Set.of("evidence", "impact");
             case "post_trace", "evidence_chat", "physical_support", "sexual_context" -> Set.of("evidence");
             case "post_spread" -> Set.of("evidence", "impact");
             case "chat_support", "physical_injury", "physical_context", "sexual_support", "actor_stop" -> Set.of("impact");
@@ -2859,6 +2911,7 @@ public class ChatService {
         if (hasAny(content, "피해 정도", "당시 상황", "맞거나 밀친 정도", "친구들이 알고", "상대가 흥분")) return "physical_context";
         if (hasAny(content, "영향", "걱정되는 부분", "보복", "등교", "불안", "두려운")) return "impact";
         if (hasAny(content, "필요한 도움", "어떤 도움", "신고", "증거 정리", "안전하게 보호", "거리를 둬야")) return "goal";
+        if (hasAny(content, "몇 명", "몇명", "참여자", "본 사람", "방에 있는 사람", "대화방 인원")) return "chat_scale";
         if (hasAny(content, "같은 사안", "리포트를 생성")) return "final_check";
         return "";
     }
