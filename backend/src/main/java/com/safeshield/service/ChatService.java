@@ -1608,7 +1608,11 @@ public class ChatService {
     static String adaptGroupChatEvidenceWording(String reply, String userContextText) {
         if (reply == null || reply.isBlank()) return reply;
         if (!hasGroupChatHarassmentSignal(userContextText)) return reply;
-        return sanitizeGroupChatExitAdvice(reply);
+        String adapted = sanitizeGroupChatExitAdvice(reply);
+        if (!hasGroupChatEvidencePreservationAdvice(adapted)) {
+            return GROUP_CHAT_EVIDENCE_FIRST_ADVICE + "\n" + adapted;
+        }
+        return adapted;
     }
 
     static String adaptSexualViolenceWording(String reply, String userContextText) {
@@ -1659,6 +1663,10 @@ public class ChatService {
         String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
         return containsAny(t, "단체 채팅방", "단톡", "단톡방", "채팅방", "카톡")
                 && containsAny(t, "욕", "욕설", "놀림", "비방", "모욕", "괴롭", "따돌", "협박", "조롱");
+    }
+
+    private static boolean hasGroupChatEvidencePreservationAdvice(String reply) {
+        return containsAny(reply, "참여자 목록", "보낸 시간", "앞뒤 대화", "앞뒤 맥락", "대화 내보내기", "원본", "캡처");
     }
 
     private static boolean asksMaleVictimCanConsult(String text) {

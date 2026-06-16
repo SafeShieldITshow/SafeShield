@@ -223,6 +223,19 @@ class ChatServiceTest {
     }
 
     @Test
+    void addsGroupChatEvidencePreservationWhenReplySkipsIt() {
+        String adapted = ChatService.adaptCaseDomainWording(
+                "현재 할 수 있는 행동은 담임 선생님께 이 사실을 알려 주는 것입니다.",
+                "친구들이 단체 채팅방에서 계속 욕하고 놀립니다."
+        );
+
+        assertTrue(adapted.startsWith("단체 채팅방에서는 먼저 참여자 목록"));
+        assertTrue(adapted.contains("보낸 시간"));
+        assertTrue(adapted.contains("대화 내보내기 원본"));
+        assertTrue(adapted.contains("담임 선생님"));
+    }
+
+    @Test
     void rejectsVictimBlamingReasonQuestion() {
         String reply = """
                 같은 반 학생이라면 학교에서 함께 지내는 관계가 중요한 부분입니다.
