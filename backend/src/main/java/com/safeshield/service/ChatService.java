@@ -242,14 +242,26 @@ public class ChatService {
         Map<String, Object> report = null;
         boolean reportGenerated = false;
         boolean reportUpdated = false;
-        if (explicitReportRequest && readiness.ready()) {
+        boolean canGenerateReport = canGenerateReportFromExplicitRequest(
+                readiness,
+                confirmationPrompts,
+                history,
+                explicitReportRequest
+        );
+        if (canGenerateReport) {
             ReportService.ReportMutation mutation = reportService.generateOrUpdateForSessionMutation(user, session, "", readiness);
             report = mutation.report();
             reportGenerated = mutation.generated();
             reportUpdated = mutation.updated();
         }
         String reply = appendReportSummary(
-                connectReplyToConfirmation(generatedReply.reply(), confirmationPrompts),
+                appendReportGateNotice(
+                        connectReplyToConfirmation(generatedReply.reply(), confirmationPrompts),
+                        explicitReportRequest,
+                        reportGenerated || reportUpdated,
+                        readiness,
+                        history
+                ),
                 report,
                 reportGenerated,
                 reportUpdated
@@ -313,13 +325,20 @@ public class ChatService {
         Map<String, Object> report = null;
         boolean reportGenerated = false;
         boolean reportUpdated = false;
-        if (shouldGenerateGuestTemporaryReport(readiness, confirmationPrompts, history, explicitReportRequest)) {
+        boolean canGenerateReport = shouldGenerateGuestTemporaryReport(readiness, confirmationPrompts, history, explicitReportRequest);
+        if (canGenerateReport) {
             report = reportService.generateTemporary(history, "", readiness);
             reportUpdated = hasPriorReportSignal(history);
             reportGenerated = !reportUpdated;
         }
         String reply = appendReportSummary(
-                connectReplyToConfirmation(generatedReply.reply(), confirmationPrompts),
+                appendReportGateNotice(
+                        connectReplyToConfirmation(generatedReply.reply(), confirmationPrompts),
+                        explicitReportRequest,
+                        reportGenerated || reportUpdated,
+                        readiness,
+                        history
+                ),
                 report,
                 reportGenerated,
                 reportUpdated
@@ -360,8 +379,17 @@ public class ChatService {
             List<Message> history,
             boolean explicitReportRequest
     ) {
+        return canGenerateReportFromExplicitRequest(readiness, confirmationPrompts, history, explicitReportRequest);
+    }
+
+    static boolean canGenerateReportFromExplicitRequest(
+            ReportReadiness readiness,
+            List<Map<String, Object>> confirmationPrompts,
+            List<Message> history,
+            boolean explicitReportRequest
+    ) {
         if (!explicitReportRequest) return false;
-        if (readiness == null || !readiness.ready()) return false;
+        if (!strictReportContextReady(readiness, history)) return false;
         return confirmationPrompts == null || confirmationPrompts.isEmpty() || hasPriorReportSignal(history);
     }
 
@@ -691,16 +719,43 @@ public class ChatService {
     }
 
     private static boolean shouldSuggestReport(ReportReadiness readiness, List<Message> history) {
+        return strictReportContextReady(readiness, history);
+    }
+
+    private static boolean strictReportContextReady(ReportReadiness readiness, List<Message> history) {
         if (readiness == null || !readiness.ready() || !readiness.missingInfo().isEmpty()) return false;
         if (isConversationStopped(history)) return false;
-        long userMessages = userMessageCount(history);
-        if (userMessages < 5) return false;
+        if (userMessageCount(history) < 6) return false;
+
         String text = combinedUserText(history);
-        boolean hasEvidenceImpactOrGoal = hasAny(text,
-                "캡처", "증거", "사진", "목격", "진단", "기록", "메시지", "url",
-                "불안", "무서", "두려", "힘들", "보복", "등교", "피해",
-                "신고", "상담", "정리", "보호", "멈추", "사과", "삭제");
-        return !text.isBlank() && hasEvidenceImpactOrGoal;
+        if (text.isBlank()) return false;
+        Set<String> answeredFamilies = answeredQuestionFamilies(history);
+        return hasStrictReportAnswers(text, answeredFamilies);
+    }
+
+    private static boolean hasStrictReportAnswers(String text, Set<String> answeredFamilies) {
+        return (hasReportAnswer("incident", text, answeredFamilies)
+                || hasViolenceTypeSignal(text)
+                || hasBodilyWasteIncidentSignal(text))
+                && hasReportAnswer("relationship", text, answeredFamilies)
+                && hasReportAnswer("timeline", text, answeredFamilies)
+                && hasReportAnswer("evidence", text, answeredFamilies)
+                && hasReportAnswer("impact", text, answeredFamilies)
+                && hasReportAnswer("goal", text, answeredFamilies);
+    }
+
+    private static String appendReportGateNotice(
+            String reply,
+            boolean explicitReportRequest,
+            boolean reportChanged,
+            ReportReadiness readiness,
+            List<Message> history
+    ) {
+        String trimmed = reply == null ? "" : reply.trim();
+        if (!explicitReportRequest || reportChanged || strictReportContextReady(readiness, history)) return trimmed;
+        String notice = "리포트는 사건 내용, 관계, 시점, 증거, 피해 영향, 원하는 도움까지 확인된 뒤 생성할게요.";
+        if (trimmed.contains(notice)) return trimmed;
+        return trimmed.isBlank() ? notice : trimmed + "\n\n" + notice;
     }
 
     private static boolean isExplicitReportRequest(String text) {

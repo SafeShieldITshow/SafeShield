@@ -961,9 +961,18 @@
   gap: 16px;
 }
 
+.report-main-grid.assessment-action-grid {
+  align-items: start;
+}
+
 .ss-container .report-section {
   padding: 20px;
   border-radius: 18px;
+}
+
+.ss-container .balanced-report-section {
+  min-height: 0;
+  height: auto;
 }
 
 .report-section-head {

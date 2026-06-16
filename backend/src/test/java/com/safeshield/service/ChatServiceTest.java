@@ -9,6 +9,7 @@ import com.safeshield.repository.ReportRepository;
 import com.safeshield.repository.SessionRepository;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -754,13 +755,34 @@ class ChatServiceTest {
         Message priorAssistant = new Message();
         priorAssistant.setRole("assistant");
         priorAssistant.setContent("리포트가 생성되었습니다. 현재 판단: 학교폭력 가능성 검토, 유형: 신체 폭력, 위험도: 6.8/10입니다.");
+        List<Message> history = new ArrayList<>(strictReportReadyHistory());
+        history.add(priorAssistant);
         List<Map<String, Object>> prompts = List.of(Map.of(
                 "id", "impact",
                 "question", "지금 가장 걱정되는 부분은 무엇인가요?"
         ));
 
-        assertFalse(ChatService.shouldGenerateGuestTemporaryReport(readiness, prompts, List.of(priorAssistant)));
-        assertTrue(ChatService.shouldGenerateGuestTemporaryReport(readiness, prompts, List.of(priorAssistant), true));
+        assertFalse(ChatService.shouldGenerateGuestTemporaryReport(readiness, prompts, history));
+        assertTrue(ChatService.shouldGenerateGuestTemporaryReport(readiness, prompts, history, true));
+    }
+
+    @Test
+    void explicitReportRequestStillRequiresStrictContext() {
+        ReportReadiness readiness = new ReportReadiness(
+                true,
+                "학교폭력 가능성 검토",
+                "리포트 생성 가능",
+                List.of(),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+        List<Message> thinHistory = List.of(
+                transientMessage("user", "같은 반 친구가 단톡방에서 욕설을 했고 캡처는 있습니다."),
+                transientMessage("user", "리포트 만들어줘")
+        );
+
+        assertFalse(ChatService.canGenerateReportFromExplicitRequest(readiness, List.of(), thinHistory, true));
+        assertTrue(ChatService.canGenerateReportFromExplicitRequest(readiness, List.of(), strictReportReadyHistory(), true));
     }
 
     @Test
@@ -1278,6 +1300,17 @@ class ChatServiceTest {
                 List.of("상담 내용을 조금 더 들은 뒤 리포트 생성"),
                 List.of("구체적인 사건 내용 확인"),
                 true
+        );
+    }
+
+    private static List<Message> strictReportReadyHistory() {
+        return List.of(
+                transientMessage("user", "같은 반 친구가 단톡방에서 욕설과 비방을 했습니다."),
+                transientMessage("user", "며칠 동안 반복됐고 지금도 계속됩니다."),
+                transientMessage("user", "참여자 목록과 보낸 시간이 보이는 캡처가 있습니다."),
+                transientMessage("user", "불안하고 등교가 힘듭니다."),
+                transientMessage("user", "신고 절차를 알고 싶고 안전하게 보호받고 싶습니다."),
+                transientMessage("user", "이 내용으로 리포트를 만들어줘.")
         );
     }
 

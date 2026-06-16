@@ -158,6 +158,34 @@ const detailValue = (details = [], label) => {
     return item ? String(item).slice(prefix.length).trim() : '';
 };
 
+const ASSESSMENT_DETAIL_PRIORITY = [
+    '핵심 상황:',
+    '관계 판단:',
+    '행위 유형:',
+    '발생 양상:',
+    '증거 수준:',
+    '피해 영향:',
+];
+
+const compactReportLines = (items = [], limit = 4) => items
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .slice(0, limit);
+
+const prioritizeAssessmentDetails = (details = []) => {
+    const visible = details
+        .map((item) => String(item || '').trim())
+        .filter((item) => item
+            && !item.startsWith('판단 상태:')
+            && !item.startsWith('판단 신뢰도:')
+            && !item.startsWith('예상 조치 근거:'));
+    const prioritized = ASSESSMENT_DETAIL_PRIORITY
+        .map((prefix) => visible.find((item) => item.startsWith(prefix)))
+        .filter(Boolean);
+    const remaining = visible.filter((item) => !prioritized.includes(item));
+    return compactReportLines([...prioritized, ...remaining], 4);
+};
+
 const formatDate = (value) => formatKoreanDateTime(value);
 
 const SShieldResult = () => {
@@ -286,11 +314,10 @@ const SShieldResult = () => {
     const assessmentDetails = report?.assessment_details || [];
     const confidenceText = detailValue(assessmentDetails, '판단 신뢰도') || '추가 대화에 따라 달라질 수 있습니다.';
     const measureBasis = detailValue(assessmentDetails, '예상 조치 근거') || measureRangeText;
-    const visibleAssessmentDetails = assessmentDetails.filter((item) => (
-        !String(item).startsWith('판단 신뢰도:')
-        && !String(item).startsWith('예상 조치 근거:')
-    ));
-    const primaryAction = (report?.recommended_actions || [])[0] || '상담 내용을 조금 더 보강해 주세요.';
+    const visibleAssessmentDetails = prioritizeAssessmentDetails(assessmentDetails);
+    const visibleRecommendedActions = compactReportLines(report?.recommended_actions || [], 4);
+    const primaryAction = visibleRecommendedActions[0] || '상담 내용을 조금 더 보강해 주세요.';
+    const actionList = visibleRecommendedActions.length ? visibleRecommendedActions : [primaryAction];
     const riskPercent = Math.max(0, Math.min(100, Number(score || 0) * 10));
 
     const logout = () => {
@@ -439,8 +466,8 @@ const SShieldResult = () => {
                                     <button type="button" onClick={goToReportChat}>내용 더 보강하기</button>
                                 </section>
 
-                                <div className="report-main-grid">
-                                    <section className="ss-card report-section">
+                                <div className="report-main-grid assessment-action-grid">
+                                    <section className="ss-card report-section balanced-report-section">
                                         <div className="report-section-head">
                                             <span>01</span>
                                             <div>
@@ -455,7 +482,7 @@ const SShieldResult = () => {
                                         </ul>
                                     </section>
 
-                                    <section className="ss-card report-section action-section">
+                                    <section className="ss-card report-section action-section balanced-report-section">
                                         <div className="report-section-head">
                                             <span>02</span>
                                             <div>
@@ -464,7 +491,7 @@ const SShieldResult = () => {
                                             </div>
                                         </div>
                                         <ul className="ss-report-list clean">
-                                            {(report.recommended_actions || []).map((item) => (
+                                            {actionList.map((item) => (
                                                 <li key={item}>{item}</li>
                                             ))}
                                         </ul>
