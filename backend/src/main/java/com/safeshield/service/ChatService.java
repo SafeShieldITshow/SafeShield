@@ -81,6 +81,7 @@ public class ChatService {
                 - 블록은 반드시 닫는 태그 [[/NEXT_QUESTION]]까지 완전하게 출력하세요. 선택지를 본문에 섞거나 닫는 태그를 줄여 쓰지 마세요.
                 - 지금 맥락에서 가장 자연스럽고 필요한 사실 확인 질문 1개만 만드세요. 고정 설문 문구를 베끼지 말고, 사용자가 이미 말한 사실은 다시 묻지 마세요.
                 - 질문은 학교폭력 유형을 고르게 하는 것이 아니라 관찰 가능한 사실을 답하게 해야 합니다.
+                - 단체 채팅방·단톡방 첫 확인은 선생님/어른이 방에 있는지 묻지 말고, 언제부터 얼마나 자주 있었는지 또는 몇 명이 보거나 참여했는지를 먼저 확인하세요.
                 - 선택지는 2~4개로 만들고, 사용자가 쉽게 누를 수 있는 사실 답변이어야 합니다. 직접 입력은 화면에 항상 있으므로 선택지에 억지로 넣지 않아도 됩니다.
                 - 더 물을 실익보다 정리 실익이 크거나 사용자가 리포트를 직접 요청한 상황이면 질문에 "없음"이라고 쓰세요.
 
@@ -530,6 +531,13 @@ public class ChatService {
         String combined = combinedUserText(history);
         if (needsRealityCheck(combined)) return List.of(confirmationPrompt(realityCheckQuestion()));
         if (readiness.ready() || readiness.missingInfo().isEmpty()) return List.of();
+        List<ConfirmationCandidate> priorityCandidates = priorityConfirmationCandidates(combined);
+        if (!priorityCandidates.isEmpty()) {
+            return priorityCandidates.stream()
+                    .limit(1)
+                    .map(ChatService::confirmationPrompt)
+                    .toList();
+        }
         List<ConfirmationCandidate> aiCandidates = filterUsableCandidates(
                 aiFollowUpQuestion == null ? List.of() : List.of(aiFollowUpQuestion),
                 combined,
@@ -545,6 +553,14 @@ public class ChatService {
                 .limit(1)
                 .map(ChatService::confirmationPrompt)
                 .toList();
+    }
+
+    private static List<ConfirmationCandidate> priorityConfirmationCandidates(String combinedText) {
+        String text = combinedText == null ? "" : combinedText;
+        if (!hasChatSignal(text)) return List.of();
+        if (!hasGroupChatTimelineDetailAnswer(text)) return List.of(groupChatTimelineQuestion());
+        if (!hasGroupChatScaleAnswer(text)) return List.of(groupChatScaleQuestion());
+        return List.of();
     }
 
     private static Map<String, Object> confirmationPrompt(ConfirmationCandidate candidate) {
@@ -1375,6 +1391,24 @@ public class ChatService {
                 option("기억 안 남", "확인 답변: 정확한 시점이나 횟수는 아직 기억나지 않습니다."));
     }
 
+    private static ConfirmationCandidate groupChatTimelineQuestion() {
+        return candidate("chat_timeline", "이 단체 채팅방에서 이런 일이 얼마나 자주, 언제부터 일어났나요?",
+                option("오늘 처음", "확인 답변: 오늘 처음 일어난 일입니다."),
+                option("며칠 전부터", "확인 답변: 며칠 전부터 가끔씩 있었습니다."),
+                option("오래 지속", "확인 답변: 꽤 오래전부터 지속적으로 일어났습니다."),
+                option("지금도 계속", "확인 답변: 지금도 계속되고 있습니다."),
+                option("직접 입력", "확인 답변: "));
+    }
+
+    private static ConfirmationCandidate groupChatScaleQuestion() {
+        return candidate("chat_scale", "그 말을 보거나 대화방에 함께 있던 사람이 몇 명 정도였나요?",
+                option("소수만 봄", "확인 답변: 단체 채팅방에서 소수만 그 말을 봤습니다."),
+                option("여러 명이 봄", "확인 답변: 단체 채팅방에서 여러 명이 그 말을 봤습니다."),
+                option("반 전체 수준", "확인 답변: 반 전체에 가까운 인원이 볼 수 있는 대화방이었습니다."),
+                option("잘 모르겠음", "확인 답변: 대화방 인원이나 본 사람 수는 아직 잘 모르겠습니다."),
+                option("직접 입력", "확인 답변: "));
+    }
+
     private static ConfirmationCandidate evidenceQuestion(String text) {
         if (hasSexualViolationSignal(text)) {
             return candidate("evidence_sexual", "지금 남길 수 있는 단서는 무엇인가요? 당시 장소·시간, 주변에 있던 사람, 이후 메시지, 상담 기록 중 가까운 것을 골라주세요.",
@@ -1525,20 +1559,10 @@ public class ChatService {
 
         if (groupChat) {
             if (!hasGroupChatTimelineDetailAnswer(text)) {
-                questions.add(candidate("chat_timeline", "이 단체 채팅방에서 이런 일이 얼마나 자주, 언제부터 일어났나요?",
-                        option("오늘 처음", "확인 답변: 오늘 처음 일어난 일입니다."),
-                        option("며칠 전부터", "확인 답변: 며칠 전부터 가끔씩 있었습니다."),
-                        option("오래 지속", "확인 답변: 꽤 오래전부터 지속적으로 일어났습니다."),
-                        option("지금도 계속", "확인 답변: 지금도 계속되고 있습니다."),
-                        option("직접 입력", "확인 답변: ")));
+                questions.add(groupChatTimelineQuestion());
             }
             if (!hasGroupChatScaleAnswer(text)) {
-                questions.add(candidate("chat_scale", "그 말을 보거나 대화방에 함께 있던 사람이 몇 명 정도였나요?",
-                        option("소수만 봄", "확인 답변: 단체 채팅방에서 소수만 그 말을 봤습니다."),
-                        option("여러 명이 봄", "확인 답변: 단체 채팅방에서 여러 명이 그 말을 봤습니다."),
-                        option("반 전체 수준", "확인 답변: 반 전체에 가까운 인원이 볼 수 있는 대화방이었습니다."),
-                        option("잘 모르겠음", "확인 답변: 대화방 인원이나 본 사람 수는 아직 잘 모르겠습니다."),
-                        option("직접 입력", "확인 답변: ")));
+                questions.add(groupChatScaleQuestion());
             }
             if (!hasAny(text, "주도", "여러 명이 같이", "여러 명이 함께", "한 명이 주도", "강퇴", "초대 제외", "읽씹", "단체로 무시")) {
                 questions.add(candidate("chat_pattern", "단톡방에서는 괴롭힘이 어떤 방식으로 반복됐나요? 여러 명이 같이 한 건지, 한 명이 주도한 건지, 배제도 있었는지 확인해야 합니다.",
