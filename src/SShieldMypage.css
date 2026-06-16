@@ -347,7 +347,63 @@
   max-width: 100%;
 }
 
+.privacyPanel {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding: 17px 18px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(95, 142, 255, 0.24);
+  background: rgba(40, 88, 216, 0.09);
+}
+
+.privacyPanel span {
+  display: block;
+  margin-bottom: 5px;
+  color: #b9c9ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.privacyPanel strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.privacyPanel p {
+  margin: 6px 0 0;
+  color: var(--text-sub);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.privacyPanel button {
+  min-height: 38px;
+  border: 1px solid rgba(185, 201, 255, 0.28);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  padding: 0 13px;
+  font: 800 12px var(--font);
+  cursor: pointer;
+}
+
+.privacyPanel button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.page-variant .ss-session-delete {
+  color: #fecaca;
+}
+
 @media (max-width: 560px) {
+  .privacyPanel {
+    grid-template-columns: 1fr;
+  }
+
   .reportCard {
     min-height: 0;
   }

@@ -2,14 +2,23 @@ package com.safeshield.service;
 
 import com.safeshield.dto.ReportReadiness;
 import com.safeshield.model.Message;
+import com.safeshield.model.Session;
+import com.safeshield.model.User;
+import com.safeshield.repository.MessageRepository;
+import com.safeshield.repository.ReportRepository;
+import com.safeshield.repository.SessionRepository;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ChatServiceTest {
 
@@ -22,6 +31,35 @@ class ChatServiceTest {
             제307조 (명예훼손): 명예훼손 규정
             제311조 (모욕): 모욕 규정
             """;
+
+    @Test
+    void deleteSessionRemovesReportsMessagesAndSessionForOwner() {
+        SessionRepository sessionRepository = mock(SessionRepository.class);
+        MessageRepository messageRepository = mock(MessageRepository.class);
+        ReportRepository reportRepository = mock(ReportRepository.class);
+        User owner = new User();
+        owner.setId(10L);
+        Session session = new Session();
+        session.setId(77L);
+        session.setUser(owner);
+
+        when(sessionRepository.findById(77L)).thenReturn(Optional.of(session));
+
+        ChatService service = new ChatService(
+                sessionRepository,
+                messageRepository,
+                reportRepository,
+                mock(LawApiService.class),
+                mock(AnalysisService.class),
+                mock(ReportService.class)
+        );
+
+        service.deleteSession(77L, owner);
+
+        verify(reportRepository).deleteBySession(session);
+        verify(messageRepository).deleteBySession(session);
+        verify(sessionRepository).delete(session);
+    }
 
     @Test
     void forcesLowestCostDeepSeekModelAndTokenDefault() {

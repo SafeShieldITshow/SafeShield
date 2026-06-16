@@ -1353,6 +1353,43 @@
   box-shadow: none;
 }
 
+.report-trust-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+
+.report-trust-panel div {
+  min-height: 132px;
+  padding: 16px;
+  border-radius: var(--r-md);
+  border: 1px solid rgba(126, 116, 240, 0.18);
+  background: #27262e;
+}
+
+.report-trust-panel span {
+  display: block;
+  margin-bottom: 8px;
+  color: #9a9aab;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.report-trust-panel strong {
+  display: block;
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.report-trust-panel p {
+  margin: 8px 0 0;
+  color: #b7b6c5;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 .report-next-strip span {
   color: #9a9aab;
 }
@@ -1446,6 +1483,14 @@
 }
 
 @media (max-width: 800px) {
+  .report-trust-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .report-trust-panel div {
+    min-height: 0;
+  }
+
   .ss-mobile-nav button {
     background: transparent;
     border: 0;

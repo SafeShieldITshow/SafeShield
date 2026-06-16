@@ -17,6 +17,7 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 
     List<Message> findBySessionOrderByCreatedAtAsc(Session session);
     long countBySessionAndRole(Session session, String role);
+    void deleteBySession(Session session);
 
     @Query("""
             select m.session.id as sessionId, count(m.id) as messageCount

@@ -6,7 +6,14 @@ import './SessionHistory.css';
 
 const formatSessionDate = (iso) => formatKoreanCompactDateTime(iso);
 
-const SessionHistory = ({ sessions: providedSessions, activeSessionId, onSelect, variant = 'sidebar', loading = false }) => {
+const SessionHistory = ({
+    sessions: providedSessions,
+    activeSessionId,
+    onSelect,
+    onDelete,
+    variant = 'sidebar',
+    loading = false,
+}) => {
     const [loadedSessions, setLoadedSessions] = useState([]);
     const [isInternalLoading, setIsInternalLoading] = useState(providedSessions === undefined);
     const navigate = useNavigate();
@@ -39,14 +46,26 @@ const SessionHistory = ({ sessions: providedSessions, activeSessionId, onSelect,
             ) : sessions.length === 0 ? (
                 <p className="ss-session-empty">아직 기록이 없습니다.</p>
             ) : sessions.map((session) => (
-                <button
+                <div
                     key={session.session_id}
                     className={`ss-session-item ${session.session_id === activeSessionId ? 'active' : ''}`}
-                    onClick={() => openSession(session.session_id)}
                 >
-                    <span>{session.preview}</span>
-                    <small>{formatSessionDate(session.created_at)} · {session.message_count}개</small>
-                </button>
+                    <button type="button" className="ss-session-open" onClick={() => openSession(session.session_id)}>
+                        <span>{session.preview}</span>
+                        <small>{formatSessionDate(session.created_at)} · {session.message_count}개</small>
+                    </button>
+                    {onDelete && (
+                        <button
+                            type="button"
+                            className="ss-session-delete"
+                            onClick={() => onDelete(session)}
+                            aria-label="상담 기록 삭제"
+                            title="상담 기록 삭제"
+                        >
+                            삭제
+                        </button>
+                    )}
+                </div>
             ))}
         </section>
     );

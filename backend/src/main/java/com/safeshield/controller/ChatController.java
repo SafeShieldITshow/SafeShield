@@ -48,6 +48,13 @@ public class ChatController {
         return chatService.getReadiness(id, user);
     }
 
+    @DeleteMapping("/sessions/{id}")
+    public Map<String, Boolean> deleteSession(@PathVariable Long id,
+                                              @AuthenticationPrincipal User user) {
+        chatService.deleteSession(id, user);
+        return Map.of("ok", true);
+    }
+
     @PostMapping("/message")
     public Map<String, Object> sendMessage(@RequestBody MessageRequest req,
                                             @AuthenticationPrincipal User user) {

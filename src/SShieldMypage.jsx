@@ -15,6 +15,7 @@ const SShieldMypage = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+    const [showDeleteSessionConfirm, setShowDeleteSessionConfirm] = useState(null);
     const [stats, setStats] = useState(null);
     const [reports, setReports] = useState([]);
     const [sessions, setSessions] = useState([]);
@@ -47,10 +48,29 @@ const SShieldMypage = () => {
         try {
             await api.del(`/reports/${id}`);
             setReports((prev) => prev.filter((report) => report.id !== id));
+            setStats((prev) => prev ? { ...prev, reports_count: Math.max(0, (prev.reports_count ?? 1) - 1) } : prev);
         } catch (e) {
             alert(e.message);
         }
         setShowDeleteConfirm(null);
+    };
+
+    const handleDeleteSession = async (session) => {
+        const id = session?.session_id;
+        if (!id) return;
+        try {
+            await api.del(`/chat/sessions/${id}`);
+            setSessions((prev) => prev.filter((item) => item.session_id !== id));
+            setReports((prev) => prev.filter((report) => report.session_id !== id));
+            setStats((prev) => prev ? {
+                ...prev,
+                sessions_count: Math.max(0, (prev.sessions_count ?? 1) - 1),
+                reports_count: Math.max(0, (prev.reports_count ?? 0) - reports.filter((report) => report.session_id === id).length),
+            } : prev);
+        } catch (e) {
+            alert(e.message);
+        }
+        setShowDeleteSessionConfirm(null);
     };
 
     const logout = () => {
@@ -164,6 +184,17 @@ const SShieldMypage = () => {
                                         <div className="insightLabel">전체 리포트</div>
                                     </div>
                                 </div>
+
+                                <div className="privacyPanel">
+                                    <div>
+                                        <span>기록 관리</span>
+                                        <strong>상담 기록은 로그인한 계정에만 저장됩니다.</strong>
+                                        <p>마이페이지에서 리포트와 상담 세션을 직접 삭제할 수 있고, 세션을 지우면 연결된 대화와 리포트도 함께 정리됩니다.</p>
+                                    </div>
+                                    <button type="button" onClick={() => document.getElementById('session-history')?.scrollIntoView({ behavior: 'smooth' })}>
+                                        상담 기록 관리
+                                    </button>
+                                </div>
                             </>
                         )}
                     </section>
@@ -174,7 +205,11 @@ const SShieldMypage = () => {
                                 <h2 className="label">상담 기록</h2>
                                 <button className="btnDetail" onClick={startNewChat}>새 상담</button>
                             </div>
-                            <SessionHistory sessions={recentSessions} variant="page" />
+                            <SessionHistory
+                                sessions={recentSessions}
+                                variant="page"
+                                onDelete={(session) => setShowDeleteSessionConfirm(session)}
+                            />
                         </section>
 
                         <section className="section">
@@ -242,6 +277,22 @@ const SShieldMypage = () => {
                         <div className="confirm-btns">
                             <button className="confirm-btn-cancel" onClick={() => setShowDeleteConfirm(null)}>취소</button>
                             <button className="confirm-btn-ok" onClick={() => handleDelete(showDeleteConfirm)}>삭제</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showDeleteSessionConfirm && (
+                <div className="confirm-overlay" onClick={() => setShowDeleteSessionConfirm(null)}>
+                    <div className="confirm-box" onClick={(e) => e.stopPropagation()}>
+                        <p>상담 기록을 삭제하시겠습니까?<br />
+                            <small style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
+                                연결된 대화와 리포트도 함께 삭제되며 복구할 수 없습니다.
+                            </small>
+                        </p>
+                        <div className="confirm-btns">
+                            <button className="confirm-btn-cancel" onClick={() => setShowDeleteSessionConfirm(null)}>취소</button>
+                            <button className="confirm-btn-ok" onClick={() => handleDeleteSession(showDeleteSessionConfirm)}>삭제</button>
                         </div>
                     </div>
                 </div>

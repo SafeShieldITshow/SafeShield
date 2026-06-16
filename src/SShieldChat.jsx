@@ -908,6 +908,20 @@ const SShieldChat = () => {
                         </div>
                     ) : (
                         <>
+                            <section className="ss-trust-strip" aria-label="상담 이용 안내">
+                                <div>
+                                    <strong>{isGuest ? '임시 상담' : '저장 상담'}</strong>
+                                    <span>{isGuest ? '로그인 전 대화는 서버 상담 기록으로 저장되지 않습니다.' : '상담 기록은 내 계정에서만 조회됩니다.'}</span>
+                                </div>
+                                <div>
+                                    <strong>긴급 보호</strong>
+                                    <span>위협이 계속되면 보호자·학교 담당자·117에 먼저 연결하세요.</span>
+                                </div>
+                                <div>
+                                    <strong>참고용 분석</strong>
+                                    <span>AI 판단은 신고·법률 자문을 대신하지 않습니다.</span>
+                                </div>
+                            </section>
                             {messages.map((msg) => (
                                 <div key={msg.id} className={`ss-msg-row ${msg.type}`}>
                                     <div className="ss-msg-col">
@@ -1046,7 +1060,7 @@ const SShieldChat = () => {
                         </p>
                     )}
                     <p className="ss-legal-notice">
-                        이 정보는 일반적인 법률 정보이며 전문 법률상담을 대체하지 않습니다.
+                        S-Shield는 신고를 대신 접수하지 않습니다. 생명·신체 위험이나 보복 우려가 있으면 즉시 보호자, 학교 담당자, 117 또는 112에 연결하세요.
                     </p>
                 </footer>
             </main>

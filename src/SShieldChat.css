@@ -924,9 +924,9 @@
     background: #eaf1ff;
   }
 
-  .ss-chat-content {
-    padding: 22px 16px 18px;
-  }
+.ss-chat-content {
+  padding: 22px 16px 18px;
+}
 
   .ss-msg-col {
     max-width: 90%;
@@ -948,6 +948,38 @@
     min-width: 74px;
     padding: 10px 14px;
   }
+}
+
+.ss-trust-strip {
+  width: min(100%, 980px);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 auto 2px;
+}
+
+.ss-trust-strip div {
+  min-height: 74px;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid #dbe3ef;
+  background: #ffffff;
+  box-shadow: 0 12px 24px rgba(30, 41, 59, 0.06);
+}
+
+.ss-trust-strip strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #172033;
+  font-size: 13px;
+}
+
+.ss-trust-strip span {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.45;
+  word-break: keep-all;
 }
 
 /* 로그아웃 오버레이 */
@@ -991,6 +1023,8 @@
   .ss-chat-topbar > span { display: none; }
   .ss-chat-header-actions { display: none; }
   .ss-chat-content { padding: 20px 16px 18px; gap: 18px; }
+  .ss-trust-strip { grid-template-columns: 1fr; }
+  .ss-trust-strip div { min-height: 0; }
   .ss-chat-footer { padding: 10px 16px 18px; }
   .ss-msg-col { max-width: 88%; }
   .ss-msg-bubble  { font-size: 14px; }
@@ -1254,6 +1288,20 @@
 
 .chat-cta p {
   color: #b7b6c5;
+}
+
+.ss-trust-strip div {
+  background: #27262e;
+  border-color: rgba(126, 116, 240, 0.18);
+  box-shadow: none;
+}
+
+.ss-trust-strip strong {
+  color: #ffffff;
+}
+
+.ss-trust-strip span {
+  color: #9a9aab;
 }
 
 .ss-legal-notice {

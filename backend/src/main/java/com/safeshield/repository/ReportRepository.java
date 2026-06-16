@@ -12,4 +12,5 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     List<Report> findBySessionOrderByCreatedAtAsc(Session session);
     Optional<Report> findFirstByUserOrderByCreatedAtDesc(User user);
     long countByUser(User user);
+    void deleteBySession(Session session);
 }

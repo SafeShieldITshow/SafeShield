@@ -393,6 +393,24 @@ const SShieldResult = () => {
                                     </div>
                                 </section>
 
+                                <section className="report-trust-panel" aria-label="리포트 이용 안내">
+                                    <div>
+                                        <span>판단 한계</span>
+                                        <strong>AI 분석은 참고용입니다.</strong>
+                                        <p>실제 처분과 법적 판단은 학교 조사, 증거, 담당 기관 판단에 따라 달라집니다.</p>
+                                    </div>
+                                    <div>
+                                        <span>긴급 대응</span>
+                                        <strong>위험하면 분석보다 보호가 먼저입니다.</strong>
+                                        <p>신체 위협, 보복 우려, 자해 신호가 있으면 보호자·학교 담당자·117 또는 112에 연결하세요.</p>
+                                    </div>
+                                    <div>
+                                        <span>기록 관리</span>
+                                        <strong>{report.temporary ? '임시 리포트입니다.' : '저장된 리포트입니다.'}</strong>
+                                        <p>{report.temporary ? '로그인 전 리포트는 브라우저에 임시 보관됩니다.' : '마이페이지에서 연결된 상담 기록과 리포트를 삭제할 수 있습니다.'}</p>
+                                    </div>
+                                </section>
+
                                 <div className="report-stat-grid compact">
                                     <div className="report-stat-card">
                                         <span>분류 유형</span>

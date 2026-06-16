@@ -7,6 +7,7 @@ import com.safeshield.dto.AnalysisResult;
 import com.safeshield.dto.MessageRequest.HistoryMessage;
 import com.safeshield.dto.ReportReadiness;
 import com.safeshield.repository.MessageRepository;
+import com.safeshield.repository.ReportRepository;
 import com.safeshield.repository.SessionRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -17,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -125,6 +127,7 @@ public class ChatService {
 
     private final SessionRepository sessionRepository;
     private final MessageRepository messageRepository;
+    private final ReportRepository reportRepository;
     private final LawApiService lawApiService;
     private final AnalysisService analysisService;
     private final ReportService reportService;
@@ -162,10 +165,12 @@ public class ChatService {
     private volatile String lastProviderFailureReason = "";
 
     public ChatService(SessionRepository sessionRepository, MessageRepository messageRepository,
+                       ReportRepository reportRepository,
                        LawApiService lawApiService, AnalysisService analysisService,
                        ReportService reportService) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
+        this.reportRepository = reportRepository;
         this.lawApiService = lawApiService;
         this.analysisService = analysisService;
         this.reportService = reportService;
@@ -392,6 +397,17 @@ public class ChatService {
         List<Message> messages = messageRepository.findBySessionOrderByCreatedAtAsc(session);
         ReportReadiness readiness = assessReadiness(messages);
         return readinessToMap(readiness, messages);
+    }
+
+    @Transactional
+    public void deleteSession(Long sessionId, User user) {
+        Session session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "상담 세션을 찾을 수 없습니다."));
+        requireOwner(user, session);
+
+        reportRepository.deleteBySession(session);
+        messageRepository.deleteBySession(session);
+        sessionRepository.delete(session);
     }
 
     private static Map<String, Object> messageToMap(Message message) {
