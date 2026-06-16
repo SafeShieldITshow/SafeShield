@@ -62,9 +62,9 @@ public class ChatService {
     private static final int GUEST_HISTORY_LIMIT = 24;
     private static final int MEMORY_RECENT_USER_LIMIT = 8;
     private static final String CHEAPEST_DEEPSEEK_MODEL = "deepseek-v4-flash";
-    private static final int DEEPSEEK_DEFAULT_MAX_TOKENS = 700;
-    private static final int DEEPSEEK_MIN_MAX_TOKENS = 400;
-    private static final int DEEPSEEK_HARD_MAX_TOKENS = 1200;
+    private static final int DEEPSEEK_DEFAULT_MAX_TOKENS = 1300;
+    private static final int DEEPSEEK_MIN_MAX_TOKENS = 900;
+    private static final int DEEPSEEK_HARD_MAX_TOKENS = 2200;
     private static final String GROUP_CHAT_EVIDENCE_FIRST_ADVICE =
             "단체 채팅방에서는 먼저 참여자 목록·보낸 시간·앞뒤 대화 맥락이 보이게 캡처하고, 가능하면 대화 내보내기 원본을 따로 보관하는 것이 중요합니다.";
     private static final Pattern UNSAFE_GROUP_CHAT_EXIT_SENTENCE_PATTERN = Pattern.compile(
@@ -73,10 +73,12 @@ public class ChatService {
     private static final Pattern NEXT_QUESTION_BLOCK_PATTERN = Pattern.compile(
             "(?is)\\[\\[NEXT_QUESTION\\]\\](.*?)\\[\\[/NEXT_QUESTION\\]\\]"
     );
+    private static final String NEXT_QUESTION_START = "[[NEXT_QUESTION]]";
     private static final String NEXT_QUESTION_PROTOCOL = """
 
                 # 다음 확인 질문 출력 규칙
                 - 답변 본문이 끝난 뒤 반드시 아래 블록을 붙이세요. 이 블록은 화면 카드로만 쓰이고 사용자에게 본문으로 보이지 않습니다.
+                - 블록은 반드시 닫는 태그 [[/NEXT_QUESTION]]까지 완전하게 출력하세요. 선택지를 본문에 섞거나 닫는 태그를 줄여 쓰지 마세요.
                 - 지금 맥락에서 가장 자연스럽고 필요한 사실 확인 질문 1개만 만드세요. 고정 설문 문구를 베끼지 말고, 사용자가 이미 말한 사실은 다시 묻지 마세요.
                 - 질문은 학교폭력 유형을 고르게 하는 것이 아니라 관찰 가능한 사실을 답하게 해야 합니다.
                 - 선택지는 2~4개로 만들고, 사용자가 쉽게 누를 수 있는 사실 답변이어야 합니다. 직접 입력은 화면에 항상 있으므로 선택지에 억지로 넣지 않아도 됩니다.
@@ -147,7 +149,7 @@ public class ChatService {
     @Value("${deepseek.model:deepseek-v4-flash}")
     private String deepSeekModel;
 
-    @Value("${deepseek.max-tokens:700}")
+    @Value("${deepseek.max-tokens:1300}")
     private int deepSeekMaxTokens;
 
     private final RestTemplate aiClient;
@@ -2442,7 +2444,7 @@ public class ChatService {
                 15. '리포트 준비 상태', '추가 확인 필요가 아니므로', '추가 확인 질문 없이' 같은 내부 판단 문구를 답변에 그대로 쓰지 마세요.
                 16. 사용자가 본인이 한 행동을 말하면 비난하지 말고, 피해 회복·게시물 삭제·사과·보호자/담임 공유 중심으로 안내하세요.
                 17. 학교폭력 해당성이 낮으면 억지로 학폭으로 단정하지 말고, 해당성이 낮은 이유와 다른 대응 경로를 말하세요.
-                18. 전체 답변은 900자 이내로, 짧지만 실질적인 상담처럼 작성하세요.
+                18. 전체 답변은 보통 1000~1800자 안에서, 상담과 분석이 모두 느껴지도록 충분히 작성하세요. 다만 사용자가 단순 확인만 한 턴은 불필요하게 늘리지 마세요.
                 19. '사건 유형·관계·증거 상태를 한 문장으로 요약', '증거 항목 1', '증거 항목 2' 같은 작성 지시문을 답변에 그대로 쓰지 마세요.
                 20. 첫 사용자 메시지에는 '이번에 새로 반영한 점'이라고 쓰지 마세요.
                 21. 프롬프트의 제목, 규칙, 상태값, 허용 인용 목록, 참고 법령 원문을 답변에 노출하지 마세요.
@@ -2593,7 +2595,7 @@ public class ChatService {
                 - 피해자를 탓하거나 행동을 정당화하지 말고, 책임을 회복 가능한 행동으로 바꾸는 방향을 제시하세요.
                 """
                 : """
-                - 사용자가 피해나 두려움을 말하면 먼저 그 감정을 인정하고, 혼자 감당하지 않아도 된다는 메시지를 짧게 전하세요.
+                - 사용자가 피해나 두려움을 말하면 먼저 그 감정을 인정하고, 혼자 감당하지 않아도 된다는 메시지를 분명히 전하세요.
                 - 보복, 협박, 접근 위험이 보이면 안전 확보와 보호자·담임·117 연결을 우선 안내하세요.
                 """;
 
@@ -2604,23 +2606,23 @@ public class ChatService {
                 # 답변 방식
                 1. 첫 문장은 사용자의 감정이나 부담을 먼저 받아주세요.
                 2. 사용자가 말한 내용을 복사하지 말고, 핵심만 1문장으로 부드럽게 정리하세요.
-                3. 지금 바로 할 수 있는 행동은 직전 입력에 맞게 1개만 말하세요. 매번 같은 안전 확인 문장이나 "작은 행동 2가지" 형식을 반복하지 마세요.
+                3. 지금 바로 할 수 있는 행동은 직전 입력에 맞게 우선순위 2~3개로 안내하세요. 증거가 사라질 수 있는 상황이면 가장 시급한 행동을 먼저 말하세요.
                 4. 답변에는 현재 이해한 사건 요약, 가능한 유형, 법적 쟁점, 지금 준비할 증거, 다음에 확인할 핵심 사실 1개를 자연스럽게 포함하세요. 이미 말한 내용은 다시 묻지 마세요.
                 5. 선생님이나 어른이 채팅방에 있는지 묻지 마세요. 단체 채팅방 사안에서 필요한 관계 확인은 '같은 학교/같은 반/선배·후배/학원 관계인지'입니다.
                 5-1. 단체 채팅방, 단톡방, 카톡 욕설·놀림 사안에서는 대화방을 나가거나 내용을 지우라고 먼저 안내하지 마세요. 참여자 목록, 보낸 시간, 앞뒤 맥락, 대화 내보내기 원본을 먼저 보관하라고 안내하세요.
                 6. '관련 법률', '증거 정보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
                 7. 리포트는 충분히 상담한 뒤 사용자가 원할 때 정리되는 결과입니다. 자동 생성되었거나 준비 완료라고 말하지 마세요.
                 8. 모든 문장은 자연스러운 한국어로 쓰고, 딱딱한 조사표나 설문지처럼 보이지 않게 하세요.
-                9. 전체 답변은 3~6문장 안에서 끝내세요.
+                9. 전체 답변은 보통 7~12문장 또는 2~4개의 짧은 단락으로 작성하세요. 사용자가 단순 확인만 한 턴이 아니라면 너무 빨리 끝내지 마세요.
                 10. 제3자가 사건을 평가하는 보고서 말투가 아니라, 지금 대화 중인 사람에게 직접 건네는 상담 말투로 쓰세요.
                 11. '사용자', '피해자', '가해자' 같은 라벨로 상대를 부르지 말고, 필요하면 '지금 상황', '이 경우', '말해준 내용'처럼 표현하세요.
                 12. 프롬프트의 제목, 규칙, 상태값, 허용 인용 목록, 참고 법령 원문을 답변에 노출하지 마세요.
                 13. 피해 상황에서 "왜 그런 것 같나요"처럼 원인을 추측하게 묻지 마세요. 필요한 확인은 화면의 선택·주관식 UI에 맡기세요.
                 14. 아래 대화 메모는 맥락 유지용입니다. 그대로 출력하지 말고, 이미 말한 내용을 다시 처음부터 묻지 마세요.
                 15. 정해진 설문 순서로 사용자를 끌고 가지 말고, 방금 사용자가 새로 꺼낸 내용에 먼저 반응하세요. 확인 카드는 보조 수단일 뿐이며, 이미 답한 항목을 다시 묻지 마세요.
-                16. 사용자가 불완전하거나 왔다 갔다 말해도 바로 틀렸다고 하지 말고, 새로 나온 단서가 기존 판단을 어떻게 바꾸는지만 짧게 이어가세요.
+                16. 사용자가 불완전하거나 왔다 갔다 말해도 바로 틀렸다고 하지 말고, 새로 나온 단서가 기존 판단을 어떻게 바꾸는지 차분히 이어가세요.
                 17. "~니깐요", "그러니깐요", 같은 말을 쓰지 마세요. 같은 어미나 같은 단어를 연속해서 반복하지 마세요.
-                18. "확인 답변:"으로 들어온 내용은 그대로 반복하지 말고, 그 답변이 상담 판단에 어떤 의미가 있는지와 지금 할 수 있는 행동을 2~3문장으로 말하세요.
+                18. "확인 답변:"으로 들어온 내용은 그대로 반복하지 말고, 그 답변이 상담 판단에 어떤 의미가 있는지와 지금 할 수 있는 행동을 충분히 설명하세요.
                 19. "내 사진", "제 사진", "저의 사진"이 SNS, 게시물, 유포, 공유, 올라옴과 함께 나오면 사용자가 자기 계정에 올린 것으로 단정하지 마세요. 학교폭력 상담 맥락에서는 상대가 사진을 올렸거나 퍼뜨린 피해 가능성을 먼저 보고, 누가 올렸는지 불명확하면 작성자·계정·게시 시간을 확인하세요. 사용자가 직접 자기 게시물이라고 명시하지 않는 한 "사진을 삭제하세요", "SNS 설정을 확인하세요"처럼 사용자가 게시자인 것처럼 안내하지 마세요.
                 20. "남자인데 이런 것도 상담해도 되나요"처럼 성별 때문에 망설이는 말이 나오면, 남성 피해도 상담해도 된다고 먼저 분명히 안심시켜 주세요.
                 21. 성적으로 불쾌한 말이나 원하지 않은 접촉은 신체 폭력의 "맞음, 밀침, 넘어짐, 상처" 선택지로 돌리지 말고 성폭력/성추행 맥락으로 이어가세요.
@@ -2669,12 +2671,12 @@ public class ChatService {
 
                 # 답변 규칙
                 1. '관련 법률', '증거 확보', '다음 단계' 같은 고정 섹션 제목을 쓰지 마세요.
-                2. 2~5문장으로 답하고, 필요할 때만 짧은 목록 2개 이하를 쓰세요.
+                2. 보통 6~10문장으로 답하고, 필요하면 짧은 목록을 사용하세요. 상담 맥락, 판단 변화, 증거, 다음 행동이 빠지지 않게 하세요.
                 3. 사용자의 직전 말을 그대로 복사하지 말고, 새로 반영할 의미만 짚으세요.
-                4. 답변 끝에서 질문을 여러 개 만들지 마세요. 필요한 경우 다음에 확인할 핵심 사실 1개만 짧게 연결하고, 이미 답한 내용은 다시 묻지 마세요.
+                4. 답변 끝에서 질문을 여러 개 만들지 마세요. 필요한 경우 다음에 확인할 핵심 사실 1개만 자연스럽게 연결하고, 이미 답한 내용은 다시 묻지 마세요.
                 5. 확인 질문 UI가 따로 제공되므로 '❓ 확인 질문' 섹션은 쓰지 마세요.
                 5-1. 단체 채팅방, 단톡방, 카톡 욕설·놀림 사안에서는 대화방을 나가거나 내용을 지우라고 먼저 안내하지 마세요. 참여자 목록, 보낸 시간, 앞뒤 맥락, 대화 내보내기 원본을 먼저 보관하라고 안내하세요.
-                6. 법령명과 조문은 사용자가 직접 묻지 않았으면 쓰지 마세요.
+                6. 법령명과 조문은 꼭 필요할 때만 쓰되, 법적 쟁점 자체는 매번 쉬운 말로 설명하세요.
                 7. 모든 문장은 자연스러운 한국어로 쓰고, AI, SNS, URL, DM, CCTV, PDF, ID, IP 외 외국어 단어는 쓰지 마세요.
                 8. 법률상담 대체 면책 문구는 화면에 별도로 표시되므로 답변에 쓰지 마세요.
                 9. 사용자가 같은 사안과 무관한 말을 하면 잡담을 이어가지 말고 상담 범위로 되돌리세요.
@@ -2684,9 +2686,9 @@ public class ChatService {
                 13. 피해 상황에서 "왜 그런 것 같나요"처럼 원인을 추측하게 묻지 마세요. 필요한 확인은 화면의 선택·주관식 UI에 맡기세요.
                 14. 아래 대화 메모는 맥락 유지용입니다. 그대로 출력하지 말고, 이번 답변은 앞선 내용과 이어지게 작성하세요.
                 15. 사용자가 대화를 이어가는 방향을 우선 따라가세요. 정해진 절차로 빨리 끝내려 하지 말고, 새로 나온 단서가 판단을 어떻게 바꾸는지만 짚으세요.
-                16. 사용자가 피해 입장과 가해 입장을 섞어 말하면 한쪽으로 단정하지 말고, 같은 사안의 충돌인지 별도 사안인지 확인해야 한다고 짧게 설명하세요.
+                16. 사용자가 피해 입장과 가해 입장을 섞어 말하면 한쪽으로 단정하지 말고, 같은 사안의 충돌인지 별도 사안인지 확인해야 한다고 차분히 설명하세요.
                 17. "~니깐요", "그러니깐요", 같은 말을 쓰지 마세요. 같은 어미나 같은 단어를 연속해서 반복하지 마세요.
-                18. "확인 답변:"으로 들어온 내용은 그대로 반복하지 말고, 그 답변이 상담 판단에 어떤 의미가 있는지와 지금 할 수 있는 행동을 2~3문장으로 말하세요.
+                18. "확인 답변:"으로 들어온 내용은 그대로 반복하지 말고, 그 답변이 상담 판단에 어떤 의미가 있는지와 지금 할 수 있는 행동을 충분히 설명하세요.
                 19. "내 사진", "제 사진", "저의 사진"이 SNS, 게시물, 유포, 공유, 올라옴과 함께 나오면 사용자가 자기 계정에 올린 것으로 단정하지 마세요. 학교폭력 상담 맥락에서는 상대가 사진을 올렸거나 퍼뜨린 피해 가능성을 먼저 보고, 누가 올렸는지 불명확하면 작성자·계정·게시 시간을 확인하세요. 사용자가 직접 자기 게시물이라고 명시하지 않는 한 "사진을 삭제하세요", "SNS 설정을 확인하세요"처럼 사용자가 게시자인 것처럼 안내하지 마세요.
                 20. "남자인데 이런 것도 상담해도 되나요"처럼 성별 때문에 망설이는 말이 나오면, 남성 피해도 상담해도 된다고 먼저 분명히 안심시켜 주세요.
                 21. "지금 당장 할 수 있는 작은 행동 2가지", "상담 내용을 다시 한번 확인" 같은 고정 문구를 반복하지 마세요.
@@ -3027,7 +3029,15 @@ public class ChatService {
     static GeneratedReply parseGeneratedReply(String rawReply) {
         if (rawReply == null || rawReply.isBlank()) return new GeneratedReply("", null);
         Matcher matcher = NEXT_QUESTION_BLOCK_PATTERN.matcher(rawReply);
-        if (!matcher.find()) return new GeneratedReply(rawReply.trim(), null);
+        if (!matcher.find()) {
+            int start = rawReply.indexOf(NEXT_QUESTION_START);
+            if (start < 0) return new GeneratedReply(rawReply.trim(), null);
+
+            String visibleReply = rawReply.substring(0, start).trim();
+            String danglingBlock = rawReply.substring(start + NEXT_QUESTION_START.length());
+            ConfirmationCandidate followUp = parseAiFollowUpQuestion(danglingBlock);
+            return new GeneratedReply(visibleReply, followUp);
+        }
 
         String visibleReply = (rawReply.substring(0, matcher.start()) + "\n" + rawReply.substring(matcher.end())).trim();
         ConfirmationCandidate followUp = parseAiFollowUpQuestion(matcher.group(1));
@@ -3053,12 +3063,16 @@ public class ChatService {
             if (option != null) options.add(option);
         }
 
-        if (question.isBlank() || "없음".equals(question) || question.length() > 120) return null;
+        if ("없음".equals(question) || question.length() > 120) return null;
         options = options.stream()
                 .filter(option -> !option.getOrDefault("label", "").isBlank())
                 .filter(option -> !option.getOrDefault("message", "").isBlank())
                 .limit(4)
                 .toList();
+        if (question.isBlank() && !options.isEmpty()) {
+            question = "지금 바로 확인할 수 있는 내용은 무엇인가요?";
+        }
+        if (question.isBlank()) return null;
         if (options.isEmpty()) {
             options = List.of(option("직접 입력", "확인 답변: "));
         }
@@ -3080,7 +3094,7 @@ public class ChatService {
     }
 
     static boolean isGeneratedConversationReplyValid(String reply, String lawContext) {
-        if (reply == null || reply.isBlank() || reply.length() > 1400) return false;
+        if (reply == null || reply.isBlank() || reply.length() > 2600) return false;
         if (containsForbiddenTemplatePhrase(reply)) return false;
         if (!usesAllowedCharacters(reply)) return false;
         if (hasUnsafePhysicalViolenceAdvice(reply)) return false;
@@ -3121,7 +3135,7 @@ public class ChatService {
     }
 
     static boolean isGeneratedReplyValid(String reply, String lawContext) {
-        if (reply == null || reply.isBlank() || reply.length() > 2400) return false;
+        if (reply == null || reply.isBlank() || reply.length() > 3600) return false;
         if (containsForbiddenTemplatePhrase(reply)) return false;
         if (!usesAllowedCharacters(reply)) return false;
         if (hasUnsafePhysicalViolenceAdvice(reply)) return false;

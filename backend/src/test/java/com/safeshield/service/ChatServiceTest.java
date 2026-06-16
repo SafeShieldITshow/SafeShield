@@ -28,9 +28,9 @@ class ChatServiceTest {
         assertEquals("deepseek-v4-flash", ChatService.cheapestDeepSeekModel("deepseek-reasoner"));
         assertEquals("deepseek-v4-flash", ChatService.cheapestDeepSeekModel("deepseek-chat"));
         assertEquals("deepseek-v4-flash", ChatService.cheapestDeepSeekModel(""));
-        assertEquals(700, ChatService.effectiveDeepSeekMaxTokens(0));
-        assertEquals(400, ChatService.effectiveDeepSeekMaxTokens(100));
-        assertEquals(1200, ChatService.effectiveDeepSeekMaxTokens(3000));
+        assertEquals(1300, ChatService.effectiveDeepSeekMaxTokens(0));
+        assertEquals(900, ChatService.effectiveDeepSeekMaxTokens(100));
+        assertEquals(2200, ChatService.effectiveDeepSeekMaxTokens(3000));
     }
 
     @Test
@@ -748,6 +748,41 @@ class ChatServiceTest {
         assertFalse(visibleReply.contains("NEXT_QUESTION"));
         assertTrue(visibleReply.contains("언어폭력"));
         assertEquals("그 말을 본 사람이 단톡방 안에 몇 명 정도 있었나요?", questionMethod.invoke(followUp));
+    }
+
+    @Test
+    void stripsDanglingAiFollowUpBlockFromVisibleReply() throws Exception {
+        String raw = """
+                멍은 시간이 지나면 사라질 수 있어서 지금 바로 사진을 남기는 것이 가장 시급합니다.
+
+                [[NEXT_QUESTION]] 선택지:
+
+                네, 지금 찍을 수 있어요 | 확인 답변: 지금 멍 사진을 찍을 수 있다고 답함
+                아직 못 찍었어요 | 확인 답변: 아직 멍 사진을 찍지 못한 상황
+                [[/
+                """;
+
+        var method = ChatService.class.getDeclaredMethod("parseGeneratedReply", String.class);
+        method.setAccessible(true);
+        Object parsed = method.invoke(null, raw);
+        var replyMethod = parsed.getClass().getDeclaredMethod("reply");
+        var followUpMethod = parsed.getClass().getDeclaredMethod("followUpQuestion");
+        replyMethod.setAccessible(true);
+        followUpMethod.setAccessible(true);
+
+        String visibleReply = (String) replyMethod.invoke(parsed);
+        Object followUp = followUpMethod.invoke(parsed);
+        var questionMethod = followUp.getClass().getDeclaredMethod("question");
+        var optionsMethod = followUp.getClass().getDeclaredMethod("options");
+        questionMethod.setAccessible(true);
+        optionsMethod.setAccessible(true);
+
+        assertFalse(visibleReply.contains("NEXT_QUESTION"));
+        assertFalse(visibleReply.contains("[[/"));
+        assertFalse(visibleReply.contains("확인 답변:"));
+        assertTrue(visibleReply.contains("멍"));
+        assertEquals("지금 바로 확인할 수 있는 내용은 무엇인가요?", questionMethod.invoke(followUp));
+        assertEquals(2, ((List<?>) optionsMethod.invoke(followUp)).size());
     }
 
     @Test
