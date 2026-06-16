@@ -317,17 +317,17 @@ public class AnalysisService {
 
     private double calculateRiskScore(List<String> violenceTypes, String text) {
         String t = text.toLowerCase(Locale.ROOT);
-        double score = 1.2;
+        double score = 1.0;
 
-        if (violenceTypes.contains("언어 폭력")) score += 0.5;
-        if (violenceTypes.contains("사이버 폭력")) score += 0.6;
-        if (violenceTypes.contains("따돌림")) score += 0.8;
-        if (violenceTypes.contains("갈취")) score += 1.0;
-        if (violenceTypes.contains("스토킹")) score += 1.2;
-        if (violenceTypes.contains("신체 폭력")) score += 1.3;
-        if (violenceTypes.contains("성폭력")) score += 2.0;
+        if (violenceTypes.contains("언어 폭력")) score += 0.35;
+        if (violenceTypes.contains("사이버 폭력")) score += 0.45;
+        if (violenceTypes.contains("따돌림")) score += 0.7;
+        if (violenceTypes.contains("갈취")) score += 0.9;
+        if (violenceTypes.contains("스토킹")) score += 1.0;
+        if (violenceTypes.contains("신체 폭력")) score += 1.1;
+        if (violenceTypes.contains("성폭력")) score += 1.8;
 
-        if (violenceTypes.size() > 1) score += Math.min(1.0, (violenceTypes.size() - 1) * 0.35);
+        if (violenceTypes.size() > 1) score += Math.min(0.75, (violenceTypes.size() - 1) * 0.25);
 
         boolean oneOff = containsAny(t, "한 번", "1번", "처음", "처음으로");
         boolean repeated = hasRepeatSignal(t);
@@ -344,8 +344,9 @@ public class AnalysisService {
         boolean distress = severeDistress
                 || containsAny(t, "무서", "불안", "학교 못", "등교 못", "잠을 못", "상담")
                 || (containsAny(t, "병원") && !noMedicalOrInjury);
-        boolean directThreat = containsAny(t, "죽이", "때리겠", "찾아가", "가만 안", "협박") && !noThreat;
-        boolean weaponOrGroup = containsAny(t, "흉기", "칼", "위험한 물건", "여러 명", "단체로", "무리");
+        boolean directThreat = containsAny(t, "죽이", "때리겠", "찾아가", "가만 안", "협박", "신고하면", "보복하") && !noThreat;
+        boolean dangerousWeaponOrPhysicalGroup = containsAny(t, "흉기", "칼", "위험한 물건")
+                || (violenceTypes.contains("신체 폭력") && containsAny(t, "여러 명이 때", "단체로 때", "무리 지어", "집단 폭행"));
         boolean objectThrowing = containsAny(t, "던졌", "던진", "던지", "투척", "우유곽", "물건을 던", "맞혔");
         boolean physicalType = violenceTypes.contains("신체 폭력");
         boolean bodilyWastePhysical = physicalType && hasBodilyWasteIncidentSignal(t);
@@ -367,7 +368,7 @@ public class AnalysisService {
         if (publicSpread) score += 0.65;
         if (identityExposure) score += 0.55;
         if (directThreat) score += 1.0;
-        if (weaponOrGroup) score += 0.65;
+        if (dangerousWeaponOrPhysicalGroup) score += 0.65;
         if (physicalType && objectThrowing) score += 0.35;
         if (physicalType && humiliatingPhysical) score += 0.45;
         if (physicalPublicContext) score += 0.35;
@@ -391,7 +392,7 @@ public class AnalysisService {
                 && oneOff
                 && injuryScore == 0.0
                 && !directThreat
-                && !weaponOrGroup
+                && !dangerousWeaponOrPhysicalGroup
                 && !aggravatedPhysical
                 && !physicalPublicContext
                 && !retaliationConcern
@@ -424,11 +425,11 @@ public class AnalysisService {
         if (!violenceTypes.isEmpty()) {
             MeasureFactors factors = assessMeasureFactors(violenceTypes, text);
             double factorBasedScore = 1.6
-                    + factors.seriousness() * 1.2
-                    + factors.persistence() * 0.65
-                    + factors.intent() * 0.5
-                    + factors.aggravation() * 0.55
-                    - factors.mitigation() * 0.35;
+                    + factors.seriousness() * 0.95
+                    + factors.persistence() * 0.55
+                    + factors.intent() * 0.35
+                    + factors.aggravation() * 0.45
+                    - factors.mitigation() * 0.45;
             if (mildExpression) factorBasedScore -= 1.2;
             if (noMeaningfulImpact) factorBasedScore -= 0.7;
             score = Math.max(score, factorBasedScore);
@@ -436,9 +437,14 @@ public class AnalysisService {
         if (bodilyWastePhysical) {
             score = Math.max(score, 8.0);
         }
+        if (physicalType && repeated && injuryScore >= 0.9 && directThreat) {
+            score = Math.max(score, 8.0);
+        } else if (physicalType && repeated && injuryScore >= 0.5 && !directThreat && !dangerousWeaponOrPhysicalGroup) {
+            score = Math.max(score, 5.6);
+        }
 
-        boolean seriousPhysicalSignal = physicalType && (injuryScore >= 0.9 || directThreat || weaponOrGroup);
-        boolean severeSignal = severeDistress || injuryScore >= 1.1 || directThreat || weaponOrGroup
+        boolean seriousPhysicalSignal = physicalType && (injuryScore >= 0.9 || directThreat || dangerousWeaponOrPhysicalGroup);
+        boolean severeSignal = severeDistress || injuryScore >= 1.1 || directThreat || dangerousWeaponOrPhysicalGroup
                 || seriousPhysicalSignal
                 || bodilyWastePhysical
                 || violenceTypes.contains("성폭력")
@@ -456,24 +462,24 @@ public class AnalysisService {
         } else if (verbalOrCyberOnly && oneOff && !repeated && !ongoing && !publicSpread && !identityExposure && !severeSignal) {
             cap = severeVerbalHumiliation ? 4.8 : 3.8;
         } else if (verbalOrCyberOnly && !repeated && !severeSignal) {
-            cap = publicSpread || identityExposure ? 5.0 : 4.2;
-            if (severeVerbalHumiliation) cap = Math.max(cap, publicSpread || identityExposure ? 5.8 : 5.2);
+            cap = publicSpread || identityExposure ? 4.6 : 4.0;
+            if (severeVerbalHumiliation) cap = Math.max(cap, publicSpread || identityExposure ? 5.4 : 4.9);
         } else if (verbalOrCyberOnly && !severeSignal) {
-            cap = 5.8;
-            if (repeated) cap = Math.max(cap, 6.4);
-            if (ongoing || longTerm) cap = Math.max(cap, 6.8);
-            if (publicSpread && identityExposure) cap = Math.max(cap, 6.7);
-            if (distress) cap = Math.max(cap, 7.0);
-            if (severeVerbalHumiliation) cap = Math.max(cap, 7.2);
-            if (containsAny(t, "보복", "학교 못", "등교 못")) cap = Math.max(cap, 7.2);
-            cap = Math.min(cap, 7.4);
+            cap = 5.4;
+            if (repeated) cap = Math.max(cap, 5.9);
+            if (ongoing || longTerm) cap = Math.max(cap, 6.2);
+            if (publicSpread && identityExposure) cap = Math.max(cap, 6.1);
+            if (distress) cap = Math.max(cap, 6.3);
+            if (severeVerbalHumiliation) cap = Math.max(cap, 6.6);
+            if (containsAny(t, "학교 못", "등교 못")) cap = Math.max(cap, 6.8);
+            cap = Math.min(cap, 6.9);
         } else if (minorPhysicalOnly) {
             cap = noMeaningfulImpact ? 3.8 : 4.3;
-        } else if (physicalType && oneOff && injuryScore <= 0.5 && !directThreat && !weaponOrGroup && !aggravatedPhysical) {
+        } else if (physicalType && oneOff && injuryScore <= 0.5 && !directThreat && !dangerousWeaponOrPhysicalGroup && !aggravatedPhysical) {
             cap = 5.3;
-        } else if (physicalType && injuryScore <= 0.5 && !directThreat && !weaponOrGroup && (repeated || longTerm || ongoing)) {
+        } else if (physicalType && injuryScore <= 0.5 && !directThreat && !dangerousWeaponOrPhysicalGroup && (repeated || longTerm || ongoing)) {
             cap = aggravatedPhysical ? 7.4 : 6.8;
-        } else if (physicalType && injuryScore <= 0.5 && !directThreat && !weaponOrGroup) {
+        } else if (physicalType && injuryScore <= 0.5 && !directThreat && !dangerousWeaponOrPhysicalGroup) {
             cap = aggravatedPhysical ? 6.5 : 5.8;
             if (physicalPublicContext || retaliationConcern || actorAgitated) cap = Math.max(cap, 6.2);
         } else if (!severeSignal) {
@@ -483,11 +489,11 @@ public class AnalysisService {
             boolean sexualMedia = containsAny(t, "사진", "영상", "촬영", "유포", "온라인", "dm", "디엠");
             boolean repeatedOrForcedContact = repeated || ongoing || longTerm
                     || containsAny(t, "자꾸", "강제로", "원하지 않는", "신체 접촉", "만졌", "만지는", "성추행");
-            if (!sexualMedia && !severeDistress && !directThreat && !weaponOrGroup) {
+            if (!sexualMedia && !severeDistress && !directThreat && !dangerousWeaponOrPhysicalGroup) {
                 cap = Math.min(cap, repeatedOrForcedContact ? 8.4 : 7.6);
             }
         }
-        if (bodilyWastePhysical && !severeDistress && !directThreat && !weaponOrGroup) {
+        if (bodilyWastePhysical && !severeDistress && !directThreat && !dangerousWeaponOrPhysicalGroup) {
             cap = Math.max(cap, (repeated || ongoing || longTerm) ? 8.4 : 8.0);
         }
 
@@ -589,7 +595,7 @@ public class AnalysisService {
             intent = Math.max(intent, 3);
         }
         if (severeVerbalHumiliation) intent = Math.max(intent, 3);
-        if (containsAny(t, "보복", "신고하면", "흉기", "칼", "강제로", "촬영", "퍼뜨", "흥분", "분노", "통제 안", "통제가 안")) {
+        if (containsAny(t, "신고하면", "보복하", "보복한다고", "보복하겠", "흉기", "칼", "강제로", "촬영", "퍼뜨", "흥분", "분노", "통제 안", "통제가 안")) {
             intent = 4;
         }
         if (containsAny(t, "장난", "실수", "몰랐")) {
@@ -606,7 +612,7 @@ public class AnalysisService {
         mitigation = Math.min(2, mitigation);
 
         int aggravation = 0;
-        if (containsAny(t, "보복", "신고하면", "협박", "때리겠", "찾아가", "장애", "특수학급", "여러 명", "단체로", "무리")) aggravation += 1;
+        if (containsAny(t, "신고하면", "보복하", "보복한다고", "보복하겠", "협박", "때리겠", "찾아가", "장애", "특수학급", "여러 명", "단체로", "무리")) aggravation += 1;
         if (containsAny(t, "흉기", "칼", "촬영", "유포", "골절", "응급실", "수술")) aggravation += 1;
         if (containsAny(t, "던졌", "던진", "던지", "투척", "우유곽", "물건을 던", "들이붓", "끼얹", "부었", "뿌렸", "침을 뱉")
                 || hasBodilyWasteIncidentSignal(t)) aggravation += 1;
@@ -700,6 +706,7 @@ public class AnalysisService {
         if (containsAny(t,
                 "여러 번", "몇 번", "매일", "자꾸", "계속 연락", "계속 따라", "계속 따돌",
                 "또 했", "또 당", "또 연락", "또 올", "또다시",
+                "반복했", "반복됐", "반복되었", "반복해서", "반복적으로", "반복한",
                 "점점 심", "더 심해", "갈수록 심", "수위가 올라", "수위 올라", "수위가 높아")) {
             return true;
         }

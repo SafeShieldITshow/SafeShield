@@ -25,7 +25,7 @@ class AnalysisServiceTest {
                 readiness
         );
 
-        assertTrue(result.riskScore() < 6.0, "일반 사이버 비방은 고위험으로 과측정하지 않아야 합니다.");
+        assertTrue(result.riskScore() <= 4.8, "일반 사이버 비방은 고위험으로 과측정하지 않아야 합니다.");
         assertTrue(result.expectedMeasureRange().get(1) <= 5, "일반 사이버 비방의 조치 범위 상한은 중간 이하가 적절합니다.");
     }
 
@@ -124,7 +124,7 @@ class AnalysisServiceTest {
 
         assertTrue(repeated.riskScore() > oneOff.riskScore() + 1.0,
                 "반복, 공개 확산, 불안이 있으면 1회성 게시보다 위험도가 뚜렷하게 높아야 합니다.");
-        assertTrue(oneOff.riskScore() < 5.5, "1회성 사이버 비방은 고위험으로 과측정하지 않아야 합니다.");
+        assertTrue(oneOff.riskScore() <= 4.8, "1회성 사이버 비방은 고위험으로 과측정하지 않아야 합니다.");
     }
 
     @Test
@@ -188,10 +188,33 @@ class AnalysisServiceTest {
                 readiness
         );
 
-        assertTrue(highImpact.riskScore() >= lowImpact.riskScore() + 0.8,
-                "행위가 같아도 피해 영향과 안전 우려가 크면 위험도에 뚜렷하게 반영되어야 합니다.");
+        assertTrue(highImpact.riskScore() >= lowImpact.riskScore() + 0.6,
+                "행위가 같아도 피해 영향과 안전 우려가 크면 위험도에 뚜렷하게 반영되어야 합니다. low="
+                        + lowImpact.riskScore() + ", high=" + highImpact.riskScore());
         assertTrue(highImpact.keyFindings().stream().anyMatch(item -> item.contains("피해 영향:")));
         assertTrue(highImpact.keyFindings().stream().anyMatch(item -> item.contains("가중·완화 단서:")));
+    }
+
+    @Test
+    void keepsRepeatedCyberHarassmentMiddleRiskWhenOnlyRecurrenceConcernIsAdded() {
+        ReportReadiness readiness = readySchoolViolence();
+
+        var base = analysisService.analyze(
+                "같은 반 친구들이 단톡방에서 욕설과 모욕을 반복했고 캡처가 있습니다.",
+                readiness
+        );
+        var withConcern = analysisService.analyze(
+                "같은 반 친구들이 단톡방에서 욕설과 모욕을 반복했고 캡처가 있습니다. 불안해서 반복이 걱정됩니다.",
+                readiness
+        );
+
+        assertTrue(base.riskScore() <= 5.9,
+                "반복 단톡방 모욕만으로 고위험권에 쉽게 올라가면 안 됩니다. risk=" + base.riskScore());
+        assertTrue(withConcern.riskScore() >= base.riskScore(),
+                "이미 발생한 반복 행위는 재발 걱정 표현이 붙어도 반복 사실로 유지되어야 합니다. base="
+                        + base.riskScore() + ", concern=" + withConcern.riskScore());
+        assertTrue(withConcern.riskScore() <= 6.3,
+                "재발 걱정만으로 중대 신체·협박 사건처럼 과측정하면 안 됩니다. risk=" + withConcern.riskScore());
     }
 
     @Test
@@ -710,7 +733,7 @@ class AnalysisServiceTest {
         ReportReadiness readiness = readySchoolViolence();
         record Scenario(String text, String expectedType, double minRisk) {}
         List<Scenario> scenarios = List.of(
-                new Scenario("같은 반 친구가 여러 번 때리고 멍이 들었으며 멍 사진이 있습니다.", "신체 폭력", 6.0),
+                new Scenario("같은 반 친구가 여러 번 때리고 멍이 들었으며 멍 사진이 있습니다.", "신체 폭력", 5.5),
                 new Scenario("같은 반 친구들이 단톡방에서 욕설과 모욕을 반복했고 캡처가 있습니다.", "언어 폭력", 4.0),
                 new Scenario("같은 학교 학생이 SNS에 제 사진과 비방 글을 공개로 올렸고 URL이 있습니다.", "사이버 폭력", 4.0),
                 new Scenario("반 친구들이 계속 저만 빼고 따돌리고 단체 활동에서 배제합니다.", "따돌림", 4.0),
@@ -725,7 +748,8 @@ class AnalysisServiceTest {
             assertTrue(result.violenceTypes().contains(scenario.expectedType()),
                     scenario.expectedType() + " 유형을 놓치면 안 됩니다: " + scenario.text());
             assertTrue(result.riskScore() >= scenario.minRisk(),
-                    scenario.expectedType() + " 위험도가 대표 사안 기준보다 낮게 묶이면 안 됩니다.");
+                    scenario.expectedType() + " 위험도가 대표 사안 기준보다 낮게 묶이면 안 됩니다. actual="
+                            + result.riskScore() + ", min=" + scenario.minRisk());
             assertFalse(result.keyFindings().isEmpty(), "리포트 사건 정리와 판단 근거가 비어 있으면 안 됩니다.");
             scores.add(result.riskScore());
         }
