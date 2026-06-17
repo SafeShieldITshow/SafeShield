@@ -729,7 +729,7 @@ public class ChatService {
         String text = combinedUserText(history);
         if (text.isBlank()) return false;
         Set<String> answeredFamilies = answeredQuestionFamilies(history);
-        return hasStrictReportAnswers(text, answeredFamilies);
+        return hasStrictReportAnswers(text, answeredFamilies) || hasStrictReportKeyFacts(readiness.keyFacts());
     }
 
     private static boolean hasStrictReportAnswers(String text, Set<String> answeredFamilies) {
@@ -741,6 +741,17 @@ public class ChatService {
                 && hasReportAnswer("evidence", text, answeredFamilies)
                 && hasReportAnswer("impact", text, answeredFamilies)
                 && hasReportAnswer("goal", text, answeredFamilies);
+    }
+
+    private static boolean hasStrictReportKeyFacts(List<String> keyFacts) {
+        if (keyFacts == null || keyFacts.isEmpty()) return false;
+        String facts = String.join(" ", keyFacts);
+        return containsAny(facts, "구체적인 사건", "사건 내용")
+                && containsAny(facts, "상대방과 학교 관계", "상대방 특정", "학교 관계", "상대 관계")
+                && containsAny(facts, "시점", "반복성")
+                && containsAny(facts, "증거", "발생 경로")
+                && containsAny(facts, "피해 영향", "회복 노력", "보호 필요")
+                && containsAny(facts, "요청한 도움", "도움 방향", "원하는 도움");
     }
 
     private static String appendReportGateNotice(

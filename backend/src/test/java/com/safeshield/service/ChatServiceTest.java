@@ -810,6 +810,36 @@ class ChatServiceTest {
     }
 
     @Test
+    void suggestsReportWhenReadinessKeyFactsAreCompleteEvenIfQuestionFamilyTrackingMissesOne() {
+        ReportReadiness readiness = new ReportReadiness(
+                true,
+                "학교폭력 해당성 낮음",
+                "제한사항을 포함해 리포트 생성 가능",
+                List.of(),
+                List.of(
+                        "구체적인 사건 내용 확인",
+                        "상대방과 학교 관계 확인",
+                        "시점 또는 반복성 단서 확인",
+                        "증거 또는 발생 경로 단서 확인",
+                        "피해 영향 또는 회복 노력 확인",
+                        "요청한 도움 방향 확인"
+                ),
+                false
+        );
+        List<Message> history = List.of(
+                transientMessage("user", "SNS에 제 사진과 비방 글이 올라왔습니다."),
+                transientMessage("user", "확인 답변: 상대는 학교 관계자가 아닙니다."),
+                transientMessage("user", "확인 답변: 게시물이 일주일 이상 게시되어 있었습니다."),
+                transientMessage("user", "확인 답변: 정서적으로 불안감이나 수면 장애를 겪고 있습니다."),
+                transientMessage("user", "확인 답변: 게시물의 조회수나 공유 횟수를 확인했습니다.")
+        );
+
+        assertTrue(ChatService.shouldSuggestReport(readiness, history),
+                "분석 준비 상태가 핵심 사실을 모두 채웠으면 리포트 CTA가 떠야 합니다.");
+        assertTrue(ChatService.canGenerateReportFromExplicitRequest(readiness, List.of(), history, true));
+    }
+
+    @Test
     void doesNotSuggestReportWhenCoreAnswersAreMissingEvenAfterManyTurns() {
         ReportReadiness readiness = new ReportReadiness(
                 true,

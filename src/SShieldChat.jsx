@@ -1111,16 +1111,8 @@ const SShieldChat = () => {
                 </div>
 
                 <footer className="ss-chat-footer">
-                    <div className="example-chips">
-                        {EXAMPLE_QUESTIONS.map((q) => (
-                            <button key={q} className="example-chip" onClick={() => sendOrAskTopic(q)} disabled={isChatLocked}>
-                                {q}
-                            </button>
-                        ))}
-                    </div>
-
                     {showReport && (
-                        <div className="chat-cta">
+                        <div className="chat-cta" role="status" aria-live="polite">
                             <p>
                                 {readyReport
                                     ? (reportNeedsRefresh
@@ -1135,6 +1127,14 @@ const SShieldChat = () => {
                             </button>
                         </div>
                     )}
+
+                    <div className="example-chips">
+                        {EXAMPLE_QUESTIONS.map((q) => (
+                            <button key={q} className="example-chip" onClick={() => sendOrAskTopic(q)} disabled={isChatLocked}>
+                                {q}
+                            </button>
+                        ))}
+                    </div>
 
                     {conversationStopped && (
                         <p className="ss-stopped-notice">
