@@ -78,6 +78,14 @@ public class ChatService {
     private static final String NEXT_QUESTION_START = "[[NEXT_QUESTION]]";
     private static final String NEXT_QUESTION_PROTOCOL = """
 
+                # Quick reply quality rules
+                - Ask only one follow-up question. Choose the missing axis that matters most now: incident, relationship, timing, evidence, impact/emotional state, safety, or desired help.
+                - Do not keep asking evidence questions when the user's latest answer was about impact, fear, daily life, relationship, timing, or desired help. Move to the next missing axis instead.
+                - Do not create duplicate questions such as "what harm happened?" and "what daily difficulty happened?" for the same turn. If impact is needed, ask about the user's current emotional or daily-life state caused by the incident.
+                - Each option message must read like a natural first-person user message. Never end option labels or messages with "~함", "라고 함", or report-note style wording.
+                - Option labels should be short, but the option message should be complete enough to send as the user's chat message.
+                - If the user already answered an axis in the visible conversation, do not ask that same axis again unless the answer was unclear or contradictory.
+
                 # 다음 확인 질문 출력 규칙
                 - 답변 본문이 끝난 뒤 반드시 아래 블록을 붙이세요. 이 블록은 화면 카드로만 쓰이고 사용자에게 본문으로 보이지 않습니다.
                 - 블록은 반드시 닫는 태그 [[/NEXT_QUESTION]]까지 완전하게 출력하세요. 선택지를 본문에 섞거나 닫는 태그를 줄여 쓰지 마세요.
@@ -1806,6 +1814,12 @@ public class ChatService {
         if (hasSocialExclusionSignal(combined)) return "따돌림 피해 상담";
         if (hasExtortionSignal(combined)) return "금품 갈취 상담";
         if (hasStalkingSignal(combined)) return "스토킹 피해 상담";
+        if (containsAny(combined, "욕", "비방", "모욕", "조롱", "놀림", "소문", "허위")) {
+            return "욕설·비방 피해 상담";
+        }
+        if (containsAny(combined, "수업", "성적", "등교", "잠", "수면", "불안", "두려움")) {
+            return "피해 영향 상담";
+        }
 
         String seed = contents.stream()
                 .filter(content -> !isGreetingOnly(content))
@@ -3321,6 +3335,12 @@ public class ChatService {
     static String normalizeAiConfirmationSentence(String text) {
         String normalized = text == null ? "" : text.trim().replaceAll("\\s+", " ");
         if (normalized.isBlank()) return "";
+        normalized = normalized
+                .replaceAll("고\\s*있다고\\s*함$", "고 있습니다")
+                .replaceAll("고\\s*있다고\\s*했음$", "고 있습니다")
+                .replaceAll("라고\\s*함$", "라고 말했습니다")
+                .replaceAll("다고\\s*함$", "다고 말했습니다")
+                .replaceAll("\\s*함$", "했습니다");
         normalized = normalized
                 .replaceAll("고\\s+있다고\\s+답함$", "고 있습니다")
                 .replaceAll("고\\s+있다고\\s+함$", "고 있습니다")

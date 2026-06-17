@@ -113,8 +113,8 @@
 .ss-session-history.page-variant {
   padding: 0;
   margin: 0;
-  max-height: none;
-  overflow: visible;
+  max-height: min(46vh, 460px);
+  overflow-y: auto;
 }
 
 .page-variant .ss-session-title {

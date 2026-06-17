@@ -105,6 +105,25 @@
 
 .mypage-history-grid .section {
   margin-bottom: 0;
+  min-height: 0;
+}
+
+.mypage-history-grid .ss-session-history.page-variant,
+.mypage-history-grid .reportList {
+  max-height: min(46vh, 460px);
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.mypage-history-grid .ss-session-history.page-variant::-webkit-scrollbar,
+.mypage-history-grid .reportList::-webkit-scrollbar {
+  width: 5px;
+}
+
+.mypage-history-grid .ss-session-history.page-variant::-webkit-scrollbar-thumb,
+.mypage-history-grid .reportList::-webkit-scrollbar-thumb {
+  background: rgba(126, 116, 240, 0.28);
+  border-radius: 999px;
 }
 
 .label {

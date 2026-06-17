@@ -35,6 +35,12 @@ public class ReportController {
         return reportService.latest(user);
     }
 
+    @GetMapping("/session/{sessionId}/latest")
+    public Map<String, Object> latestForSession(@PathVariable Long sessionId,
+                                                @AuthenticationPrincipal User user) {
+        return reportService.latestForSession(user, sessionId);
+    }
+
     @GetMapping("/{id}")
     public Map<String, Object> get(@PathVariable Long id, @AuthenticationPrincipal User user) {
         return reportService.get(user, id);

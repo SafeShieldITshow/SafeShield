@@ -215,6 +215,18 @@ public class ReportService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "아직 생성된 리포트가 없습니다."));
     }
 
+    public Map<String, Object> latestForSession(User user, Long sessionId) {
+        if (sessionId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "상담 세션이 필요합니다.");
+        }
+        Session session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "상담 세션을 찾을 수 없습니다."));
+        requireOwner(user, session);
+        return reportRepository.findFirstBySessionAndUserOrderByCreatedAtDesc(session, user)
+                .map(this::toMap)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "이 상담 세션에 생성된 리포트가 없습니다."));
+    }
+
     public Map<String, Object> get(User user, Long id) {
         Report report = reportRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "리포트를 찾을 수 없습니다."));

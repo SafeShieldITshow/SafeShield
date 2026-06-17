@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import './SShieldChat.css';
 import { api, clearSession, hasToken, setSession } from './api.js';
 import SessionHistory from './SessionHistory.jsx';
+import { ChatIcon, ReportIcon, UserIcon } from './NavIcons.jsx';
 import { formatKoreanTime } from './time.js';
 
 const EXAMPLE_QUESTIONS = [
@@ -114,6 +115,12 @@ const reportNoticeText = (report, action = '생성') => {
         : '분류 정보 없음';
     const risk = report.risk_score ?? 0;
     return `리포트가 ${action}되었습니다. 현재 판단: ${status}, 유형: ${types}, 위험도: ${risk}/10입니다.`;
+};
+
+const hasReportCtaCue = (reply = '') => {
+    const text = String(reply || '');
+    return /리포트|보고서|분석 결과/.test(text)
+        && /열|보기|확인|정리|생성|갱신|준비|볼 수/.test(text);
 };
 
 const isStoppedMessage = (text = '') => CONVERSATION_STOPPED_MARKERS.some((marker) => (
@@ -694,6 +701,7 @@ const SShieldChat = () => {
                 }
                 const stopped = Boolean(data.conversation_stopped) || isStoppedMessage(data.reply);
                 const latestReport = data.report || null;
+                const reportCue = hasReportCtaCue(data.reply);
                 setConversationStopped(stopped);
                 if (latestReport) {
                     setReadyReport(latestReport);
@@ -703,7 +711,7 @@ const SShieldChat = () => {
                     setReadyReport(null);
                 }
                 setShowReport(!stopped && Boolean(
-                    latestReport || data.report_suggested || data.report_ready || existingReadyReport
+                    latestReport || data.report_suggested || data.report_ready || existingReadyReport || reportCue
                 ));
                 const reportChanged = latestReport && (data.report_generated || data.report_updated);
                 const notice = reportChanged && !String(data.reply || '').includes('리포트가 ')
@@ -901,16 +909,16 @@ const SShieldChat = () => {
                     )}
                     <div className={`ss-menu-content ${isMenuOpen ? 'visible' : ''}`}>
                         <nav className="ss-nav-list">
-                            <div className="ss-nav-item" onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/result'))}>
-                                <span className="ss-emoji-icon">R</span>
+                            <div className="ss-nav-item" onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate(sessionId ? `/result?session=${sessionId}` : '/result'))}>
+                                <span className="ss-emoji-icon"><ReportIcon /></span>
                                 <span className="ss-nav-text">분석 결과</span>
                             </div>
                             <div className="ss-nav-item" onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/mypage'))}>
-                                <span className="ss-emoji-icon">M</span>
+                                <span className="ss-emoji-icon"><UserIcon /></span>
                                 <span className="ss-nav-text">마이페이지</span>
                             </div>
                             <div className="ss-nav-item active">
-                                <span className="ss-emoji-icon">C</span>
+                                <span className="ss-emoji-icon"><ChatIcon /></span>
                                 <span className="ss-nav-text">상담</span>
                             </div>
                         </nav>

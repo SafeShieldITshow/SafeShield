@@ -994,6 +994,16 @@ class ChatServiceTest {
     }
 
     @Test
+    void sessionPreviewUsesShortIssueTitleForVerbalHarassment() {
+        String title = ChatService.summarizeSessionPreview(List.of(
+                transientMessage("user", "친구가 계속 욕하고 소문을 퍼뜨립니다."),
+                transientMessage("user", "확인 답변: 수업 집중이 어렵거나 성적에 영향이 있습니다.")
+        ));
+
+        assertEquals("욕설·비방 피해 상담", title);
+    }
+
+    @Test
     void doesNotAppendConversationHintWhenReplyAlreadyPointsToCard() {
         String reply = ChatService.connectReplyToConfirmation(
                 "말해준 내용은 표현이 매우 특이해서 실제 사건인지 먼저 확인해야 합니다.\n아래에 실제 사건 여부를 확인할 선택지를 띄워둘게요.",

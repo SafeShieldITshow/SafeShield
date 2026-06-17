@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -112,6 +113,39 @@ class ReportServiceTest {
         assertEquals("학교폭력 가능성 검토", updated.get("assessment_status"));
         assertTrue(((Double) updated.get("risk_score")) > 4.5);
         assertTrue(((List<?>) updated.get("violence_types")).contains("신체 폭력"));
+    }
+
+    @Test
+    void latestForSessionReturnsReportForCurrentSession() {
+        User user = new User();
+        user.setId(1L);
+        Session session = new Session();
+        session.setId(10L);
+        session.setUser(user);
+        Report report = new Report();
+        report.setId(100L);
+        report.setUser(user);
+        report.setSession(session);
+        report.setTitle("세션 리포트");
+        report.setRiskScore(5.0);
+
+        ReportRepository reportRepository = mock(ReportRepository.class);
+        SessionRepository sessionRepository = mock(SessionRepository.class);
+        when(sessionRepository.findById(10L)).thenReturn(Optional.of(session));
+        when(reportRepository.findFirstBySessionAndUserOrderByCreatedAtDesc(session, user)).thenReturn(Optional.of(report));
+        ReportService service = new ReportService(
+                reportRepository,
+                sessionRepository,
+                mock(MessageRepository.class),
+                new AnalysisService(new LawDataService(), new EvidenceGuideService()),
+                new ObjectMapper()
+        );
+
+        Map<String, Object> result = service.latestForSession(user, 10L);
+
+        assertEquals(100L, result.get("id"));
+        assertEquals(10L, result.get("session_id"));
+        assertEquals("세션 리포트", result.get("title"));
     }
 
     @Test

@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import './SShieldResult.css';
 import { api, clearSession, hasToken } from './api.js';
 import SessionHistory from './SessionHistory.jsx';
+import { ChatIcon, ReportIcon, UserIcon } from './NavIcons.jsx';
 import { formatKoreanDateTime } from './time.js';
 
 const EVIDENCE_MAP = {
@@ -200,10 +201,12 @@ const SShieldResult = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const reportId = params.get('id');
+    const sessionReportId = params.get('session');
     const temporaryMode = params.get('temporary') === '1';
 
     useEffect(() => {
         const id = reportId;
+        const sessionId = sessionReportId;
         let cancelled = false;
 
         const applyReport = (data) => {
@@ -260,7 +263,11 @@ const SShieldResult = () => {
         }
 
         const loadReport = (initial = false) => {
-            const request = id ? api.get(`/reports/${id}`) : api.get('/reports/latest');
+            const request = id
+                ? api.get(`/reports/${id}`)
+                : sessionId
+                    ? api.get(`/reports/session/${sessionId}/latest`).catch(() => api.get('/reports/latest'))
+                    : api.get('/reports/latest');
             if (initial) setLoading(true);
             return request
             .then((data) => {
@@ -293,7 +300,7 @@ const SShieldResult = () => {
             cancelled = true;
             window.clearInterval(timer);
         };
-    }, [reportId, temporaryMode, location.state]);
+    }, [reportId, sessionReportId, temporaryMode, location.state]);
 
     const toggleCheck = (id) => setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
     const checkedCount = Object.values(checked).filter(Boolean).length;
@@ -343,9 +350,9 @@ const SShieldResult = () => {
                     )}
                     <div className={`ss-menu-content ${isMenuOpen ? 'visible' : ''}`}>
                         <nav className="ss-nav-list">
-                            <div className="ss-nav-item active"><span className="ss-emoji-icon">R</span><span className="ss-nav-text">분석 결과</span></div>
-                            <div className="ss-nav-item" onClick={() => navigate('/mypage')}><span className="ss-emoji-icon">M</span><span className="ss-nav-text">마이페이지</span></div>
-                            <div className="ss-nav-item" onClick={goToReportChat}><span className="ss-emoji-icon">C</span><span className="ss-nav-text">상담</span></div>
+                            <div className="ss-nav-item active"><span className="ss-emoji-icon"><ReportIcon /></span><span className="ss-nav-text">분석 결과</span></div>
+                            <div className="ss-nav-item" onClick={() => navigate('/mypage')}><span className="ss-emoji-icon"><UserIcon /></span><span className="ss-nav-text">마이페이지</span></div>
+                            <div className="ss-nav-item" onClick={goToReportChat}><span className="ss-emoji-icon"><ChatIcon /></span><span className="ss-nav-text">상담</span></div>
                         </nav>
                         <SessionHistory />
                         <div className="ss-logout-section">
@@ -429,7 +436,7 @@ const SShieldResult = () => {
                                     <div>
                                         <span>바로 도움받기</span>
                                         <strong>지금 안전이 걱정되면 먼저 사람에게 연결하세요.</strong>
-                                        <p>위협을 받았거나 보복이 걱정되거나 스스로를 해칠 것 같다면, 혼자 두지 말고 보호자·학교 담당자·117 또는 112에 바로 연락하세요.</p>
+                                        <p>몸이 다칠까 걱정되거나, 보복이 두렵거나, 혼자 있기 어려울 만큼 마음이 위험하게 느껴진다면 보호자·학교 담당자·117 또는 112에 바로 연결하세요.</p>
                                     </div>
                                     <div>
                                         <span>기록 관리</span>

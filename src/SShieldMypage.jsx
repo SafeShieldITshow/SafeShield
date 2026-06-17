@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import './SShieldMypage.css';
 import { api, clearSession } from './api.js';
 import SessionHistory from './SessionHistory.jsx';
+import { ChatIcon, ReportIcon, UserIcon } from './NavIcons.jsx';
 import { formatKoreanNumericDateTime } from './time.js';
 
 const getRiskLevel = (score) => {
@@ -92,8 +93,8 @@ const SShieldMypage = () => {
 
     const formatDate = (iso) => formatKoreanNumericDateTime(iso);
     const startNewChat = () => navigate('/chat?new=1');
-    const recentSessions = sessions.slice(0, 4);
-    const recentReports = reports.slice(0, 4);
+    const listedSessions = sessions;
+    const listedReports = reports;
 
     return (
         <div className="wrapper">
@@ -108,9 +109,9 @@ const SShieldMypage = () => {
                     )}
                     <div className={`ss-menu-content ${isMenuOpen ? 'visible' : ''}`}>
                         <nav className="ss-nav-list">
-                            <div className="ss-nav-item" onClick={() => navigate('/result')}><span className="ss-emoji-icon">R</span><span className="ss-nav-text">분석 결과</span></div>
-                            <div className="ss-nav-item active"><span className="ss-emoji-icon">M</span><span className="ss-nav-text">마이페이지</span></div>
-                            <div className="ss-nav-item" onClick={startNewChat}><span className="ss-emoji-icon">C</span><span className="ss-nav-text">상담</span></div>
+                            <div className="ss-nav-item" onClick={() => navigate('/result')}><span className="ss-emoji-icon"><ReportIcon /></span><span className="ss-nav-text">분석 결과</span></div>
+                            <div className="ss-nav-item active"><span className="ss-emoji-icon"><UserIcon /></span><span className="ss-nav-text">마이페이지</span></div>
+                            <div className="ss-nav-item" onClick={startNewChat}><span className="ss-emoji-icon"><ChatIcon /></span><span className="ss-nav-text">상담</span></div>
                         </nav>
                         <SessionHistory sessions={sessions} />
                         <div className="ss-logout-section">
@@ -206,7 +207,7 @@ const SShieldMypage = () => {
                                 <button className="btnDetail" onClick={startNewChat}>새 상담</button>
                             </div>
                             <SessionHistory
-                                sessions={recentSessions}
+                                sessions={listedSessions}
                                 variant="page"
                                 onDelete={(session) => setShowDeleteSessionConfirm(session)}
                             />
@@ -222,7 +223,7 @@ const SShieldMypage = () => {
                                     <p style={{ color: '#aaa', textAlign: 'center', padding: '24px' }}>
                                         아직 리포트가 없습니다.
                                     </p>
-                                ) : recentReports.map((item) => {
+                                ) : listedReports.map((item) => {
                                     const risk = getRiskLevel(item.risk_score);
                                     return (
                                         <div key={item.id} className="reportCard">
