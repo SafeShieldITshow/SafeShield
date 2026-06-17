@@ -876,6 +876,37 @@ class ChatServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void normalizesAiGeneratedFollowUpOptionTone() throws Exception {
+        String raw = """
+                확인한 내용은 상담 기록에 반영했습니다.
+
+                [[NEXT_QUESTION]]
+                질문: 지금 가장 크게 영향을 받은 부분은 무엇인가요?
+                선택지:
+                - 정서적으로 불안감이나 수면 장애를 겪고 있다고 함 | 확인 답변: 정서적으로 불안감이나 수면 장애를 겪고 있다고 함
+                - 게시물의 조회수나 공유 횟수를 확인함 | 확인 답변: 게시물의 조회수나 공유 횟수를 확인함
+                [[/NEXT_QUESTION]]
+                """;
+
+        var method = ChatService.class.getDeclaredMethod("parseGeneratedReply", String.class);
+        method.setAccessible(true);
+        Object parsed = method.invoke(null, raw);
+        var followUpMethod = parsed.getClass().getDeclaredMethod("followUpQuestion");
+        followUpMethod.setAccessible(true);
+        Object followUp = followUpMethod.invoke(parsed);
+        var optionsMethod = followUp.getClass().getDeclaredMethod("options");
+        optionsMethod.setAccessible(true);
+
+        List<Map<String, String>> options = (List<Map<String, String>>) optionsMethod.invoke(followUp);
+
+        assertEquals("정서적으로 불안감이나 수면 장애를 겪고 있습니다", options.get(0).get("label"));
+        assertEquals("확인 답변: 정서적으로 불안감이나 수면 장애를 겪고 있습니다.", options.get(0).get("message"));
+        assertEquals("게시물의 조회수나 공유 횟수를 확인했습니다", options.get(1).get("label"));
+        assertEquals("확인 답변: 게시물의 조회수나 공유 횟수를 확인했습니다.", options.get(1).get("message"));
+    }
+
+    @Test
     void stripsDanglingAiFollowUpBlockFromVisibleReply() throws Exception {
         String raw = """
                 멍은 시간이 지나면 사라질 수 있어서 지금 바로 사진을 남기는 것이 가장 시급합니다.
@@ -908,6 +939,28 @@ class ChatServiceTest {
         assertTrue(visibleReply.contains("멍"));
         assertEquals("지금 바로 확인할 수 있는 내용은 무엇인가요?", questionMethod.invoke(followUp));
         assertEquals(2, ((List<?>) optionsMethod.invoke(followUp)).size());
+    }
+
+    @Test
+    void summarizesSessionPreviewLikeShortChatTitle() {
+        String title = ChatService.summarizeSessionPreview(List.of(
+                transientMessage("user", "SNS에 제 사진과 비방 글이 올라왔습니다."),
+                transientMessage("user", "확인 답변: 상대는 학교 관계자가 아닙니다."),
+                transientMessage("user", "확인 답변: 게시물의 조회수나 공유 횟수를 확인했습니다.")
+        ));
+
+        assertEquals("SNS 사진 비방 대응", title);
+    }
+
+    @Test
+    void sessionPreviewIgnoresConfirmationAnswerWhenChoosingFallbackTitle() {
+        String title = ChatService.summarizeSessionPreview(List.of(
+                transientMessage("user", "안녕하세요"),
+                transientMessage("user", "친구가 계속 사물함 앞에서 기다리며 따라옵니다."),
+                transientMessage("user", "확인 답변: 지금도 계속되고 있습니다.")
+        ));
+
+        assertEquals("스토킹 피해 상담", title);
     }
 
     @Test

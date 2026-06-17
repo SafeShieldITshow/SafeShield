@@ -54,6 +54,15 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
             from Message m
             where m.session.id in :sessionIds
               and m.role = 'user'
+            order by m.session.id asc, m.id asc
+            """)
+    List<Message> findUserMessagesBySessionIds(@Param("sessionIds") List<Long> sessionIds);
+
+    @Query("""
+            select m
+            from Message m
+            where m.session.id in :sessionIds
+              and m.role = 'user'
               and m.id in (
                   select max(m2.id)
                   from Message m2

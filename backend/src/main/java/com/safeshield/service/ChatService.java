@@ -1754,18 +1754,14 @@ public class ChatService {
                         MessageRepository.SessionMessageCount::getSessionId,
                         MessageRepository.SessionMessageCount::getMessageCount
                 ));
-        Map<Long, String> previews = messageRepository.findLatestUserMessagesBySessionIds(sessionIds).stream()
-                .collect(Collectors.toMap(
-                        message -> message.getSession().getId(),
-                        message -> truncatePreview(message.getContent()),
-                        (first, second) -> second
-                ));
+        Map<Long, List<Message>> userMessagesBySession = messageRepository.findUserMessagesBySessionIds(sessionIds).stream()
+                .collect(Collectors.groupingBy(message -> message.getSession().getId(), LinkedHashMap::new, Collectors.toList()));
 
         return sessions.stream()
                 .map(session -> {
                     return Map.<String, Object>of(
                             "session_id", session.getId(),
-                            "preview", previews.getOrDefault(session.getId(), "새 상담"),
+                            "preview", summarizeSessionPreview(userMessagesBySession.getOrDefault(session.getId(), List.of())),
                             "message_count", messageCounts.getOrDefault(session.getId(), 0L),
                             "created_at", session.getCreatedAt().toString()
                     );
@@ -1773,11 +1769,50 @@ public class ChatService {
                 .toList();
     }
 
-    private static String truncatePreview(String content) {
-        String preview = content == null || content.isBlank() ? "새 상담" : content.trim();
-        if (preview.length() > 44) {
-            return preview.substring(0, 44) + "...";
+    static String summarizeSessionPreview(List<Message> userMessages) {
+        if (userMessages == null || userMessages.isEmpty()) return "새 상담";
+        List<String> contents = userMessages.stream()
+                .filter(Objects::nonNull)
+                .map(Message::getContent)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(content -> !content.isBlank())
+                .toList();
+        if (contents.isEmpty()) return "새 상담";
+
+        String combined = String.join(" ", contents).toLowerCase(Locale.ROOT);
+        if (containsAny(combined, "sns", "인스타", "게시", "온라인", "댓글", "사진", "영상")
+                && containsAny(combined, "비방", "욕", "모욕", "조롱", "소문")) {
+            if (containsAny(combined, "사진", "영상")) return "SNS 사진 비방 대응";
+            return "SNS 비방 글 대응";
         }
+        if (containsAny(combined, "단톡", "단체 채팅", "채팅방", "카톡", "메시지")
+                && containsAny(combined, "욕", "비방", "조롱", "놀림", "소문", "무시", "읽씹")) {
+            return "단체 채팅방 괴롭힘 상담";
+        }
+        if (hasSexualViolationSignal(combined)) return "성적 괴롭힘 상담";
+        if (hasPhysicalViolenceSignal(combined) || hasBodilyWasteIncidentSignal(combined)) return "신체 폭력 피해 상담";
+        if (hasSocialExclusionSignal(combined)) return "따돌림 피해 상담";
+        if (hasExtortionSignal(combined)) return "금품 갈취 상담";
+        if (hasStalkingSignal(combined)) return "스토킹 피해 상담";
+
+        String seed = contents.stream()
+                .filter(content -> !isGreetingOnly(content))
+                .filter(content -> !isConfirmationAnswer(content))
+                .findFirst()
+                .orElse(contents.get(0));
+        return compactSessionPreview(seed);
+    }
+
+    private static String compactSessionPreview(String content) {
+        String preview = content == null ? "" : content.trim();
+        preview = preview.replaceFirst("^(확인 답변|추가 설명|답변)\\s*:\\s*", "");
+        preview = preview.replaceAll("[\\r\\n]+", " ");
+        preview = preview.replaceAll("\\s+", " ");
+        preview = preview.replaceAll("(입니다|습니다|어요|예요|네요|요)[.!?。]*$", "");
+        preview = preview.replaceAll("[.!?。]+$", "");
+        if (preview.isBlank()) return "새 상담";
+        if (preview.length() > 22) return preview.substring(0, 22).trim() + "...";
         return preview;
     }
 
@@ -2067,8 +2102,10 @@ public class ChatService {
 
         if (!readiness.ready() && !readiness.missingInfo().isEmpty()) {
             reply.append("\n아래 질문은 지금 상담 흐름에서 가장 필요한 확인입니다. 선택지에 없어도 직접 적어도 됩니다.\n");
-        } else {
+        } else if (shouldSuggestReport(readiness, history)) {
             reply.append("\n상담 내용이 어느 정도 정리됐습니다. 원하면 지금까지 내용을 리포트로 정리할 수 있습니다.\n");
+        } else {
+            reply.append("\n방금 내용은 상담 기록에 반영했습니다. 더 떠오르는 사실이 있으면 이어서 적어 주세요.\n");
         }
 
         return reply.toString().trim();
@@ -3238,15 +3275,65 @@ public class ChatService {
     private static Map<String, String> parseAiOption(String optionLine) {
         if (optionLine == null || optionLine.isBlank()) return null;
         String[] parts = optionLine.split("\\|", 2);
-        String label = parts[0].trim();
+        String label = normalizeAiConfirmationLabel(parts[0].trim());
         String message = parts.length > 1 ? parts[1].trim() : "";
         if (label.endsWith(":")) label = label.substring(0, label.length() - 1).trim();
         if (message.isBlank()) message = "확인 답변: " + label;
         if (!message.startsWith("확인 답변:") && !message.startsWith("추가 설명:")) {
             message = "확인 답변: " + message;
         }
-        if (label.length() > 24) label = label.substring(0, 24).trim();
+        message = normalizeAiConfirmationMessage(message);
+        if (label.length() > 80) label = label.substring(0, 80).trim();
         return option(label, message);
+    }
+
+    private static String normalizeAiConfirmationLabel(String label) {
+        String normalized = normalizeAiConfirmationSentence(label);
+        if (normalized.endsWith(".")) normalized = normalized.substring(0, normalized.length() - 1);
+        return normalized;
+    }
+
+    private static String normalizeAiConfirmationMessage(String message) {
+        String normalized = message == null ? "" : message.trim().replaceAll("\\s+", " ");
+        String prefix = "";
+        if (normalized.startsWith("확인 답변:")) {
+            prefix = "확인 답변: ";
+            normalized = normalized.substring("확인 답변:".length()).trim();
+        } else if (normalized.startsWith("추가 설명:")) {
+            prefix = "추가 설명: ";
+            normalized = normalized.substring("추가 설명:".length()).trim();
+        }
+        if (normalized.isBlank()) return prefix;
+        return prefix + normalizeAiConfirmationSentence(normalized);
+    }
+
+    static String normalizeAiConfirmationSentence(String text) {
+        String normalized = text == null ? "" : text.trim().replaceAll("\\s+", " ");
+        if (normalized.isBlank()) return "";
+        normalized = normalized
+                .replaceAll("고\\s+있다고\\s+답함$", "고 있습니다")
+                .replaceAll("고\\s+있다고\\s+함$", "고 있습니다")
+                .replaceAll("라고\\s+답함$", "라고 답했습니다")
+                .replaceAll("라고\\s+함$", "라고 답했습니다")
+                .replaceAll("다고\\s+답함$", "다고 답했습니다")
+                .replaceAll("다고\\s+함$", "다고 답했습니다")
+                .replaceAll("확인함$", "확인했습니다")
+                .replaceAll("파악함$", "파악했습니다")
+                .replaceAll("알림$", "알렸습니다")
+                .replaceAll("삭제함$", "삭제했습니다")
+                .replaceAll("중단함$", "중단했습니다")
+                .replaceAll("겪음$", "겪고 있습니다")
+                .replaceAll("공유됨$", "공유됐습니다")
+                .replaceAll("유포됨$", "유포됐습니다")
+                .replaceAll("퍼짐$", "퍼졌습니다")
+                .replaceAll("못\\s*함$", "하지 못했습니다")
+                .replaceAll("있음$", "있습니다")
+                .replaceAll("없음$", "없습니다")
+                .replaceAll("상황$", "상황입니다");
+        if (normalized.matches(".*(습니다|입니다|했습니다|됐습니다|합니다|됩니다)$")) {
+            normalized += ".";
+        }
+        return normalized;
     }
 
     static boolean isGeneratedConversationReplyValid(String reply, String lawContext) {

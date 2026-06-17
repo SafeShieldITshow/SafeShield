@@ -32,6 +32,51 @@ const removeInlineDisclaimer = (text = '') => text
     .join('\n')
     .trim();
 
+const normalizeConfirmationSentence = (text = '') => {
+    let normalized = String(text || '').trim().replace(/\s+/g, ' ');
+    if (!normalized) return '';
+    normalized = normalized
+        .replace(/고\s+있다고\s+답함$/, '고 있습니다')
+        .replace(/고\s+있다고\s+함$/, '고 있습니다')
+        .replace(/라고\s+답함$/, '라고 답했습니다')
+        .replace(/라고\s+함$/, '라고 답했습니다')
+        .replace(/다고\s+답함$/, '다고 답했습니다')
+        .replace(/다고\s+함$/, '다고 답했습니다')
+        .replace(/확인함$/, '확인했습니다')
+        .replace(/파악함$/, '파악했습니다')
+        .replace(/알림$/, '알렸습니다')
+        .replace(/삭제함$/, '삭제했습니다')
+        .replace(/중단함$/, '중단했습니다')
+        .replace(/겪음$/, '겪고 있습니다')
+        .replace(/공유됨$/, '공유됐습니다')
+        .replace(/유포됨$/, '유포됐습니다')
+        .replace(/퍼짐$/, '퍼졌습니다')
+        .replace(/못\s*함$/, '하지 못했습니다')
+        .replace(/있음$/, '있습니다')
+        .replace(/없음$/, '없습니다')
+        .replace(/상황$/, '상황입니다');
+    if (/(습니다|입니다|했습니다|됐습니다|합니다|됩니다)$/.test(normalized)) {
+        normalized += '.';
+    }
+    return normalized;
+};
+
+const normalizeConfirmationLabel = (label = '') => normalizeConfirmationSentence(label).replace(/\.$/, '');
+
+const normalizeConfirmationMessage = (message = '') => {
+    let normalized = String(message || '').trim().replace(/\s+/g, ' ');
+    let prefix = '';
+    if (normalized.startsWith('확인 답변:')) {
+        prefix = '확인 답변: ';
+        normalized = normalized.slice('확인 답변:'.length).trim();
+    } else if (normalized.startsWith('추가 설명:')) {
+        prefix = '추가 설명: ';
+        normalized = normalized.slice('추가 설명:'.length).trim();
+    }
+    if (!normalized) return prefix;
+    return `${prefix}${normalizeConfirmationSentence(normalized)}`;
+};
+
 const normalizeConfirmationPrompts = (prompts = []) => (Array.isArray(prompts) ? prompts : [])
     .map((prompt) => ({
         id: prompt.id || prompt.question,
@@ -40,8 +85,8 @@ const normalizeConfirmationPrompts = (prompts = []) => (Array.isArray(prompts) ?
         instruction: String(prompt.instruction || '').trim(),
         options: (Array.isArray(prompt.options) ? prompt.options : [])
             .map((option) => ({
-                label: String(option.label || '').trim(),
-                message: String(option.message || option.label || '').trim(),
+                label: normalizeConfirmationLabel(option.label || ''),
+                message: normalizeConfirmationMessage(option.message || option.label || ''),
             }))
             .filter((option) => option.label && option.message),
     }))
@@ -609,6 +654,7 @@ const SShieldChat = () => {
         const guestSend = isGuestMode || !hasToken();
         const targetSessionId = guestSend || options.forceNewSession ? null : sessionIdRef.current;
         const guestHistory = guestSend ? toGuestHistoryPayload(messages) : [];
+        const existingReadyReport = options.forceNewSession ? null : readyReport;
 
         setInput('');
         setConfirmationDrafts({});
@@ -623,7 +669,7 @@ const SShieldChat = () => {
             setReportNeedsRefresh(false);
             setConversationStopped(false);
             setExpandedPromptMessages(new Set());
-        } else if (readyReport) {
+        } else if (existingReadyReport) {
             setReportNeedsRefresh(true);
         }
         setMessages((prev) => [
@@ -653,10 +699,12 @@ const SShieldChat = () => {
                     setReadyReport(latestReport);
                     setReportNeedsRefresh(false);
                     if (guestSend) storeTemporaryReport(latestReport);
-                } else if (!readyReport) {
+                } else if (!existingReadyReport) {
                     setReadyReport(null);
                 }
-                setShowReport(!stopped && Boolean(latestReport || data.report_suggested || data.report_ready));
+                setShowReport(!stopped && Boolean(
+                    latestReport || data.report_suggested || data.report_ready || existingReadyReport
+                ));
                 const reportChanged = latestReport && (data.report_generated || data.report_updated);
                 const notice = reportChanged && !String(data.reply || '').includes('리포트가 ')
                     ? reportNoticeText(latestReport, data.report_updated ? '갱신' : '생성')
