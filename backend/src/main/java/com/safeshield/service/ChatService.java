@@ -627,8 +627,10 @@ public class ChatService {
 
     static String connectReplyToConfirmation(String reply, List<Map<String, Object>> prompts) {
         if (reply == null) return "";
-        if (prompts == null || prompts.isEmpty()) return stripGeneratedQuestionSentences(reply).trim();
-        String trimmed = stripGeneratedQuestionSentences(reply).trim();
+        if (prompts == null || prompts.isEmpty()) {
+            return stripQuickReplyLeadIns(stripGeneratedQuestionSentences(reply)).trim();
+        }
+        String trimmed = stripQuickReplyLeadIns(stripGeneratedQuestionSentences(reply)).trim();
         trimmed = stripDanglingConfirmationLeadIn(trimmed);
         if (trimmed.isBlank()) {
             trimmed = "말해준 내용은 상담 기록에 반영했습니다.";
@@ -669,7 +671,7 @@ public class ChatService {
         String types = reportTypesText(report.get("violence_types"));
         String caseSummary = reportCaseSummary(report);
         String summaryLine = caseSummary.isBlank() ? "" : "\n사건 정리: " + caseSummary;
-        return "리포트가 %s되었습니다. 현재 판단: %s, 유형: %s, 위험도: %s/10입니다.%s\n같은 가해자에게 당한 다른 피해가 있거나 피해 정도·당시 상황을 더 설명하고 싶으면 이어서 작성해 주세요."
+        return "리포트가 %s되었습니다. 현재 판단: %s, 유형: %s, 위험도: %s/10입니다.%s\n필요하면 이후에도 상담을 이어가며 새로 떠오른 사실을 더 보강할 수 있습니다."
                 .formatted(action, status, types, risk, summaryLine);
     }
 
@@ -809,6 +811,19 @@ public class ChatService {
         if (reply == null || reply.isBlank()) return "";
         return reply.lines()
                 .map(ChatService::stripQuestionFragments)
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .collect(Collectors.joining("\n"))
+                .trim();
+    }
+
+    private static String stripQuickReplyLeadIns(String reply) {
+        if (reply == null || reply.isBlank()) return "";
+        return reply.lines()
+                .map(line -> line
+                        .replaceAll("\\s*필요하면\\s*아래\\s*(빠른 답변|확인 카드|선택지)[^\\n]*", "")
+                        .replaceAll("\\s*아래\\s*(빠른 답변|확인 카드|선택지)[^\\n]*", "")
+                        .replaceAll("\\s*빠른 답변으로\\s*이어갈\\s*수\\s*있어요\\.?\\s*$", ""))
                 .map(String::trim)
                 .filter(line -> !line.isBlank())
                 .collect(Collectors.joining("\n"))
@@ -1142,7 +1157,7 @@ public class ChatService {
             case "reality_check" -> hasRealityCheckAnswer(text);
             case "relationship" -> hasRelationshipAnswer(text);
             case "timeline", "timeline_cyber" -> hasTimelineAnswer(text);
-            case "evidence", "evidence_chat", "evidence_physical", "evidence_actor", "evidence_sexual" -> hasEvidenceAnswer(text);
+            case "evidence", "evidence_chat", "evidence_physical", "evidence_actor", "evidence_sexual", "evidence_threat" -> hasEvidenceAnswer(text);
             case "impact" -> hasImpactAnswer(text);
             case "goal" -> hasGoalAnswer(text);
             case "final_check" -> hasFinalCheckAnswer(text);
@@ -1179,6 +1194,12 @@ public class ChatService {
                     "보호자에게 말할 수", "상담교사나 담임", "117 상담", "누구에게 말해야 할지 어렵");
             case "sexual_context" -> hasAny(text,
                     "장소를 기억", "시간대를 기억", "주변에 있던 사람", "자세히 정리하기 어렵");
+            case "threat_safety" -> hasAny(text,
+                    "보호자에게 이미", "부모님이나 보호자", "학교 선생님께", "학교 차원의 조치",
+                    "경찰 신고", "진행할 예정", "아직 보호자나 학교", "함께 대응 중");
+            case "threat_school_action" -> hasAny(text,
+                    "같은 반이라 즉시 분리", "등하교 동선", "동행 조치", "접근 금지",
+                    "접촉 제한", "상담만 진행", "구체적인 보호 조치");
             case "more_context" -> hasImpactAnswer(text) || hasGoalAnswer(text);
             default -> false;
         };
@@ -1257,7 +1278,9 @@ public class ChatService {
                 "대화 전체", "내용 전체", "전체 내용", "전체가 있습니다", "원본", "전체 맥락",
                 "상처 사진", "진단서", "진료 기록", "목격자", "아직 확보한 증거는 없습니다",
                 "아직 정리한 자료는 없습니다", "대화나 게시물 원본", "삭제나 수정한 내역",
-                "상담 기록", "주변에", "본 사람", "애들이 있", "친구들이 있", "장소", "시간");
+                "상담 기록", "주변에", "본 사람", "애들이 있", "친구들이 있", "장소", "시간",
+                "녹음", "통화 기록", "cctv", "CCTV", "경비 기록", "방문 기록", "메시지 기록", "반복 연락",
+                "신고 접수", "접수 기록");
     }
 
     private static boolean hasImpactAnswer(String text) {
@@ -1422,6 +1445,12 @@ public class ChatService {
         return hasAny(text, "스토킹", "따라", "기다리", "집 앞", "계속 연락", "찾아와");
     }
 
+    private static boolean hasThreatOrStalkingEvidenceContext(String text) {
+        return hasAny(text,
+                "칼", "흉기", "죽이", "죽여", "살해", "협박", "위협", "해치",
+                "집 앞", "찾아와", "기다리", "쫓아", "따라", "스토킹", "보복");
+    }
+
     private static boolean hasDemeaningSpeechSignal(String text) {
         String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
         boolean directPhrase = containsAny(t,
@@ -1533,6 +1562,15 @@ public class ChatService {
                     option("아직 없음", "확인 답변: 아직 확보한 증거는 없습니다."),
                     option("직접 입력", "확인 답변: "));
         }
+        if (hasThreatOrStalkingEvidenceContext(text)) {
+            return candidate("evidence_threat", "협박이나 반복 방문을 확인할 수 있는 단서는 무엇이 있나요? 녹음, CCTV, 방문 기록, 목격자 중 가까운 것을 골라주세요.",
+                    option("녹음·통화", "확인 답변: 협박 발언이 담긴 녹음이나 통화 기록이 있습니다."),
+                    option("CCTV·방문 기록", "확인 답변: 집 앞 방문 장면을 확인할 수 있는 CCTV나 경비 기록이 있습니다."),
+                    option("메시지·연락", "확인 답변: 협박이나 반복 연락이 남아 있는 메시지 기록이 있습니다."),
+                    option("목격자", "확인 답변: 상황을 본 목격자가 있습니다."),
+                    option("아직 없음", "확인 답변: 아직 확보한 증거는 없습니다."),
+                    option("직접 입력", "확인 답변: "));
+        }
         if (hasPhysicalViolenceSignal(text) || hasAny(text, "병원", "진단")) {
             return candidate("evidence_physical", "신체 피해를 확인할 자료가 무엇인가요? 사진, 진료 기록, 목격자 중 해당하는 것을 골라주세요.",
                     option("상처 사진", "확인 답변: 멍이나 상처 사진이 있습니다."),
@@ -1622,6 +1660,7 @@ public class ChatService {
         boolean post = hasAny(text, "sns", "인스타", "게시", "댓글", "유포", "온라인")
                 || (hasAny(text, "사진", "영상") && hasAny(text, "올렸", "올라", "퍼졌", "공유", "단톡", "채팅방"));
         boolean sexual = hasSexualViolationSignal(text);
+        boolean threat = hasThreatOrStalkingEvidenceContext(text);
         boolean physical = hasPhysicalViolenceSignal(text) || hasAny(text, "병원", "진단");
 
         if (actor) {
@@ -1662,6 +1701,29 @@ public class ChatService {
                         option("직접 입력", "확인 답변: ")));
             }
             return questions.isEmpty() ? List.of(genericDetailQuestion(text)) : questions;
+        }
+
+        if (threat) {
+            if (!hasAny(text, "보호자", "부모", "담임", "선생", "학교", "경찰", "112", "신고", "알렸", "대응 중", "도움")) {
+                questions.add(candidate("threat_safety", "지금 이 위협을 함께 알고 대응해줄 어른이나 기관이 있나요? 보호자, 학교, 경찰 신고 여부가 가장 중요합니다.",
+                        option("보호자에게 알림", "확인 답변: 부모님이나 보호자에게 이미 이 사실을 알렸고 함께 대응 중입니다."),
+                        option("학교에 알림", "확인 답변: 학교 선생님께 이 사실을 알렸고 학교 차원의 조치를 요청했습니다."),
+                        option("경찰 신고", "확인 답변: 경찰 신고를 진행했거나 진행할 예정입니다."),
+                        option("아직 혼자임", "확인 답변: 아직 보호자나 학교, 경찰에는 알리지 못했습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            if (!hasAny(text, "녹음", "통화", "CCTV", "cctv", "메시지", "목격", "경비", "방문 기록", "신고 접수", "접수 기록")) {
+                questions.add(evidenceQuestion(text));
+            }
+            if (!hasAny(text, "분리", "보호 조치", "접근 금지", "등하교", "동선", "같은 반 분리", "학교 조치")) {
+                questions.add(candidate("threat_school_action", "학교 안팎에서 마주칠 가능성이 있나요? 필요한 보호 조치를 리포트에 정확히 넣기 위해 확인할게요.",
+                        option("같은 반 분리", "확인 답변: 가해 학생과 같은 반이라 즉시 분리 조치가 필요합니다."),
+                        option("등하교 보호", "확인 답변: 등하교 동선 보호나 동행 조치가 필요합니다."),
+                        option("접근 금지 요청", "확인 답변: 학교와 경찰에 접근 금지나 접촉 제한을 요청하고 싶습니다."),
+                        option("상담만 진행", "확인 답변: 학교 선생님과 상담만 진행되었고 구체적인 보호 조치는 아직 없습니다."),
+                        option("직접 입력", "확인 답변: ")));
+            }
+            return questions.isEmpty() ? List.of(goalQuestion(text)) : questions;
         }
 
         if (groupChat) {
@@ -3057,10 +3119,10 @@ public class ChatService {
             case "incident_post", "chat_pattern" -> Set.of("incident");
             case "chat_timeline" -> Set.of("timeline");
             case "chat_scale" -> Set.of("evidence", "impact");
-            case "post_trace", "evidence_chat", "physical_support", "sexual_context" -> Set.of("evidence");
+            case "post_trace", "evidence_chat", "evidence_threat", "physical_support", "sexual_context" -> Set.of("evidence");
             case "post_spread" -> Set.of("evidence", "impact");
-            case "chat_support", "physical_injury", "physical_context", "sexual_support", "actor_stop" -> Set.of("impact");
-            case "actor_recovery" -> Set.of("goal");
+            case "chat_support", "physical_injury", "physical_context", "sexual_support", "actor_stop", "threat_safety" -> Set.of("impact");
+            case "actor_recovery", "threat_school_action" -> Set.of("goal");
             default -> Set.of();
         };
     }
@@ -3070,10 +3132,12 @@ public class ChatService {
         if (hasAny(content, "실제로 있었던 행동", "실제로 어떤 행동", "온라인에 올라온 내용", "몸에 어떤 일", "어떤 유형", "유형은 제가 판단")) return "incident";
         if (hasAny(content, "상대와의 관계", "학교폭력 절차 기준", "같은 반", "같은 학교", "학교 밖", "학교 관계")) return "relationship";
         if (hasAny(content, "언제부터", "몇 번", "어떤 빈도", "한 번인지", "지금도", "반복됐나요")) return "timeline";
-        if (hasAny(content, "남아 있는 증거", "증거는 무엇", "캡처", "URL", "작성자 계정", "게시 시간", "확인 가능한 게")) return "evidence";
+        if (hasAny(content, "남아 있는 증거", "증거는 무엇", "캡처", "URL", "작성자 계정", "게시 시간", "확인 가능한 게",
+                "협박이나 반복 방문", "녹음", "CCTV", "방문 기록", "목격자")) return "evidence";
         if (hasAny(content, "피해 정도", "당시 상황", "맞거나 밀친 정도", "친구들이 알고", "상대가 흥분")) return "physical_context";
-        if (hasAny(content, "영향", "걱정되는 부분", "보복", "등교", "불안", "두려운")) return "impact";
-        if (hasAny(content, "필요한 도움", "어떤 도움", "신고", "증거 정리", "안전하게 보호", "거리를 둬야")) return "goal";
+        if (hasAny(content, "영향", "걱정되는 부분", "보복", "등교", "불안", "두려운", "함께 알고 대응")) return "impact";
+        if (hasAny(content, "필요한 도움", "어떤 도움", "신고", "증거 정리", "안전하게 보호", "거리를 둬야",
+                "마주칠 가능성", "보호 조치")) return "goal";
         if (hasAny(content, "몇 명", "몇명", "참여자", "본 사람", "방에 있는 사람", "대화방 인원")) return "chat_scale";
         if (hasAny(content, "같은 사안", "리포트를 생성")) return "final_check";
         return "";

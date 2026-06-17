@@ -308,6 +308,16 @@ class ChatServiceTest {
     }
 
     @Test
+    void stripsQuickReplyLeadInWhenNoQuickReplyUiWillRender() {
+        String reply = "리포트를 만들어드릴 수 있습니다. 필요하면 아래 빠른 답변으로 이어갈 수 있어요.";
+
+        String cleaned = ChatService.connectReplyToConfirmation(reply, List.of());
+
+        assertTrue(cleaned.contains("리포트를 만들어드릴 수 있습니다."));
+        assertFalse(cleaned.contains("빠른 답변"));
+    }
+
+    @Test
     void sanitizesChoiceLessQuestionBeforeValidatingExternalAiReply() {
         String reply = """
                 게시물의 URL이나 링크가 있다는 것은 중요한 증거가 될 수 있습니다.
@@ -738,8 +748,8 @@ class ChatServiceTest {
         assertTrue(notice.contains("사건 정리:"));
         assertTrue(notice.contains("우유곽 투척"));
         assertTrue(notice.contains("배설물 행위"));
-        assertTrue(notice.contains("같은 가해자에게 당한 다른 피해"));
-        assertTrue(notice.contains("피해 정도·당시 상황"));
+        assertTrue(notice.contains("필요하면 이후에도 상담을 이어가며"));
+        assertTrue(notice.contains("새로 떠오른 사실을 더 보강"));
     }
 
     @Test
@@ -1165,6 +1175,26 @@ class ChatServiceTest {
         List<String> questions = ChatService.previewConfirmationQuestions(evidenceMissing, history);
 
         assertTrue(questions.stream().anyMatch(question -> question.contains("지금 남길 수 있는 단서")));
+    }
+
+    @Test
+    void usesThreatSpecificEvidenceQuestionForWeaponThreats() {
+        ReportReadiness evidenceMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "증거를 확인해야 합니다.",
+                List.of("남아 있는 증거가 무엇인지"),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+        String text = "같은 반 친구가 집 앞에 찾아와 칼을 들고 죽이겠다고 협박했습니다.";
+
+        List<String> questions = ChatService.previewConfirmationQuestions(evidenceMissing, text, 2);
+
+        assertTrue(questions.stream().anyMatch(question -> question.contains("협박이나 반복 방문")));
+        assertTrue(questions.stream().anyMatch(question -> question.contains("CCTV")));
+        assertFalse(questions.stream().anyMatch(question -> question.contains("진단서")));
+        assertFalse(questions.stream().anyMatch(question -> question.contains("URL")));
     }
 
     @Test

@@ -974,7 +974,7 @@
 }
 
 .report-main-grid.assessment-action-grid {
-  align-items: start;
+  align-items: stretch;
 }
 
 .ss-container .report-section {
@@ -984,7 +984,14 @@
 
 .ss-container .balanced-report-section {
   min-height: 0;
-  height: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.ss-container .balanced-report-section .ss-report-list {
+  flex: 1;
+  align-content: start;
 }
 
 .report-section-head {

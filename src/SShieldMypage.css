@@ -306,27 +306,54 @@
 /* Keep mypage compact; details live in chat/report detail pages. */
 .reportText {
   min-width: 0;
-  flex: 1;
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 6px 8px;
+}
+
+.reportText .date {
+  margin: 0;
+  align-self: center;
+}
+
+.reportText .risk-badge {
+  justify-self: start;
+  align-self: center;
+  margin: 0;
+  width: max-content;
+  max-width: 100%;
 }
 
 .reportCard {
   min-height: 84px;
   padding: 14px 16px;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 12px;
+  flex: 0 0 auto;
 }
 
 .title {
+  grid-column: 1 / -1;
   max-width: 100%;
-  margin: 6px 0 8px;
+  margin: 0;
   font-size: 15px;
   line-height: 1.35;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .tags {
+  grid-column: 1 / -1;
   max-width: 100%;
   overflow: hidden;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 52px;
 }
 
 .tag {
@@ -338,7 +365,8 @@
 }
 
 .reportCard .actions {
-  min-width: 174px;
+  width: 100%;
+  min-width: 0;
   flex-direction: row;
   justify-content: flex-end;
   align-items: center;
@@ -366,71 +394,12 @@
   max-width: 100%;
 }
 
-.privacyPanel {
-  margin-top: 18px;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 18px;
-  align-items: center;
-  padding: 17px 18px;
-  border-radius: var(--r-md);
-  border: 1px solid rgba(95, 142, 255, 0.24);
-  background: rgba(40, 88, 216, 0.09);
-}
-
-.privacyPanel span {
-  display: block;
-  margin-bottom: 5px;
-  color: #b9c9ff;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.privacyPanel strong {
-  display: block;
-  color: var(--text);
-  font-size: 14px;
-}
-
-.privacyPanel p {
-  margin: 6px 0 0;
-  color: var(--text-sub);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.privacyPanel button {
-  min-height: 38px;
-  border: 1px solid rgba(185, 201, 255, 0.28);
-  border-radius: var(--r-sm);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
-  padding: 0 13px;
-  font: 800 12px var(--font);
-  cursor: pointer;
-}
-
-.privacyPanel button:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .page-variant .ss-session-delete {
   color: #fecaca;
 }
 
 @media (max-width: 560px) {
-  .privacyPanel {
-    grid-template-columns: 1fr;
-  }
-
   .reportCard {
     min-height: 0;
-  }
-
-  .title {
-    white-space: normal;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
   }
 }

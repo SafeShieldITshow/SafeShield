@@ -186,16 +186,6 @@ const SShieldMypage = () => {
                                     </div>
                                 </div>
 
-                                <div className="privacyPanel">
-                                    <div>
-                                        <span>기록 관리</span>
-                                        <strong>상담 기록은 로그인한 계정에만 저장됩니다.</strong>
-                                        <p>마이페이지에서 리포트와 상담 세션을 직접 삭제할 수 있고, 세션을 지우면 연결된 대화와 리포트도 함께 정리됩니다.</p>
-                                    </div>
-                                    <button type="button" onClick={() => document.getElementById('session-history')?.scrollIntoView({ behavior: 'smooth' })}>
-                                        상담 기록 관리
-                                    </button>
-                                </div>
                             </>
                         )}
                     </section>
