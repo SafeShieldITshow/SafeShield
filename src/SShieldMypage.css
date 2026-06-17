@@ -308,18 +308,24 @@
   min-width: 0;
   width: 100%;
   display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 6px 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(14px, 1fr) auto auto auto;
+  gap: 4px 12px;
+  min-height: 112px;
 }
 
 .reportText .date {
+  grid-column: 1 / 2;
+  grid-row: 3;
   margin: 0;
-  align-self: center;
+  align-self: start;
 }
 
 .reportText .risk-badge {
-  justify-self: start;
-  align-self: center;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  align-self: start;
   margin: 0;
   width: max-content;
   max-width: 100%;
@@ -335,7 +341,8 @@
 }
 
 .title {
-  grid-column: 1 / -1;
+  grid-column: 1 / 2;
+  grid-row: 2;
   max-width: 100%;
   margin: 0;
   font-size: 15px;
@@ -349,11 +356,15 @@
 
 .tags {
   grid-column: 1 / -1;
+  grid-row: 4;
+  justify-content: flex-start;
+  align-self: end;
   max-width: 100%;
   overflow: hidden;
   flex-wrap: wrap;
   gap: 6px;
   max-height: 52px;
+  margin-top: 8px;
 }
 
 .tag {
@@ -401,5 +412,9 @@
 @media (max-width: 560px) {
   .reportCard {
     min-height: 0;
+  }
+
+  .reportText {
+    min-height: 104px;
   }
 }
