@@ -476,6 +476,19 @@ class AnalysisServiceTest {
     }
 
     @Test
+    void academicGradeImpactIsNotClassifiedAsSexualViolence() {
+        String text = "같은 반 친구들이 단톡방에서 욕설과 비방을 했고 캡처가 있습니다. " +
+                "확인 답변: 수업 집중이 어렵거나 성적에 영향이 있습니다. " +
+                "확인 답변: 담임 선생님에게 신고 절차를 상담하고 싶습니다.";
+
+        var result = analysisService.analyze(text, readySchoolViolence());
+
+        assertFalse(result.violenceTypes().contains("성폭력"),
+                "학업 성적 영향 답변의 성적을 성폭력 유형으로 오분류하면 안 됩니다.");
+        assertTrue(result.violenceTypes().contains("언어 폭력") || result.violenceTypes().contains("사이버 폭력"));
+    }
+
+    @Test
     void sexualViolenceRiskIsNotCappedByLowSchoolApplicability() {
         String text = "원하지 않는 성적 신체 접촉이 있었고 너무 불안해서 어떻게 해야 할지 알고 싶습니다. " +
                 "확인 답변: 상대는 학교 관계자가 아닙니다. " +

@@ -961,6 +961,37 @@ class ChatServiceTest {
     }
 
     @Test
+    void academicGradeImpactDoesNotTriggerSexualIncidentQuestion() {
+        ReportReadiness incidentMissing = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "사건 내용을 확인해야 합니다.",
+                List.of("구체적인 사건 내용 확인"),
+                List.of(),
+                true
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                incidentMissing,
+                "같은 반 친구들이 단톡방에서 욕설과 비방을 했습니다. 확인 답변: 수업 집중이 어렵거나 성적에 영향이 있습니다.",
+                2
+        );
+
+        assertFalse(questions.stream().anyMatch(question -> question.contains("성적으로 불쾌")),
+                "학업 성적 영향 답변을 성폭력 확인 질문으로 오분류하면 안 됩니다.");
+    }
+
+    @Test
+    void academicGradeImpactDoesNotRewritePhysicalAdviceAsSexualViolence() {
+        String adapted = ChatService.adaptCaseDomainWording(
+                "신체 폭력으로 볼 수 있어 증거를 정리하는 것이 좋습니다.",
+                "확인 답변: 수업 집중이 어렵거나 성적에 영향이 있습니다."
+        );
+
+        assertEquals("신체 폭력으로 볼 수 있어 증거를 정리하는 것이 좋습니다.", adapted);
+    }
+
+    @Test
     void asksRelationshipAfterSexualConductIsSpecified() {
         ReportReadiness relationshipMissing = new ReportReadiness(
                 false,

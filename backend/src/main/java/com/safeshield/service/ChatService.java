@@ -1331,8 +1331,24 @@ public class ChatService {
     }
 
     private static boolean hasSexualViolationSignal(String text) {
-        return hasAny(text, "성추행", "성희롱", "성적", "성적으로", "신체 접촉",
-                "원하지 않는", "원치 않는", "몸을 만", "만졌", "만지는", "불쾌", "수치심");
+        String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        if (hasAny(t,
+                "성추행", "성희롱", "성폭행", "성폭력", "성적으로", "성적인", "성희롱성", "음란",
+                "성적 접촉", "성적 신체 접촉", "성적 발언", "성적 농담", "성적 모욕", "성적 욕",
+                "성적 수치", "성적 불쾌", "성적 괴롭", "성적 침해")) {
+            return true;
+        }
+        if (hasAcademicGradeSignal(t)) return false;
+        if (hasAny(t, "신체 접촉", "몸을 만", "강제로 만", "만졌", "만지는", "수치심")) return true;
+        return hasAny(t, "원하지 않는", "원치 않는") && hasAny(t, "접촉", "신체", "몸", "만졌", "만지는");
+    }
+
+    private static boolean hasAcademicGradeSignal(String text) {
+        return hasAny(text,
+                "성적에 영향", "성적 영향", "성적이 영향", "성적에도 영향",
+                "성적이 떨어", "성적 떨어", "성적 하락", "성적 저하", "성적이 내려", "성적 내려",
+                "성적이 낮", "성적 낮", "성적표", "시험 성적", "학교 성적", "학업 성적",
+                "수업 집중", "수업에 집중", "공부", "학업", "내신", "점수", "등급");
     }
 
     private static boolean hasPhysicalViolenceSignal(String text) {
@@ -3728,7 +3744,7 @@ public class ChatService {
         if (containsAny(t, "욕", "협박", "모욕", "놀림", "비하") || hasDemeaningSpeechSignal(t)) types.add("언어 폭력");
         if (containsAny(t, "sns", "카톡", "단톡", "dm", "게시", "댓글", "사진")) types.add("사이버 폭력");
         if (containsAny(t, "따돌", "왕따", "무시", "소외")) types.add("따돌림");
-        if (containsAny(t, "성추행", "성희롱", "성적", "성적으로", "신체 접촉", "원하지 않는", "만졌", "만지는", "불쾌", "수치심")) types.add("성폭력");
+        if (hasSexualViolationSignal(t)) types.add("성폭력");
         if (containsAny(t, "돈", "빼앗", "갈취", "강요")) types.add("갈취");
         return types;
     }
