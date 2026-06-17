@@ -180,11 +180,18 @@ const prioritizeAssessmentDetails = (details = []) => {
             && !item.startsWith('판단 상태:')
             && !item.startsWith('판단 신뢰도:')
             && !item.startsWith('예상 조치 근거:'));
-    const prioritized = ASSESSMENT_DETAIL_PRIORITY
-        .map((prefix) => visible.find((item) => item.startsWith(prefix)))
-        .filter(Boolean);
-    const remaining = visible.filter((item) => !prioritized.includes(item));
-    return compactReportLines([...prioritized, ...remaining], 4);
+    const usedIndexes = new Set();
+    const prioritized = [];
+    ASSESSMENT_DETAIL_PRIORITY.forEach((prefix) => {
+        visible.forEach((item, index) => {
+            if (!usedIndexes.has(index) && item.startsWith(prefix)) {
+                prioritized.push(item);
+                usedIndexes.add(index);
+            }
+        });
+    });
+    const remaining = visible.filter((_, index) => !usedIndexes.has(index));
+    return compactReportLines([...prioritized, ...remaining], 6);
 };
 
 const formatDate = (value) => formatKoreanDateTime(value);
@@ -486,8 +493,8 @@ const SShieldResult = () => {
                                             </div>
                                         </div>
                                         <ul className="ss-report-list clean">
-                                            {visibleAssessmentDetails.map((item) => (
-                                                <li key={item}>{item}</li>
+                                            {visibleAssessmentDetails.map((item, index) => (
+                                                <li key={`${index}-${item}`}>{item}</li>
                                             ))}
                                         </ul>
                                     </section>
@@ -501,8 +508,8 @@ const SShieldResult = () => {
                                             </div>
                                         </div>
                                         <ul className="ss-report-list clean">
-                                            {actionList.map((item) => (
-                                                <li key={item}>{item}</li>
+                                            {actionList.map((item, index) => (
+                                                <li key={`${index}-${item}`}>{item}</li>
                                             ))}
                                         </ul>
                                     </section>
