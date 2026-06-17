@@ -10,6 +10,7 @@ import com.safeshield.repository.MessageRepository;
 import com.safeshield.repository.ReportRepository;
 import com.safeshield.repository.SessionRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Map;
@@ -17,6 +18,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -146,6 +148,34 @@ class ReportServiceTest {
         assertEquals(100L, result.get("id"));
         assertEquals(10L, result.get("session_id"));
         assertEquals("세션 리포트", result.get("title"));
+    }
+
+    @Test
+    void latestForSessionRejectsDifferentUserSession() {
+        User owner = new User();
+        owner.setId(1L);
+        User other = new User();
+        other.setId(2L);
+        Session session = new Session();
+        session.setId(10L);
+        session.setUser(owner);
+
+        SessionRepository sessionRepository = mock(SessionRepository.class);
+        when(sessionRepository.findById(10L)).thenReturn(Optional.of(session));
+        ReportService service = new ReportService(
+                mock(ReportRepository.class),
+                sessionRepository,
+                mock(MessageRepository.class),
+                new AnalysisService(new LawDataService(), new EvidenceGuideService()),
+                new ObjectMapper()
+        );
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> service.latestForSession(other, 10L)
+        );
+
+        assertEquals(403, ex.getStatusCode().value());
     }
 
     @Test

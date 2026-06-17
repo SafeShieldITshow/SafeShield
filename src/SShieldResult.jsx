@@ -266,7 +266,10 @@ const SShieldResult = () => {
             const request = id
                 ? api.get(`/reports/${id}`)
                 : sessionId
-                    ? api.get(`/reports/session/${sessionId}/latest`).catch(() => api.get('/reports/latest'))
+                    ? api.get(`/reports/session/${sessionId}/latest`).catch((e) => {
+                        if (e.status === 404) return api.get('/reports/latest');
+                        throw e;
+                    })
                     : api.get('/reports/latest');
             if (initial) setLoading(true);
             return request

@@ -8,6 +8,7 @@ import com.safeshield.repository.MessageRepository;
 import com.safeshield.repository.ReportRepository;
 import com.safeshield.repository.SessionRepository;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -60,6 +62,38 @@ class ChatServiceTest {
         verify(reportRepository).deleteBySession(session);
         verify(messageRepository).deleteBySession(session);
         verify(sessionRepository).delete(session);
+    }
+
+    @Test
+    void getSessionDetailRejectsDifferentUserSession() {
+        SessionRepository sessionRepository = mock(SessionRepository.class);
+        MessageRepository messageRepository = mock(MessageRepository.class);
+        ReportRepository reportRepository = mock(ReportRepository.class);
+        User owner = new User();
+        owner.setId(10L);
+        User other = new User();
+        other.setId(20L);
+        Session session = new Session();
+        session.setId(77L);
+        session.setUser(owner);
+
+        when(sessionRepository.findById(77L)).thenReturn(Optional.of(session));
+
+        ChatService service = new ChatService(
+                sessionRepository,
+                messageRepository,
+                reportRepository,
+                mock(LawApiService.class),
+                mock(AnalysisService.class),
+                mock(ReportService.class)
+        );
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> service.getSessionDetail(77L, other)
+        );
+
+        assertEquals(403, ex.getStatusCode().value());
     }
 
     @Test
