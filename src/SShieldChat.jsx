@@ -145,6 +145,34 @@ const attachPromptsToLatestAiMessage = (items, prompts) => {
     return next;
 };
 
+const expandedPromptIdsForMessages = (items = []) => {
+    const messageWithPrompts = [...items]
+        .reverse()
+        .find((message) => message.type === 'ai' && message.confirmationPrompts?.length);
+    return messageWithPrompts ? new Set([messageWithPrompts.id]) : new Set();
+};
+
+const latestReportForSession = async (id) => {
+    if (!id) return null;
+    try {
+        return await api.get(`/reports/session/${id}/latest`);
+    } catch (e) {
+        if (e.status === 404) return null;
+        throw e;
+    }
+};
+
+const reportIsOlderThanMessages = (report, items = []) => {
+    if (!report?.created_at) return false;
+    const reportTime = Date.parse(report.created_at);
+    if (Number.isNaN(reportTime)) return false;
+    return items.some((message) => {
+        if (!message.createdAtRaw || message.id === 'welcome') return false;
+        const messageTime = Date.parse(message.createdAtRaw);
+        return !Number.isNaN(messageTime) && messageTime > reportTime + 1000;
+    });
+};
+
 const confirmationPromptKey = (messageId, prompt, promptIndex) => (
     `${messageId}:${prompt.id || prompt.question || 'prompt'}:${promptIndex}`
 );
@@ -354,6 +382,7 @@ const toUiMessage = (message) => ({
     id: message.id,
     type: message.role === 'assistant' ? 'ai' : 'user',
     text: message.role === 'assistant' ? removeInlineDisclaimer(message.content) : message.content,
+    createdAtRaw: message.created_at || '',
     time: message.created_at
         ? formatKoreanTime(message.created_at)
         : now(),
@@ -483,10 +512,15 @@ const SShieldChat = () => {
             const items = Array.isArray(detail.messages) ? detail.messages : [];
             const readiness = detail.readiness || {};
             const uiMessages = items.length ? items.map(toUiMessage) : [initialMessage()];
-            setMessages(attachPromptsToLatestAiMessage(uiMessages, readiness.confirmation_prompts));
+            const messagesWithPrompts = attachPromptsToLatestAiMessage(uiMessages, readiness.confirmation_prompts);
+            const sessionReport = await latestReportForSession(id);
+            if (loadSequence !== messageLoadSequenceRef.current) return;
+            setMessages(messagesWithPrompts);
+            setExpandedPromptMessages(expandedPromptIdsForMessages(messagesWithPrompts));
             setConversationStopped(Boolean(readiness.conversation_stopped) || hasStoppedConversation(uiMessages));
-            setShowReport(Boolean(readiness.ready));
-            setReportNeedsRefresh(false);
+            setReadyReport(sessionReport);
+            setShowReport(Boolean(sessionReport || readiness.ready));
+            setReportNeedsRefresh(Boolean(sessionReport && reportIsOlderThanMessages(sessionReport, uiMessages)));
         } catch {
             if (loadSequence !== messageLoadSequenceRef.current) return;
             localStorage.removeItem('ss_session');
