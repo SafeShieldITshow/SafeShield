@@ -15,14 +15,26 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 @Service
 public class ReportService {
 
     public record ReportMutation(Map<String, Object> report, boolean generated, boolean updated) {}
+
+    private static final Pattern TOKEN_PATTERN = Pattern.compile("[\\p{IsHangul}A-Za-z0-9]{2,}");
+    private static final Set<String> REPORT_COMMAND_WORDS = Set.of(
+            "리포트", "보고서", "결과", "정리", "생성", "갱신", "만들", "보여", "열어", "작성"
+    );
+    private static final Set<String> COMMON_CONTEXT_WORDS = Set.of(
+            "확인", "답변", "추가", "설명", "상담", "리포트", "보고서", "내용", "상황", "사건",
+            "제가", "저를", "저는", "상대", "친구", "학교", "학생", "있습니다", "했습니다", "됩니다"
+    );
 
     private final ReportRepository reportRepository;
     private final SessionRepository sessionRepository;
@@ -57,6 +69,11 @@ public class ReportService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "분석할 상담 내용이 없습니다.");
         }
 
+        userMessages = scopedUserMessagesForReportUpdate(
+                userMessages,
+                reportRepository.findBySessionOrderByCreatedAtAsc(session)
+        );
+
         String userText = userMessages.stream()
                 .map(Message::getContent)
                 .reduce("", (a, b) -> a + " " + b)
@@ -87,6 +104,11 @@ public class ReportService {
         if (userMessages.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "분석할 상담 내용이 없습니다.");
         }
+
+        userMessages = scopedUserMessagesForReportUpdate(
+                userMessages,
+                reportRepository.findBySessionOrderByCreatedAtAsc(session)
+        );
 
         String userText = userMessages.stream()
                 .map(Message::getContent)
@@ -182,6 +204,8 @@ public class ReportService {
                 .toList();
         if (userMessages.isEmpty()) return null;
 
+        userMessages = scopedUserMessagesForReportUpdate(userMessages, reports);
+
         String userText = userMessages.stream()
                 .map(Message::getContent)
                 .reduce("", (a, b) -> a + " " + b)
@@ -196,6 +220,155 @@ public class ReportService {
         }
         reportRepository.saveAll(reports);
         return toMap(reports.get(reports.size() - 1));
+    }
+
+    private List<Message> scopedUserMessagesForReportUpdate(List<Message> userMessages, List<Report> reports) {
+        if (userMessages == null || userMessages.isEmpty() || reports == null || reports.isEmpty()) {
+            return userMessages == null ? List.of() : userMessages;
+        }
+        Report latestReport = reports.get(reports.size() - 1);
+        if (latestReport.getCreatedAt() == null) return userMessages;
+
+        List<Message> postReportMessages = userMessages.stream()
+                .filter(message -> message.getCreatedAt() != null)
+                .filter(message -> message.getCreatedAt().isAfter(latestReport.getCreatedAt()))
+                .toList();
+        if (postReportMessages.isEmpty() || postReportMessages.stream().allMatch(this::isReportCommandOnly)) {
+            return userMessages;
+        }
+        if (postReportMessagesCompatibleWithReport(latestReport, postReportMessages)) {
+            return userMessages;
+        }
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "기존 리포트와 다른 사안으로 보여 리포트를 섞어 갱신하지 않았습니다. 새 상담을 시작해 별도 리포트로 정리해 주세요."
+        );
+    }
+
+    private boolean postReportMessagesCompatibleWithReport(Report report, List<Message> postReportMessages) {
+        String context = reportContextText(report);
+        Set<String> reportDomains = detectCaseDomains(context);
+        if (reportDomains.isEmpty()) return true;
+
+        for (Message message : postReportMessages) {
+            if (isReportCommandOnly(message)) continue;
+            String content = normalizeText(message.getContent());
+            if (content.isBlank()) continue;
+
+            Set<String> messageDomains = detectCaseDomains(content);
+            if (!messageDomains.isEmpty()) {
+                Set<String> newDomains = new HashSet<>(messageDomains);
+                newDomains.removeAll(reportDomains);
+                if (!newDomains.isEmpty() && hasConcreteIncidentSignal(content) && !hasStrongContextOverlap(context, content)) {
+                    return false;
+                }
+            }
+            if (hasStrongContextOverlap(context, content) || isContinuationDetail(content) || !hasConcreteIncidentSignal(content)) {
+                continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private String reportContextText(Report report) {
+        return normalizeText(String.join(" ",
+                stringValue(report.getTitle()),
+                stringValue(report.getSummary()),
+                stringValue(report.getAssessmentStatus()),
+                stringValue(report.getViolenceTypes()),
+                stringValue(report.getAssessmentDetails()),
+                stringValue(report.getEvidenceGuide()),
+                stringValue(report.getRecommendedActions())
+        ));
+    }
+
+    private boolean isReportCommandOnly(Message message) {
+        String text = normalizeText(message == null ? "" : message.getContent());
+        if (text.isBlank()) return true;
+        if (text.length() > 80) return false;
+        Set<String> tokens = tokens(text);
+        if (tokens.isEmpty()) return false;
+        return tokens.stream().allMatch(token -> REPORT_COMMAND_WORDS.stream().anyMatch(token::contains));
+    }
+
+    private static String normalizeText(String value) {
+        return value == null ? "" : value.trim().toLowerCase();
+    }
+
+    private static String stringValue(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private static Set<String> detectCaseDomains(String text) {
+        Set<String> domains = new HashSet<>();
+        String value = normalizeText(text);
+        if (containsAny(value, "sns", "게시물", "댓글", "사진", "비방", "공유", "조회수", "url", "계정", "프로필", "인스타", "틱톡")) {
+            domains.add("cyber-post");
+        }
+        if (containsAny(value, "단톡", "단체 채팅", "채팅방", "카톡", "메시지", "dm", "욕설", "놀림")) {
+            domains.add("cyber-chat");
+        }
+        if (containsAny(value, "맞", "때리", "폭행", "멍", "상처", "발로", "주먹", "던졌", "던지", "부었", "신체")) {
+            domains.add("physical");
+        }
+        if (containsAny(value, "칼", "죽이", "협박", "집 앞", "찾아와", "따라오", "기다리", "스토킹", "위협")) {
+            domains.add("threat-stalking");
+        }
+        if (containsAny(value, "성적", "성추행", "성폭력", "신체 접촉", "만졌", "만짐", "추행")) {
+            domains.add("sexual");
+        }
+        if (containsAny(value, "돈", "금품", "빼앗", "내놔", "갈취", "물건")) {
+            domains.add("extortion");
+        }
+        if (containsAny(value, "따돌림", "왕따", "배제", "무시", "소외")) {
+            domains.add("exclusion");
+        }
+        return domains;
+    }
+
+    private static boolean hasConcreteIncidentSignal(String text) {
+        return !detectCaseDomains(text).isEmpty()
+                || containsAny(text, "했습니다", "했어요", "당했습니다", "반복", "계속", "며칠", "일주일", "어제", "오늘");
+    }
+
+    private static boolean isContinuationDetail(String text) {
+        return containsAny(text,
+                "확인 답변", "추가 설명", "추가로", "그 일", "그때", "이 일", "이 사건", "그 사건",
+                "목격", "증거", "캡처", "스크린샷", "url", "cctv", "녹음", "진단", "병원",
+                "신고", "경찰", "117", "112", "선생님", "부모님", "보호자", "분리 조치",
+                "불안", "수면", "등교", "수업", "성적", "상담", "보호받고", "원합니다"
+        );
+    }
+
+    private static boolean hasStrongContextOverlap(String context, String text) {
+        Set<String> contextTokens = tokens(context);
+        Set<String> textTokens = tokens(text);
+        if (contextTokens.isEmpty() || textTokens.isEmpty()) return false;
+        long shared = textTokens.stream().filter(contextTokens::contains).count();
+        double ratio = shared / (double) Math.min(contextTokens.size(), textTokens.size());
+        return shared >= 2 && ratio >= 0.22;
+    }
+
+    private static Set<String> tokens(String text) {
+        Set<String> result = new HashSet<>();
+        var matcher = TOKEN_PATTERN.matcher(normalizeText(text));
+        while (matcher.find()) {
+            String token = matcher.group();
+            if (token.length() < 2 || COMMON_CONTEXT_WORDS.contains(token)) continue;
+            result.add(token);
+        }
+        return result;
+    }
+
+    private static boolean containsAny(String text, String... needles) {
+        if (text == null || text.isBlank()) return false;
+        for (String needle : needles) {
+            if (needle != null && !needle.isBlank() && text.contains(needle.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private ReportReadiness assessEffectiveReadiness(String userText, int userMessageCount, List<Message> messages) {

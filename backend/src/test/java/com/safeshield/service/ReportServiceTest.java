@@ -12,15 +12,20 @@ import com.safeshield.repository.SessionRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ReportServiceTest {
@@ -115,6 +120,66 @@ class ReportServiceTest {
         assertEquals("학교폭력 가능성 검토", updated.get("assessment_status"));
         assertTrue(((Double) updated.get("risk_score")) > 4.5);
         assertTrue(((List<?>) updated.get("violence_types")).contains("신체 폭력"));
+    }
+
+    @Test
+    void generateOrUpdateRejectsDifferentPostReportIncident() {
+        User user = new User();
+        user.setId(1L);
+        Session session = new Session();
+        session.setId(10L);
+        session.setUser(user);
+
+        LocalDateTime reportTime = LocalDateTime.of(2026, 6, 18, 9, 0);
+        Report existing = new Report();
+        existing.setId(100L);
+        existing.setUser(user);
+        existing.setSession(session);
+        existing.setTitle("SNS 사진 비방 리포트");
+        existing.setSummary("SNS에 제 사진과 비방 글이 올라온 사안입니다.");
+        existing.setViolenceTypes("[\"사이버폭력\", \"언어 폭력\"]");
+        existing.setAssessmentDetails("[\"사건 상황: SNS에 제 사진과 비방 글이 올라왔습니다.\"]");
+        existing.setCreatedAt(reportTime);
+
+        Message first = user("SNS에 제 사진과 비방 글이 올라왔고 URL과 캡처가 있습니다.");
+        first.setSession(session);
+        first.setCreatedAt(reportTime.minusMinutes(15));
+        Message differentIncident = user("친구가 제 집 앞에 칼을 들고 찾아와 죽이겠다고 계속 협박했습니다.");
+        differentIncident.setSession(session);
+        differentIncident.setCreatedAt(reportTime.plusMinutes(5));
+        Message request = user("이 내용까지 포함해서 리포트 다시 만들어줘.");
+        request.setSession(session);
+        request.setCreatedAt(reportTime.plusMinutes(6));
+
+        ReportRepository reportRepository = mock(ReportRepository.class);
+        MessageRepository messageRepository = mock(MessageRepository.class);
+        AnalysisService analysisService = mock(AnalysisService.class);
+        when(reportRepository.findBySessionOrderByCreatedAtAsc(session)).thenReturn(List.of(existing));
+        when(messageRepository.findBySessionOrderByCreatedAtAsc(session)).thenReturn(List.of(first, differentIncident, request));
+
+        ReportService service = new ReportService(
+                reportRepository,
+                mock(SessionRepository.class),
+                messageRepository,
+                analysisService,
+                new ObjectMapper()
+        );
+        ReportReadiness readiness = new ReportReadiness(
+                true,
+                "학교폭력 가능성 검토",
+                "리포트를 생성할 수 있습니다.",
+                List.of(),
+                List.of("구체적인 사건 내용 확인"),
+                true
+        );
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> service.generateOrUpdateForSessionMutation(user, session, "", readiness)
+        );
+
+        assertEquals(409, ex.getStatusCode().value());
+        verify(analysisService, never()).analyze(anyString(), any(ReportReadiness.class));
     }
 
     @Test
