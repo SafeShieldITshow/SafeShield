@@ -8,10 +8,12 @@
   color: var(--text);
   overflow: hidden;
   position: relative;
+  opacity: 1;
+  animation: none;
 }
 
 /* 메인 채팅창 */
-.ss-chat-main    { flex: 1; min-width: 0; width: 100%; display: flex; flex-direction: column; animation: fadeIn 0.4s 0.1s ease both; }
+.ss-chat-main    { flex: 1; min-width: 0; width: 100%; display: flex; flex-direction: column; opacity: 1; animation: none; }
 
 .ss-chat-header  { padding: 14px 0 12px; }
 
@@ -1180,17 +1182,16 @@
   .ss-msg-col { max-width: 88%; }
   .ss-msg-bubble  { font-size: 14px; }
   .example-chips {
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    overflow-x: visible;
     padding-bottom: 9px;
-    scrollbar-width: none;
   }
-  .example-chips::-webkit-scrollbar { display: none; }
   .example-chip {
-    flex: 0 0 auto;
-    max-width: 82vw;
+    flex: 1 1 100%;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .chat-cta {
     align-items: stretch;
