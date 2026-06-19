@@ -609,6 +609,29 @@ class ChatServiceTest {
     }
 
     @Test
+    void infersViolenceTypeFromConductAndDoesNotAskIncidentTypeAgain() {
+        ReportReadiness readiness = new ReportReadiness(
+                false,
+                "추가 확인 필요",
+                "사건 내용과 관계, 시점을 확인해야 합니다.",
+                List.of("무슨 일이 있었는지", "상대가 학교 관계자인지", "언제부터 몇 번 있었는지"),
+                List.of(),
+                true
+        );
+
+        List<String> questions = ChatService.previewConfirmationQuestions(
+                readiness,
+                "친구가 계속 욕하고 놀렸어요.",
+                1
+        );
+
+        assertFalse(questions.isEmpty());
+        assertFalse(questions.get(0).contains("실제로 어떤 행동"));
+        assertFalse(questions.get(0).contains("학교폭력 유형은 제가 판단"));
+        assertTrue(questions.get(0).contains("상대와의 관계"));
+    }
+
+    @Test
     void prioritizesConductFactQuestionForVagueIncidentInNormalFlow() {
         List<String> questions = ChatService.previewConfirmationQuestions(
                 needsMoreContext(),
@@ -947,6 +970,29 @@ class ChatServiceTest {
         assertFalse(visibleReply.contains("NEXT_QUESTION"));
         assertTrue(visibleReply.contains("언어폭력"));
         assertEquals("그 말을 본 사람이 단톡방 안에 몇 명 정도 있었나요?", questionMethod.invoke(followUp));
+    }
+
+    @Test
+    void dropsAiFollowUpQuestionThatAsksUserToChooseViolenceType() throws Exception {
+        String raw = """
+                말해준 내용은 상담 기록에 반영했습니다.
+
+                [[NEXT_QUESTION]]
+                질문: 이 일은 언어 폭력, 사이버 폭력, 따돌림 중 어떤 유형에 가까운가요?
+                선택지:
+                - 언어 폭력 | 확인 답변: 언어 폭력에 가깝습니다.
+                - 사이버 폭력 | 확인 답변: 사이버 폭력에 가깝습니다.
+                - 따돌림 | 확인 답변: 따돌림에 가깝습니다.
+                [[/NEXT_QUESTION]]
+                """;
+
+        var method = ChatService.class.getDeclaredMethod("parseGeneratedReply", String.class);
+        method.setAccessible(true);
+        Object parsed = method.invoke(null, raw);
+        var followUpMethod = parsed.getClass().getDeclaredMethod("followUpQuestion");
+        followUpMethod.setAccessible(true);
+
+        assertEquals(null, followUpMethod.invoke(parsed));
     }
 
     @Test

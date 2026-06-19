@@ -1104,7 +1104,14 @@ public class ChatService {
         boolean hadCandidates = !candidates.isEmpty();
         boolean hadAnsweredCandidate = candidates.stream()
                 .anyMatch(candidate -> isConfirmationCandidateAnswered(candidate.id(), text));
+        boolean hadAnsweredIncidentCandidate = candidates.stream()
+                .anyMatch(candidate -> "incident".equals(questionFamily(candidate.id()))
+                        && isConfirmationCandidateAnswered(candidate.id(), text));
         candidates = filterUsableCandidates(candidates, text, history);
+
+        if (candidates.isEmpty() && hadAnsweredIncidentCandidate) {
+            candidates = filterUsableCandidates(deepDiveQuestions(text, userMessageCount), text, history);
+        }
 
         if (candidates.isEmpty() && shouldUseFallbackQuestion(hadCandidates, hadAnsweredCandidate, text, readiness)) {
             List<ConfirmationCandidate> fallback = new ArrayList<>(deepDiveQuestions(text, userMessageCount));
@@ -1120,6 +1127,7 @@ public class ChatService {
             List<Message> history
     ) {
         return new ArrayList<>(candidates.stream()
+                .filter(candidate -> !asksUserToClassifyViolenceType(candidate))
                 .filter(candidate -> isCandidateCompatibleWithContext(candidate, text))
                 .filter(candidate -> !isConfirmationCandidateAnswered(candidate.id(), text))
                 .filter(candidate -> !wasCandidateAnsweredAfterQuestion(candidate, history))
@@ -1166,6 +1174,49 @@ public class ChatService {
                         .map(option -> option.getOrDefault("label", "") + " " + option.getOrDefault("message", ""))
                         .collect(Collectors.joining(" "));
         return hasAny(text, "맞음", "밀침", "넘어짐", "상처", "신체 폭력", "때리거나 밀치는");
+    }
+
+    private static boolean asksUserToClassifyViolenceType(ConfirmationCandidate candidate) {
+        if (candidate == null) return false;
+        String question = candidate.question() == null ? "" : candidate.question();
+        if (asksUserToClassifyViolenceTypeText(question)) return true;
+
+        long typeOptionCount = candidate.options().stream()
+                .map(option -> option.getOrDefault("label", "") + " " + option.getOrDefault("message", ""))
+                .filter(ChatService::looksLikeViolenceTypeLabel)
+                .count();
+        return typeOptionCount >= 2 && asksUserToChooseText(question);
+    }
+
+    private static boolean asksUserToClassifyViolenceTypeText(String text) {
+        String t = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+        if (t.isBlank()) return false;
+        if (containsAny(t, "제가 판단", "ai가 판단", "상담 ai가 판단", "제가 정리")) return false;
+
+        boolean mentionsType = containsAny(t,
+                "학교폭력 유형", "폭력 유형", "어떤 유형", "무슨 유형", "무엇으로 볼", "뭐로 볼",
+                "유형을", "유형은", "유형이", "유형에");
+        boolean asksChoice = asksUserToChooseText(t);
+        boolean presentsTypeOptions = violenceTypeNameCount(t) >= 2;
+        return (mentionsType && asksChoice) || (presentsTypeOptions && asksChoice);
+    }
+
+    private static boolean asksUserToChooseText(String text) {
+        String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
+        return containsAny(t,
+                "고르", "골라", "선택", "답해", "알려", "말해", "해당", "가까운",
+                "무엇", "뭐", "무슨", "어떤", "인가요", "나요", "?");
+    }
+
+    private static boolean looksLikeViolenceTypeLabel(String text) {
+        return violenceTypeNameCount(text) >= 1;
+    }
+
+    private static long violenceTypeNameCount(String text) {
+        String t = text == null ? "" : text.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+        return List.of("신체폭력", "언어폭력", "사이버폭력", "따돌림", "성폭력", "스토킹", "갈취").stream()
+                .filter(t::contains)
+                .count();
     }
 
     private static boolean shouldUseFallbackQuestion(
@@ -1345,9 +1396,10 @@ public class ChatService {
     }
 
     private static boolean hasIncidentAnswer(String text) {
-        return hasAny(text,
+        return hasViolenceTypeSignal(text) || hasAny(text,
                 "욕설", "비방", "모욕", "조롱", "사진", "영상", "게시물", "댓글",
                 "공유", "유포", "맞거나", "가격", "밀치", "넘어뜨", "상처", "멍",
+                "욕", "욕먹", "놀림", "놀렸", "놀리", "비하", "협박", "따돌", "왕따",
                 "따돌림", "배제", "괴롭힘", "때리거나 밀치는 신체 폭력",
                 "신체 접촉", "신체 폭력", "원하지 않는", "만졌", "만지는", "성적으로", "불쾌",
                 "성추행", "성희롱", "배설물", "똥을", "오줌", "소변", "대변");
@@ -3506,7 +3558,8 @@ public class ChatService {
         if (options.isEmpty()) {
             options = List.of(option("직접 입력", "확인 답변: "));
         }
-        return new ConfirmationCandidate("ai_next_question", question, options);
+        ConfirmationCandidate candidate = new ConfirmationCandidate("ai_next_question", question, options);
+        return asksUserToClassifyViolenceType(candidate) ? null : candidate;
     }
 
     private static Map<String, String> parseAiOption(String optionLine) {
@@ -3663,6 +3716,7 @@ public class ChatService {
                 || reply.contains("맞음, 밀침, 넘어짐, 상처")
                 || reply.contains("선생님이나 어른이 계신가요")
                 || reply.contains("채팅방에 참여하고 있는 친구들 중에 선생님")
+                || asksUserToClassifyViolenceTypeText(reply)
                 || containsUnsafeGroupChatExitAdvice(reply)
                 || (reply.contains("채팅방") && (reply.contains("어른") || reply.contains("선생님"))
                 && (reply.contains("있") || reply.contains("계신")));
@@ -3676,6 +3730,7 @@ public class ChatService {
                 .filter(line -> !line.contains("추가 확인 질문 없이"))
                 .filter(line -> !line.contains("추가 확인 필요가 아니므로"))
                 .filter(line -> !containsDanglingQuestionLeadIn(line))
+                .filter(line -> !asksUserToClassifyViolenceTypeText(line))
                 .filter(line -> !containsRemovableBadReplyPhrase(line))
                 .filter(line -> !containsForbiddenTemplatePhrase(line))
                 .filter(line -> !hasUnsafePhysicalViolenceAdvice(line))
