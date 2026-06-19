@@ -7,6 +7,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -33,14 +36,17 @@ public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
+    private final ClientRegistrationRepository clientRegistrationRepository;
     private final String frontendUrl;
     private final String allowedOrigins;
 
     public SecurityConfig(JwtFilter jwtFilter, OAuth2SuccessHandler oAuth2SuccessHandler,
+                          ClientRegistrationRepository clientRegistrationRepository,
                           @Value("${app.frontend-url}") String frontendUrl,
                           @Value("${app.cors.allowed-origins}") String allowedOrigins) {
         this.jwtFilter = jwtFilter;
         this.oAuth2SuccessHandler = oAuth2SuccessHandler;
+        this.clientRegistrationRepository = clientRegistrationRepository;
         this.frontendUrl = stripTrailingSlash(frontendUrl);
         this.allowedOrigins = allowedOrigins;
     }
@@ -58,6 +64,9 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .oauth2Login(oauth2 -> oauth2
+                .authorizationEndpoint(endpoint -> endpoint
+                    .authorizationRequestResolver(authorizationRequestResolver())
+                )
                 .successHandler(oAuth2SuccessHandler)
                 .failureHandler(this::handleOAuthFailure)
             )
@@ -70,6 +79,14 @@ public class SecurityConfig {
             .headers(h -> h.frameOptions(f -> f.disable()))
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    private OAuth2AuthorizationRequestResolver authorizationRequestResolver() {
+        DefaultOAuth2AuthorizationRequestResolver resolver =
+                new DefaultOAuth2AuthorizationRequestResolver(clientRegistrationRepository, "/oauth2/authorization");
+        resolver.setAuthorizationRequestCustomizer(customizer ->
+                customizer.additionalParameters(parameters -> parameters.put("prompt", "select_account")));
+        return resolver;
     }
 
     private void handleOAuthFailure(HttpServletRequest req, HttpServletResponse res, AuthenticationException error)

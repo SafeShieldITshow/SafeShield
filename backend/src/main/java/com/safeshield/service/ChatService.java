@@ -230,13 +230,13 @@ public class ChatService {
         List<Message> history = messageRepository.findBySessionOrderByCreatedAtAsc(session);
         ReportReadiness readiness = assessReadiness(history);
         if (shouldGuardIrrelevantInput(normalized, hasConversationContext(history), isConversationalFollowUp(normalized, history))) {
-            String reply = buildConversationStoppedReply(stopReasonForInput(normalized));
+            String reply = buildScopeNudgeReply(stopReasonForInput(normalized));
             Message aiMessage = new Message();
             aiMessage.setSession(session);
             aiMessage.setRole("assistant");
             aiMessage.setContent(reply);
             messageRepository.save(aiMessage);
-            return stoppedResponse(
+            return guardedResponse(
                     session,
                     reply,
                     messageRepository.countBySessionAndRole(session, "user"),
@@ -312,7 +312,7 @@ public class ChatService {
 
         List<Message> history = guestHistory(clientHistory, normalized);
         ReportReadiness readiness = assessReadiness(history);
-        if (isConversationStopped(history) || shouldGuardIrrelevantInput(normalized, hasConversationContext(history), isConversationalFollowUp(normalized, history))) {
+        if (isConversationStopped(history)) {
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("session_id", null);
             response.put("reply", buildConversationStoppedReply(stopReasonForInput(normalized)));
@@ -326,6 +326,13 @@ public class ChatService {
             response.put("conversation_stopped", true);
             response.put("temporary", true);
             return response;
+        }
+        if (shouldGuardIrrelevantInput(normalized, hasConversationContext(history), isConversationalFollowUp(normalized, history))) {
+            return guardedGuestResponse(
+                    buildScopeNudgeReply(stopReasonForInput(normalized)),
+                    userMessageCount(history),
+                    readiness
+            );
         }
         GeneratedReply generatedReply = getAiReply(history);
         List<Map<String, Object>> confirmationPrompts = confirmationPrompts(readiness, history, generatedReply.followUpQuestion());
@@ -485,6 +492,45 @@ public class ChatService {
         response.put("missing_info", readiness == null ? List.of() : readiness.missingInfo());
         response.put("confirmation_prompts", List.of());
         response.put("conversation_stopped", true);
+        return response;
+    }
+
+    private Map<String, Object> guardedResponse(Session session, String reply, long userMessageCount, ReportReadiness readiness) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("session_id", session.getId());
+        response.put("reply", reply);
+        response.put("user_message_count", userMessageCount);
+        response.put("new_session_started", false);
+        response.put("report_generated", false);
+        response.put("report_updated", false);
+        response.put("report_ready", false);
+        response.put("report_requested", false);
+        response.put("report_suggested", false);
+        response.put("report_status", readiness == null ? "상담 범위 안내" : readiness.status());
+        response.put("report_reason", "상담 범위를 다시 안내했습니다.");
+        response.put("missing_info", readiness == null ? List.of() : readiness.missingInfo());
+        response.put("confirmation_prompts", List.of());
+        response.put("conversation_stopped", false);
+        return response;
+    }
+
+    private Map<String, Object> guardedGuestResponse(String reply, long userMessageCount, ReportReadiness readiness) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("session_id", null);
+        response.put("reply", reply);
+        response.put("user_message_count", userMessageCount);
+        response.put("new_session_started", false);
+        response.put("report_generated", false);
+        response.put("report_updated", false);
+        response.put("report_ready", false);
+        response.put("report_requested", false);
+        response.put("report_suggested", false);
+        response.put("report_status", readiness == null ? "상담 범위 안내" : readiness.status());
+        response.put("report_reason", "상담 범위를 다시 안내했습니다.");
+        response.put("missing_info", readiness == null ? List.of() : readiness.missingInfo());
+        response.put("confirmation_prompts", List.of());
+        response.put("conversation_stopped", false);
+        response.put("temporary", true);
         return response;
     }
 
@@ -2470,11 +2516,20 @@ public class ChatService {
     }
 
     private String buildIrrelevantInputReply() {
-        return buildConversationStoppedReply("학교폭력 상담과 무관한 입력입니다.");
+        return buildScopeNudgeReply("학교폭력 상담과 무관한 입력입니다.");
     }
 
     private String buildPerpetratorOffTopicReply() {
-        return buildConversationStoppedReply("본인이 한 행동과 피해 회복 상담에 무관한 입력입니다.");
+        return buildScopeNudgeReply("본인이 한 행동과 피해 회복 상담에 무관한 입력입니다.");
+    }
+
+    private String buildScopeNudgeReply(String reason) {
+        return """
+                상담 범위를 다시 맞춰볼게요.
+                이유: %s
+
+                S-Shield는 학교폭력 상담, 증거 정리, 신고 준비를 돕는 채팅이에요. 지금 겪은 일이나 걱정되는 상황을 한 문장으로만 적어줘도 이어서 도와드릴게요.
+                """.formatted(reason).trim();
     }
 
     private String buildConversationStoppedReply(String reason) {

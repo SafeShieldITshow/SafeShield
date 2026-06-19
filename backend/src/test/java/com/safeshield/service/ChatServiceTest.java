@@ -1379,6 +1379,24 @@ class ChatServiceTest {
     }
 
     @Test
+    void guestIrrelevantInputNudgesWithoutStoppingConversation() {
+        ChatService service = new ChatService(
+                mock(SessionRepository.class),
+                mock(MessageRepository.class),
+                mock(ReportRepository.class),
+                mock(LawApiService.class),
+                mock(AnalysisService.class),
+                mock(ReportService.class)
+        );
+
+        Map<String, Object> response = service.sendGuestMessage("똥싸기", List.of());
+
+        assertEquals(false, response.get("conversation_stopped"));
+        assertTrue(String.valueOf(response.get("reply")).contains("상담 범위"));
+        assertFalse(String.valueOf(response.get("reply")).contains("대화가 중단"));
+    }
+
+    @Test
     void doesNotRepeatAnsweredCoreConfirmationQuestion() {
         ReportReadiness relationshipMissing = new ReportReadiness(
                 false,
