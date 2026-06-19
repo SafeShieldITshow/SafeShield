@@ -554,7 +554,18 @@ public class ChatService {
             List<Map<String, Object>> prompts = confirmationPrompts(readiness, history);
             if (!prompts.isEmpty()) return prompts;
         }
-        return List.of(confirmationPrompt(incidentQuestion("")));
+        String text = combinedUserText(history);
+        Set<String> answeredFamilies = answeredQuestionFamilies(history);
+        List<ConfirmationCandidate> candidates = retryCandidatesFromMissingInfo(readiness, text, answeredFamilies);
+        if (candidates.isEmpty()) {
+            candidates = retryCandidatesForUnansweredFamilies(text, answeredFamilies);
+        }
+        return candidates.stream()
+                .filter(candidate -> isCandidateCompatibleWithContext(candidate, text))
+                .filter(candidate -> !isConfirmationCandidateAnswered(candidate.id(), text))
+                .limit(1)
+                .map(ChatService::confirmationPrompt)
+                .toList();
     }
 
     private String buildRetryAnswerReply(String reason, List<Map<String, Object>> prompts) {
@@ -569,6 +580,51 @@ public class ChatService {
 
                 아래 확인 질문에 다시 답해 주세요.%s
                 """.formatted(reason, questionLine).trim();
+    }
+
+    private static List<ConfirmationCandidate> retryCandidatesFromMissingInfo(
+            ReportReadiness readiness,
+            String text,
+            Set<String> answeredFamilies
+    ) {
+        if (readiness == null || readiness.missingInfo().isEmpty()) return List.of();
+        List<ConfirmationCandidate> candidates = new ArrayList<>();
+        for (String missing : readiness.missingInfo()) {
+            String family = missingInfoFamily(missing);
+            if ("conversation_depth".equals(family)) {
+                candidates.addAll(retryCandidatesForUnansweredFamilies(text, answeredFamilies));
+            } else if (!family.isBlank() && !hasReportAnswer(family, text, answeredFamilies)) {
+                candidates.add(retryCandidateForFamily(family, text));
+            }
+        }
+        return candidates.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private static List<ConfirmationCandidate> retryCandidatesForUnansweredFamilies(
+            String text,
+            Set<String> answeredFamilies
+    ) {
+        return List.of("incident", "relationship", "timeline", "evidence", "impact", "goal").stream()
+                .filter(family -> !hasReportAnswer(family, text, answeredFamilies))
+                .map(family -> retryCandidateForFamily(family, text))
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private static ConfirmationCandidate retryCandidateForFamily(String family, String text) {
+        return switch (family) {
+            case "incident" -> incidentQuestion(text);
+            case "relationship" -> relationshipQuestion(text);
+            case "timeline" -> timelineQuestion(text);
+            case "evidence" -> evidenceQuestion(text);
+            case "impact" -> impactQuestion(text);
+            case "goal" -> goalQuestion(text);
+            default -> null;
+        };
     }
 
     private void putCounselingMetadata(

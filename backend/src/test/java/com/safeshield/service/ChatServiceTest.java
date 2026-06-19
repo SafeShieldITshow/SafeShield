@@ -1398,6 +1398,31 @@ class ChatServiceTest {
     }
 
     @Test
+    void guestIrrelevantFollowUpDoesNotRepeatAnsweredIncidentQuestion() {
+        ChatService service = new ChatService(
+                mock(SessionRepository.class),
+                mock(MessageRepository.class),
+                mock(ReportRepository.class),
+                mock(LawApiService.class),
+                mock(AnalysisService.class),
+                mock(ReportService.class)
+        );
+
+        Map<String, Object> response = service.sendGuestMessage(
+                "똥싸기",
+                List.of(new com.safeshield.dto.MessageRequest.HistoryMessage(
+                        "user",
+                        "친구가 단체 채팅방에서 계속 욕하고 놀렸어요."
+                ))
+        );
+
+        List<?> prompts = (List<?>) response.get("confirmation_prompts");
+        assertFalse(prompts.isEmpty());
+        String question = String.valueOf(((Map<?, ?>) prompts.get(0)).get("question"));
+        assertFalse(question.contains("실제로 어떤 행동"));
+    }
+
+    @Test
     void doesNotRepeatAnsweredCoreConfirmationQuestion() {
         ReportReadiness relationshipMissing = new ReportReadiness(
                 false,
