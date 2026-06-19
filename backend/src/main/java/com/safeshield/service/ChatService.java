@@ -230,7 +230,8 @@ public class ChatService {
         List<Message> history = messageRepository.findBySessionOrderByCreatedAtAsc(session);
         ReportReadiness readiness = assessReadiness(history);
         if (shouldGuardIrrelevantInput(normalized, hasConversationContext(history), isConversationalFollowUp(normalized, history))) {
-            String reply = buildScopeNudgeReply(stopReasonForInput(normalized));
+            List<Map<String, Object>> retryPrompts = retryConfirmationPrompts(readiness, history);
+            String reply = buildRetryAnswerReply(stopReasonForInput(normalized), retryPrompts);
             Message aiMessage = new Message();
             aiMessage.setSession(session);
             aiMessage.setRole("assistant");
@@ -240,7 +241,8 @@ public class ChatService {
                     session,
                     reply,
                     messageRepository.countBySessionAndRole(session, "user"),
-                    readiness
+                    readiness,
+                    retryPrompts
             );
         }
 
@@ -328,10 +330,12 @@ public class ChatService {
             return response;
         }
         if (shouldGuardIrrelevantInput(normalized, hasConversationContext(history), isConversationalFollowUp(normalized, history))) {
+            List<Map<String, Object>> retryPrompts = retryConfirmationPrompts(readiness, history);
             return guardedGuestResponse(
-                    buildScopeNudgeReply(stopReasonForInput(normalized)),
+                    buildRetryAnswerReply(stopReasonForInput(normalized), retryPrompts),
                     userMessageCount(history),
-                    readiness
+                    readiness,
+                    retryPrompts
             );
         }
         GeneratedReply generatedReply = getAiReply(history);
@@ -495,7 +499,13 @@ public class ChatService {
         return response;
     }
 
-    private Map<String, Object> guardedResponse(Session session, String reply, long userMessageCount, ReportReadiness readiness) {
+    private Map<String, Object> guardedResponse(
+            Session session,
+            String reply,
+            long userMessageCount,
+            ReportReadiness readiness,
+            List<Map<String, Object>> confirmationPrompts
+    ) {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("session_id", session.getId());
         response.put("reply", reply);
@@ -507,14 +517,19 @@ public class ChatService {
         response.put("report_requested", false);
         response.put("report_suggested", false);
         response.put("report_status", readiness == null ? "상담 범위 안내" : readiness.status());
-        response.put("report_reason", "상담 범위를 다시 안내했습니다.");
+        response.put("report_reason", "답변을 다시 확인해야 합니다.");
         response.put("missing_info", readiness == null ? List.of() : readiness.missingInfo());
-        response.put("confirmation_prompts", List.of());
+        response.put("confirmation_prompts", confirmationPrompts == null ? List.of() : confirmationPrompts);
         response.put("conversation_stopped", false);
         return response;
     }
 
-    private Map<String, Object> guardedGuestResponse(String reply, long userMessageCount, ReportReadiness readiness) {
+    private Map<String, Object> guardedGuestResponse(
+            String reply,
+            long userMessageCount,
+            ReportReadiness readiness,
+            List<Map<String, Object>> confirmationPrompts
+    ) {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("session_id", null);
         response.put("reply", reply);
@@ -526,12 +541,34 @@ public class ChatService {
         response.put("report_requested", false);
         response.put("report_suggested", false);
         response.put("report_status", readiness == null ? "상담 범위 안내" : readiness.status());
-        response.put("report_reason", "상담 범위를 다시 안내했습니다.");
+        response.put("report_reason", "답변을 다시 확인해야 합니다.");
         response.put("missing_info", readiness == null ? List.of() : readiness.missingInfo());
-        response.put("confirmation_prompts", List.of());
+        response.put("confirmation_prompts", confirmationPrompts == null ? List.of() : confirmationPrompts);
         response.put("conversation_stopped", false);
         response.put("temporary", true);
         return response;
+    }
+
+    private List<Map<String, Object>> retryConfirmationPrompts(ReportReadiness readiness, List<Message> history) {
+        if (readiness != null && !readiness.ready()) {
+            List<Map<String, Object>> prompts = confirmationPrompts(readiness, history);
+            if (!prompts.isEmpty()) return prompts;
+        }
+        return List.of(confirmationPrompt(incidentQuestion("")));
+    }
+
+    private String buildRetryAnswerReply(String reason, List<Map<String, Object>> prompts) {
+        if (prompts == null || prompts.isEmpty()) {
+            return buildScopeNudgeReply(reason);
+        }
+        String question = firstConfirmationQuestion(prompts);
+        String questionLine = question.isBlank() ? "" : "\n질문: " + question;
+        return """
+                방금 답변으로는 확인이 어려워요.
+                이유: %s
+
+                아래 확인 질문에 다시 답해 주세요.%s
+                """.formatted(reason, questionLine).trim();
     }
 
     private void putCounselingMetadata(

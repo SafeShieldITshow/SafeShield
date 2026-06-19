@@ -1379,7 +1379,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void guestIrrelevantInputNudgesWithoutStoppingConversation() {
+    void guestIrrelevantInputRepeatsQuestionWithoutStoppingConversation() {
         ChatService service = new ChatService(
                 mock(SessionRepository.class),
                 mock(MessageRepository.class),
@@ -1392,7 +1392,8 @@ class ChatServiceTest {
         Map<String, Object> response = service.sendGuestMessage("똥싸기", List.of());
 
         assertEquals(false, response.get("conversation_stopped"));
-        assertTrue(String.valueOf(response.get("reply")).contains("상담 범위"));
+        assertTrue(String.valueOf(response.get("reply")).contains("다시 답"));
+        assertFalse(((List<?>) response.get("confirmation_prompts")).isEmpty());
         assertFalse(String.valueOf(response.get("reply")).contains("대화가 중단"));
     }
 
