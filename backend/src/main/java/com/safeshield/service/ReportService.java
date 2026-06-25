@@ -13,6 +13,7 @@ import com.safeshield.repository.ReportRepository;
 import com.safeshield.repository.SessionRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashSet;
@@ -409,9 +410,10 @@ public class ReportService {
         return toMap(report);
     }
 
+    @Transactional
     public void delete(User user, Long id) {
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "리포트를 찾을 수 없습니다."));
+        Report report = reportRepository.findById(id).orElse(null);
+        if (report == null) return;
         if (!report.getUser().getId().equals(user.getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "리포트 접근 권한이 없습니다.");
         }

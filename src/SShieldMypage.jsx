@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import './SShieldMypage.css';
 import { api, clearSession } from './api.js';
@@ -17,11 +17,15 @@ const SShieldMypage = () => {
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
     const [showDeleteSessionConfirm, setShowDeleteSessionConfirm] = useState(null);
+    const [deletingReportId, setDeletingReportId] = useState(null);
+    const [deletingSessionId, setDeletingSessionId] = useState(null);
     const [stats, setStats] = useState(null);
     const [reports, setReports] = useState([]);
     const [sessions, setSessions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const deletingReportsRef = useRef(new Set());
+    const deletingSessionsRef = useRef(new Set());
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -46,19 +50,34 @@ const SShieldMypage = () => {
     }, [loading, location.hash]);
 
     const handleDelete = async (id) => {
+        if (deletingReportsRef.current.has(id)) return;
+        deletingReportsRef.current.add(id);
+        setDeletingReportId(id);
         try {
             await api.del(`/reports/${id}`);
             setReports((prev) => prev.filter((report) => report.id !== id));
             setStats((prev) => prev ? { ...prev, reports_count: Math.max(0, (prev.reports_count ?? 1) - 1) } : prev);
         } catch (e) {
-            alert(e.message);
+            if (e.status === 404) {
+                setReports((prev) => prev.filter((report) => report.id !== id));
+                setStats((prev) => prev ? { ...prev, reports_count: Math.max(0, (prev.reports_count ?? 1) - 1) } : prev);
+            } else {
+                alert(e.message);
+            }
+        } finally {
+            deletingReportsRef.current.delete(id);
+            setDeletingReportId(null);
+            setShowDeleteConfirm(null);
         }
-        setShowDeleteConfirm(null);
     };
 
     const handleDeleteSession = async (session) => {
         const id = session?.session_id;
         if (!id) return;
+        if (deletingSessionsRef.current.has(id)) return;
+        deletingSessionsRef.current.add(id);
+        setDeletingSessionId(id);
+        const removedReportCount = reports.filter((report) => report.session_id === id).length;
         try {
             await api.del(`/chat/sessions/${id}`);
             setSessions((prev) => prev.filter((item) => item.session_id !== id));
@@ -66,12 +85,25 @@ const SShieldMypage = () => {
             setStats((prev) => prev ? {
                 ...prev,
                 sessions_count: Math.max(0, (prev.sessions_count ?? 1) - 1),
-                reports_count: Math.max(0, (prev.reports_count ?? 0) - reports.filter((report) => report.session_id === id).length),
+                reports_count: Math.max(0, (prev.reports_count ?? 0) - removedReportCount),
             } : prev);
         } catch (e) {
-            alert(e.message);
+            if (e.status === 404) {
+                setSessions((prev) => prev.filter((item) => item.session_id !== id));
+                setReports((prev) => prev.filter((report) => report.session_id !== id));
+                setStats((prev) => prev ? {
+                    ...prev,
+                    sessions_count: Math.max(0, (prev.sessions_count ?? 1) - 1),
+                    reports_count: Math.max(0, (prev.reports_count ?? 0) - removedReportCount),
+                } : prev);
+            } else {
+                alert(e.message);
+            }
+        } finally {
+            deletingSessionsRef.current.delete(id);
+            setDeletingSessionId(null);
+            setShowDeleteSessionConfirm(null);
         }
-        setShowDeleteSessionConfirm(null);
     };
 
     const logout = () => {
@@ -229,7 +261,13 @@ const SShieldMypage = () => {
                                             </div>
                                             <div className="actions">
                                                 <button className="btnDetail" onClick={() => navigate(`/result?id=${item.id}`)}>상세 보기</button>
-                                                <button className="btnDelete" onClick={() => setShowDeleteConfirm(item.id)}>삭제</button>
+                                                <button
+                                                    className="btnDelete"
+                                                    onClick={() => setShowDeleteConfirm(item.id)}
+                                                    disabled={deletingReportId === item.id}
+                                                >
+                                                    {deletingReportId === item.id ? '삭제 중' : '삭제'}
+                                                </button>
                                             </div>
                                         </div>
                                     );
@@ -267,7 +305,13 @@ const SShieldMypage = () => {
                         </p>
                         <div className="confirm-btns">
                             <button className="confirm-btn-cancel" onClick={() => setShowDeleteConfirm(null)}>취소</button>
-                            <button className="confirm-btn-ok" onClick={() => handleDelete(showDeleteConfirm)}>삭제</button>
+                            <button
+                                className="confirm-btn-ok"
+                                onClick={() => handleDelete(showDeleteConfirm)}
+                                disabled={deletingReportId === showDeleteConfirm}
+                            >
+                                {deletingReportId === showDeleteConfirm ? '삭제 중...' : '삭제'}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -283,7 +327,13 @@ const SShieldMypage = () => {
                         </p>
                         <div className="confirm-btns">
                             <button className="confirm-btn-cancel" onClick={() => setShowDeleteSessionConfirm(null)}>취소</button>
-                            <button className="confirm-btn-ok" onClick={() => handleDeleteSession(showDeleteSessionConfirm)}>삭제</button>
+                            <button
+                                className="confirm-btn-ok"
+                                onClick={() => handleDeleteSession(showDeleteSessionConfirm)}
+                                disabled={deletingSessionId === showDeleteSessionConfirm?.session_id}
+                            >
+                                {deletingSessionId === showDeleteSessionConfirm?.session_id ? '삭제 중...' : '삭제'}
+                            </button>
                         </div>
                     </div>
                 </div>

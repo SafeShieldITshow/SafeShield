@@ -230,8 +230,7 @@ public class ChatService {
         List<Message> history = messageRepository.findBySessionOrderByCreatedAtAsc(session);
         ReportReadiness readiness = assessReadiness(history);
         if (shouldGuardIrrelevantInput(normalized, hasConversationContext(history), isConversationalFollowUp(normalized, history))) {
-            List<Map<String, Object>> retryPrompts = retryConfirmationPrompts(readiness, history);
-            String reply = buildRetryAnswerReply(stopReasonForInput(normalized), retryPrompts);
+            String reply = buildScopeNudgeReply(stopReasonForInput(normalized));
             Message aiMessage = new Message();
             aiMessage.setSession(session);
             aiMessage.setRole("assistant");
@@ -241,8 +240,7 @@ public class ChatService {
                     session,
                     reply,
                     messageRepository.countBySessionAndRole(session, "user"),
-                    readiness,
-                    retryPrompts
+                    readiness
             );
         }
 
@@ -330,12 +328,10 @@ public class ChatService {
             return response;
         }
         if (shouldGuardIrrelevantInput(normalized, hasConversationContext(history), isConversationalFollowUp(normalized, history))) {
-            List<Map<String, Object>> retryPrompts = retryConfirmationPrompts(readiness, history);
             return guardedGuestResponse(
-                    buildRetryAnswerReply(stopReasonForInput(normalized), retryPrompts),
+                    buildScopeNudgeReply(stopReasonForInput(normalized)),
                     userMessageCount(history),
-                    readiness,
-                    retryPrompts
+                    readiness
             );
         }
         GeneratedReply generatedReply = getAiReply(history);
@@ -448,8 +444,8 @@ public class ChatService {
 
     @Transactional
     public void deleteSession(Long sessionId, User user) {
-        Session session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "상담 세션을 찾을 수 없습니다."));
+        Session session = sessionRepository.findById(sessionId).orElse(null);
+        if (session == null) return;
         requireOwner(user, session);
 
         reportRepository.deleteBySession(session);
@@ -499,13 +495,7 @@ public class ChatService {
         return response;
     }
 
-    private Map<String, Object> guardedResponse(
-            Session session,
-            String reply,
-            long userMessageCount,
-            ReportReadiness readiness,
-            List<Map<String, Object>> confirmationPrompts
-    ) {
+    private Map<String, Object> guardedResponse(Session session, String reply, long userMessageCount, ReportReadiness readiness) {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("session_id", session.getId());
         response.put("reply", reply);
@@ -517,19 +507,14 @@ public class ChatService {
         response.put("report_requested", false);
         response.put("report_suggested", false);
         response.put("report_status", readiness == null ? "상담 범위 안내" : readiness.status());
-        response.put("report_reason", "답변을 다시 확인해야 합니다.");
+        response.put("report_reason", "상담 범위를 다시 안내했습니다.");
         response.put("missing_info", readiness == null ? List.of() : readiness.missingInfo());
-        response.put("confirmation_prompts", confirmationPrompts == null ? List.of() : confirmationPrompts);
+        response.put("confirmation_prompts", List.of());
         response.put("conversation_stopped", false);
         return response;
     }
 
-    private Map<String, Object> guardedGuestResponse(
-            String reply,
-            long userMessageCount,
-            ReportReadiness readiness,
-            List<Map<String, Object>> confirmationPrompts
-    ) {
+    private Map<String, Object> guardedGuestResponse(String reply, long userMessageCount, ReportReadiness readiness) {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("session_id", null);
         response.put("reply", reply);
@@ -541,90 +526,12 @@ public class ChatService {
         response.put("report_requested", false);
         response.put("report_suggested", false);
         response.put("report_status", readiness == null ? "상담 범위 안내" : readiness.status());
-        response.put("report_reason", "답변을 다시 확인해야 합니다.");
+        response.put("report_reason", "상담 범위를 다시 안내했습니다.");
         response.put("missing_info", readiness == null ? List.of() : readiness.missingInfo());
-        response.put("confirmation_prompts", confirmationPrompts == null ? List.of() : confirmationPrompts);
+        response.put("confirmation_prompts", List.of());
         response.put("conversation_stopped", false);
         response.put("temporary", true);
         return response;
-    }
-
-    private List<Map<String, Object>> retryConfirmationPrompts(ReportReadiness readiness, List<Message> history) {
-        if (readiness != null && !readiness.ready()) {
-            List<Map<String, Object>> prompts = confirmationPrompts(readiness, history);
-            if (!prompts.isEmpty()) return prompts;
-        }
-        String text = combinedUserText(history);
-        Set<String> answeredFamilies = answeredQuestionFamilies(history);
-        List<ConfirmationCandidate> candidates = retryCandidatesFromMissingInfo(readiness, text, answeredFamilies);
-        if (candidates.isEmpty()) {
-            candidates = retryCandidatesForUnansweredFamilies(text, answeredFamilies);
-        }
-        return candidates.stream()
-                .filter(candidate -> isCandidateCompatibleWithContext(candidate, text))
-                .filter(candidate -> !isConfirmationCandidateAnswered(candidate.id(), text))
-                .limit(1)
-                .map(ChatService::confirmationPrompt)
-                .toList();
-    }
-
-    private String buildRetryAnswerReply(String reason, List<Map<String, Object>> prompts) {
-        if (prompts == null || prompts.isEmpty()) {
-            return buildScopeNudgeReply(reason);
-        }
-        String question = firstConfirmationQuestion(prompts);
-        String questionLine = question.isBlank() ? "" : "\n질문: " + question;
-        return """
-                방금 답변으로는 확인이 어려워요.
-                이유: %s
-
-                아래 확인 질문에 다시 답해 주세요.%s
-                """.formatted(reason, questionLine).trim();
-    }
-
-    private static List<ConfirmationCandidate> retryCandidatesFromMissingInfo(
-            ReportReadiness readiness,
-            String text,
-            Set<String> answeredFamilies
-    ) {
-        if (readiness == null || readiness.missingInfo().isEmpty()) return List.of();
-        List<ConfirmationCandidate> candidates = new ArrayList<>();
-        for (String missing : readiness.missingInfo()) {
-            String family = missingInfoFamily(missing);
-            if ("conversation_depth".equals(family)) {
-                candidates.addAll(retryCandidatesForUnansweredFamilies(text, answeredFamilies));
-            } else if (!family.isBlank() && !hasReportAnswer(family, text, answeredFamilies)) {
-                candidates.add(retryCandidateForFamily(family, text));
-            }
-        }
-        return candidates.stream()
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-    }
-
-    private static List<ConfirmationCandidate> retryCandidatesForUnansweredFamilies(
-            String text,
-            Set<String> answeredFamilies
-    ) {
-        return List.of("incident", "relationship", "timeline", "evidence", "impact", "goal").stream()
-                .filter(family -> !hasReportAnswer(family, text, answeredFamilies))
-                .map(family -> retryCandidateForFamily(family, text))
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-    }
-
-    private static ConfirmationCandidate retryCandidateForFamily(String family, String text) {
-        return switch (family) {
-            case "incident" -> incidentQuestion(text);
-            case "relationship" -> relationshipQuestion(text);
-            case "timeline" -> timelineQuestion(text);
-            case "evidence" -> evidenceQuestion(text);
-            case "impact" -> impactQuestion(text);
-            case "goal" -> goalQuestion(text);
-            default -> null;
-        };
     }
 
     private void putCounselingMetadata(
@@ -1104,14 +1011,7 @@ public class ChatService {
         boolean hadCandidates = !candidates.isEmpty();
         boolean hadAnsweredCandidate = candidates.stream()
                 .anyMatch(candidate -> isConfirmationCandidateAnswered(candidate.id(), text));
-        boolean hadAnsweredIncidentCandidate = candidates.stream()
-                .anyMatch(candidate -> "incident".equals(questionFamily(candidate.id()))
-                        && isConfirmationCandidateAnswered(candidate.id(), text));
         candidates = filterUsableCandidates(candidates, text, history);
-
-        if (candidates.isEmpty() && hadAnsweredIncidentCandidate) {
-            candidates = filterUsableCandidates(deepDiveQuestions(text, userMessageCount), text, history);
-        }
 
         if (candidates.isEmpty() && shouldUseFallbackQuestion(hadCandidates, hadAnsweredCandidate, text, readiness)) {
             List<ConfirmationCandidate> fallback = new ArrayList<>(deepDiveQuestions(text, userMessageCount));
@@ -1127,7 +1027,6 @@ public class ChatService {
             List<Message> history
     ) {
         return new ArrayList<>(candidates.stream()
-                .filter(candidate -> !asksUserToClassifyViolenceType(candidate))
                 .filter(candidate -> isCandidateCompatibleWithContext(candidate, text))
                 .filter(candidate -> !isConfirmationCandidateAnswered(candidate.id(), text))
                 .filter(candidate -> !wasCandidateAnsweredAfterQuestion(candidate, history))
@@ -1174,49 +1073,6 @@ public class ChatService {
                         .map(option -> option.getOrDefault("label", "") + " " + option.getOrDefault("message", ""))
                         .collect(Collectors.joining(" "));
         return hasAny(text, "맞음", "밀침", "넘어짐", "상처", "신체 폭력", "때리거나 밀치는");
-    }
-
-    private static boolean asksUserToClassifyViolenceType(ConfirmationCandidate candidate) {
-        if (candidate == null) return false;
-        String question = candidate.question() == null ? "" : candidate.question();
-        if (asksUserToClassifyViolenceTypeText(question)) return true;
-
-        long typeOptionCount = candidate.options().stream()
-                .map(option -> option.getOrDefault("label", "") + " " + option.getOrDefault("message", ""))
-                .filter(ChatService::looksLikeViolenceTypeLabel)
-                .count();
-        return typeOptionCount >= 2 && asksUserToChooseText(question);
-    }
-
-    private static boolean asksUserToClassifyViolenceTypeText(String text) {
-        String t = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
-        if (t.isBlank()) return false;
-        if (containsAny(t, "제가 판단", "ai가 판단", "상담 ai가 판단", "제가 정리")) return false;
-
-        boolean mentionsType = containsAny(t,
-                "학교폭력 유형", "폭력 유형", "어떤 유형", "무슨 유형", "무엇으로 볼", "뭐로 볼",
-                "유형을", "유형은", "유형이", "유형에");
-        boolean asksChoice = asksUserToChooseText(t);
-        boolean presentsTypeOptions = violenceTypeNameCount(t) >= 2;
-        return (mentionsType && asksChoice) || (presentsTypeOptions && asksChoice);
-    }
-
-    private static boolean asksUserToChooseText(String text) {
-        String t = text == null ? "" : text.toLowerCase(Locale.ROOT);
-        return containsAny(t,
-                "고르", "골라", "선택", "답해", "알려", "말해", "해당", "가까운",
-                "무엇", "뭐", "무슨", "어떤", "인가요", "나요", "?");
-    }
-
-    private static boolean looksLikeViolenceTypeLabel(String text) {
-        return violenceTypeNameCount(text) >= 1;
-    }
-
-    private static long violenceTypeNameCount(String text) {
-        String t = text == null ? "" : text.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
-        return List.of("신체폭력", "언어폭력", "사이버폭력", "따돌림", "성폭력", "스토킹", "갈취").stream()
-                .filter(t::contains)
-                .count();
     }
 
     private static boolean shouldUseFallbackQuestion(
@@ -1396,10 +1252,9 @@ public class ChatService {
     }
 
     private static boolean hasIncidentAnswer(String text) {
-        return hasViolenceTypeSignal(text) || hasAny(text,
+        return hasAny(text,
                 "욕설", "비방", "모욕", "조롱", "사진", "영상", "게시물", "댓글",
                 "공유", "유포", "맞거나", "가격", "밀치", "넘어뜨", "상처", "멍",
-                "욕", "욕먹", "놀림", "놀렸", "놀리", "비하", "협박", "따돌", "왕따",
                 "따돌림", "배제", "괴롭힘", "때리거나 밀치는 신체 폭력",
                 "신체 접촉", "신체 폭력", "원하지 않는", "만졌", "만지는", "성적으로", "불쾌",
                 "성추행", "성희롱", "배설물", "똥을", "오줌", "소변", "대변");
@@ -3558,8 +3413,7 @@ public class ChatService {
         if (options.isEmpty()) {
             options = List.of(option("직접 입력", "확인 답변: "));
         }
-        ConfirmationCandidate candidate = new ConfirmationCandidate("ai_next_question", question, options);
-        return asksUserToClassifyViolenceType(candidate) ? null : candidate;
+        return new ConfirmationCandidate("ai_next_question", question, options);
     }
 
     private static Map<String, String> parseAiOption(String optionLine) {
@@ -3716,7 +3570,6 @@ public class ChatService {
                 || reply.contains("맞음, 밀침, 넘어짐, 상처")
                 || reply.contains("선생님이나 어른이 계신가요")
                 || reply.contains("채팅방에 참여하고 있는 친구들 중에 선생님")
-                || asksUserToClassifyViolenceTypeText(reply)
                 || containsUnsafeGroupChatExitAdvice(reply)
                 || (reply.contains("채팅방") && (reply.contains("어른") || reply.contains("선생님"))
                 && (reply.contains("있") || reply.contains("계신")));
@@ -3730,7 +3583,6 @@ public class ChatService {
                 .filter(line -> !line.contains("추가 확인 질문 없이"))
                 .filter(line -> !line.contains("추가 확인 필요가 아니므로"))
                 .filter(line -> !containsDanglingQuestionLeadIn(line))
-                .filter(line -> !asksUserToClassifyViolenceTypeText(line))
                 .filter(line -> !containsRemovableBadReplyPhrase(line))
                 .filter(line -> !containsForbiddenTemplatePhrase(line))
                 .filter(line -> !hasUnsafePhysicalViolenceAdvice(line))

@@ -1189,6 +1189,7 @@
   .example-chip {
     flex: 1 1 100%;
     max-width: 100%;
+    min-height: 36px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1433,9 +1434,9 @@
 }
 
 .example-chip {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
-  color: #c9c7d5;
+  background: rgba(126, 116, 240, 0.12);
+  border-color: rgba(126, 116, 240, 0.26);
+  color: #e8e5ff;
   box-shadow: none;
 }
 
@@ -1465,6 +1466,13 @@
 .confirmation-submit-btn:disabled {
   color: #ffffff;
   opacity: 0.55;
+}
+
+.example-chip:disabled {
+  background: rgba(126, 116, 240, 0.1);
+  border-color: rgba(126, 116, 240, 0.18);
+  color: #d8d5f7;
+  opacity: 0.72;
 }
 
 .chat-cta {

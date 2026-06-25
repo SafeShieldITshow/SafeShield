@@ -21,6 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class ChatServiceTest {
@@ -62,6 +64,32 @@ class ChatServiceTest {
         verify(reportRepository).deleteBySession(session);
         verify(messageRepository).deleteBySession(session);
         verify(sessionRepository).delete(session);
+    }
+
+    @Test
+    void deleteSessionIgnoresAlreadyDeletedSession() {
+        SessionRepository sessionRepository = mock(SessionRepository.class);
+        MessageRepository messageRepository = mock(MessageRepository.class);
+        ReportRepository reportRepository = mock(ReportRepository.class);
+        User owner = new User();
+        owner.setId(10L);
+
+        when(sessionRepository.findById(77L)).thenReturn(Optional.empty());
+
+        ChatService service = new ChatService(
+                sessionRepository,
+                messageRepository,
+                reportRepository,
+                mock(LawApiService.class),
+                mock(AnalysisService.class),
+                mock(ReportService.class)
+        );
+
+        service.deleteSession(77L, owner);
+
+        verify(sessionRepository).findById(77L);
+        verifyNoMoreInteractions(sessionRepository);
+        verifyNoInteractions(reportRepository, messageRepository);
     }
 
     @Test
@@ -609,29 +637,6 @@ class ChatServiceTest {
     }
 
     @Test
-    void infersViolenceTypeFromConductAndDoesNotAskIncidentTypeAgain() {
-        ReportReadiness readiness = new ReportReadiness(
-                false,
-                "추가 확인 필요",
-                "사건 내용과 관계, 시점을 확인해야 합니다.",
-                List.of("무슨 일이 있었는지", "상대가 학교 관계자인지", "언제부터 몇 번 있었는지"),
-                List.of(),
-                true
-        );
-
-        List<String> questions = ChatService.previewConfirmationQuestions(
-                readiness,
-                "친구가 계속 욕하고 놀렸어요.",
-                1
-        );
-
-        assertFalse(questions.isEmpty());
-        assertFalse(questions.get(0).contains("실제로 어떤 행동"));
-        assertFalse(questions.get(0).contains("학교폭력 유형은 제가 판단"));
-        assertTrue(questions.get(0).contains("상대와의 관계"));
-    }
-
-    @Test
     void prioritizesConductFactQuestionForVagueIncidentInNormalFlow() {
         List<String> questions = ChatService.previewConfirmationQuestions(
                 needsMoreContext(),
@@ -970,29 +975,6 @@ class ChatServiceTest {
         assertFalse(visibleReply.contains("NEXT_QUESTION"));
         assertTrue(visibleReply.contains("언어폭력"));
         assertEquals("그 말을 본 사람이 단톡방 안에 몇 명 정도 있었나요?", questionMethod.invoke(followUp));
-    }
-
-    @Test
-    void dropsAiFollowUpQuestionThatAsksUserToChooseViolenceType() throws Exception {
-        String raw = """
-                말해준 내용은 상담 기록에 반영했습니다.
-
-                [[NEXT_QUESTION]]
-                질문: 이 일은 언어 폭력, 사이버 폭력, 따돌림 중 어떤 유형에 가까운가요?
-                선택지:
-                - 언어 폭력 | 확인 답변: 언어 폭력에 가깝습니다.
-                - 사이버 폭력 | 확인 답변: 사이버 폭력에 가깝습니다.
-                - 따돌림 | 확인 답변: 따돌림에 가깝습니다.
-                [[/NEXT_QUESTION]]
-                """;
-
-        var method = ChatService.class.getDeclaredMethod("parseGeneratedReply", String.class);
-        method.setAccessible(true);
-        Object parsed = method.invoke(null, raw);
-        var followUpMethod = parsed.getClass().getDeclaredMethod("followUpQuestion");
-        followUpMethod.setAccessible(true);
-
-        assertEquals(null, followUpMethod.invoke(parsed));
     }
 
     @Test
@@ -1425,7 +1407,7 @@ class ChatServiceTest {
     }
 
     @Test
-    void guestIrrelevantInputRepeatsQuestionWithoutStoppingConversation() {
+    void guestIrrelevantInputNudgesWithoutStoppingConversation() {
         ChatService service = new ChatService(
                 mock(SessionRepository.class),
                 mock(MessageRepository.class),
@@ -1438,34 +1420,8 @@ class ChatServiceTest {
         Map<String, Object> response = service.sendGuestMessage("똥싸기", List.of());
 
         assertEquals(false, response.get("conversation_stopped"));
-        assertTrue(String.valueOf(response.get("reply")).contains("다시 답"));
-        assertFalse(((List<?>) response.get("confirmation_prompts")).isEmpty());
+        assertTrue(String.valueOf(response.get("reply")).contains("상담 범위"));
         assertFalse(String.valueOf(response.get("reply")).contains("대화가 중단"));
-    }
-
-    @Test
-    void guestIrrelevantFollowUpDoesNotRepeatAnsweredIncidentQuestion() {
-        ChatService service = new ChatService(
-                mock(SessionRepository.class),
-                mock(MessageRepository.class),
-                mock(ReportRepository.class),
-                mock(LawApiService.class),
-                mock(AnalysisService.class),
-                mock(ReportService.class)
-        );
-
-        Map<String, Object> response = service.sendGuestMessage(
-                "똥싸기",
-                List.of(new com.safeshield.dto.MessageRequest.HistoryMessage(
-                        "user",
-                        "친구가 단체 채팅방에서 계속 욕하고 놀렸어요."
-                ))
-        );
-
-        List<?> prompts = (List<?>) response.get("confirmation_prompts");
-        assertFalse(prompts.isEmpty());
-        String question = String.valueOf(((Map<?, ?>) prompts.get(0)).get("question"));
-        assertFalse(question.contains("실제로 어떤 행동"));
     }
 
     @Test

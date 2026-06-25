@@ -24,5 +24,18 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
     "vite": "^8.0.4"
-  }
+  },
+  "description": "AI 기반 학교폭력 상담 및 리포트 자동화 서비스",
+  "main": "eslint.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SafeShieldITshow/SafeShield.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SafeShieldITshow/SafeShield/issues"
+  },
+  "homepage": "https://github.com/SafeShieldITshow/SafeShield#readme"
 }

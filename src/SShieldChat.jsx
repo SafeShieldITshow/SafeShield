@@ -1006,7 +1006,7 @@ const SShieldChat = () => {
                     </div>
                     <nav className="ss-mobile-nav" aria-label="모바일 메뉴">
                         <button className="active">상담</button>
-                        <button onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/result'))}>결과</button>
+                        <button onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate(sessionId ? `/result?session=${sessionId}` : '/result'))}>결과</button>
                         <button onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/mypage'))}>마이</button>
                         <button onClick={() => (isGuest ? requireLoginForSavedFeature() : navigate('/mypage#session-history'))}>기록</button>
                         <button onClick={handleNewChat}>새 상담</button>

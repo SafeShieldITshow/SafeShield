@@ -605,6 +605,12 @@ html, body {
   color: #fff;
 }
 .confirm-btn-ok:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.confirm-btn-ok:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: none;
+  transform: none;
+}
 
 /* =====================================================
    전역 애니메이션 키프레임

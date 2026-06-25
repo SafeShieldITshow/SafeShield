@@ -230,6 +230,12 @@
   transition: color var(--ease), border-color var(--ease);
 }
 .btnDelete:hover { color: var(--danger); border-color: var(--danger); }
+.btnDelete:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  color: var(--text-muted);
+  border-color: var(--border);
+}
 
 /* 페이지네이션 */
 .pagination {

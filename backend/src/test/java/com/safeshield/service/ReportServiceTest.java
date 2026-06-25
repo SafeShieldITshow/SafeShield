@@ -244,6 +244,26 @@ class ReportServiceTest {
     }
 
     @Test
+    void deleteIgnoresAlreadyDeletedReport() {
+        User user = new User();
+        user.setId(1L);
+        ReportRepository reportRepository = mock(ReportRepository.class);
+        when(reportRepository.findById(99L)).thenReturn(Optional.empty());
+        ReportService service = new ReportService(
+                reportRepository,
+                mock(SessionRepository.class),
+                mock(MessageRepository.class),
+                new AnalysisService(new LawDataService(), new EvidenceGuideService()),
+                new ObjectMapper()
+        );
+
+        service.delete(user, 99L);
+
+        verify(reportRepository).findById(99L);
+        verify(reportRepository, never()).delete(any(Report.class));
+    }
+
+    @Test
     void temporaryPhysicalReportSummaryIncludesConcreteIncidentDetails() {
         ReportReadiness readiness = new ReportReadiness(
                 true,
